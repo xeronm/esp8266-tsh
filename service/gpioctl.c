@@ -27,6 +27,7 @@
 #include "system/services.h"
 #include "system/comavp.h"
 #include "service/gpioctl.h"
+#include "service/lsh.h"
 
 typedef struct gpio_data_s {
     imdb_hndlr_t    hdata;
@@ -137,6 +138,7 @@ gpio_acquire (uint8 gpio_id, bool pullup, gpio_cb_func_t intr_cb)
     else {
 	PIN_PULLUP_DIS (addr);
     }
+    d_log_iprintf (GPIO_SERVICE_NAME, "acquire gpio_id:%u, addr:%p,func:%u,pull:%u", gpio_id, addr, gpio_use->func, pullup);
 
     return GPIO_RESULT_SUCCESS;
 }
@@ -161,6 +163,8 @@ gpio_release (uint8 gpio_id)
 	return GPIO_RESULT_NOT_USED;
     }
 
+    d_log_iprintf (GPIO_SERVICE_NAME, "release gpio_id:%u", gpio_id);
+
     if (gpio_use->intr_cb) {
 	ETS_GPIO_INTR_DISABLE ();
 	//clear status
@@ -179,6 +183,89 @@ gpio_release (uint8 gpio_id)
     return GPIO_RESULT_SUCCESS;
 }
 
+
+
+/*
+ * gpio_id: GPIO_ID_NONE or absent - means all ports
+ * result: port value
+ */
+LOCAL void    ICACHE_FLASH_ATTR
+fn_gpio_get (sh_bc_arg_t * ret_arg, const arg_count_t arg_count, sh_bc_arg_type_t arg_type[], sh_bc_arg_t * bc_args[]) 
+{
+    uint8 gpio_id = GPIO_ID_NONE;
+    if (arg_count > 1)
+        gpio_id = bc_args[0]->arg.value;
+
+    if (gpio_id != GPIO_ID_NONE)
+        ret_arg->arg.value = GPIO_INPUT_GET (GPIO_ID_PIN (gpio_id));
+    else
+        ret_arg->arg.value = gpio_input_get ();
+}
+
+/*
+ * gpio_id: 
+ * value:
+ * result: gpio_result_t
+ */
+LOCAL void    ICACHE_FLASH_ATTR
+fn_gpio_set (sh_bc_arg_t * ret_arg, const arg_count_t arg_count, sh_bc_arg_type_t arg_type[], sh_bc_arg_t * bc_args[]) 
+{
+    if (arg_count != 2) {
+        ret_arg->arg.value = GPIO_RESULT_ERROR;
+        return;
+    }
+
+    uint8           gpio_id = bc_args[0]->arg.value;
+    gpio_result_t   res = gpio_common_check (gpio_id);
+    if (res != GPIO_RESULT_SUCCESS) {
+        ret_arg->arg.value = res;
+        return;
+    }
+
+    GPIO_OUTPUT_SET (GPIO_ID_PIN (gpio_id), (bc_args[1]->arg.value != 0));
+    ret_arg->arg.value = GPIO_RESULT_SUCCESS;
+}
+
+
+/*
+ * gpio_id: 
+ * function: 
+ * pullup:
+ * result: gpio_result_t
+ */
+LOCAL void    ICACHE_FLASH_ATTR
+fn_gpio_setup (sh_bc_arg_t * ret_arg, const arg_count_t arg_count, sh_bc_arg_type_t arg_type[], sh_bc_arg_t * bc_args[]) 
+{
+    if (arg_count != 2) {
+        ret_arg->arg.value = GPIO_RESULT_ERROR;
+        return;
+    }
+
+    uint8           gpio_id = bc_args[0]->arg.value;
+    gpio_result_t   res = gpio_common_check (gpio_id);
+    if (res != GPIO_RESULT_SUCCESS) {
+        ret_arg->arg.value = res;
+        return;
+    }
+
+    uint32          addr = gpio_layout[gpio_id].addr;
+    PIN_FUNC_SELECT (addr, bc_args[1]->arg.value);
+    
+    d_log_iprintf (GPIO_SERVICE_NAME, "set gpio_id:%u, addr:%p,func:%u", gpio_id, addr, bc_args[1]->arg.value);
+        
+    uint8           pullup = bc_args[2]->arg.value;
+    if (pullup != 0xFF) {
+        if (pullup) {
+	    PIN_PULLUP_EN (addr);
+	}
+	else {
+	    PIN_PULLUP_DIS (addr);
+	}
+    }	
+
+    ret_arg->arg.value = GPIO_RESULT_SUCCESS;
+}
+
 svcs_errcode_t  ICACHE_FLASH_ATTR
 gpio_on_start (imdb_hndlr_t hmdb, imdb_hndlr_t hdata, dtlv_ctx_t * conf)
 {
@@ -189,6 +276,17 @@ gpio_on_start (imdb_hndlr_t hmdb, imdb_hndlr_t hdata, dtlv_ctx_t * conf)
 	);
     os_memset (sdata, 0, sizeof (gpio_data_t));
     sdata->hdata = hdata;
+
+    // register functions
+    sh_func_entry_t fn_entries[3] = {
+        { GPIO_SERVICE_ID, false, false, 0, "gpio_get", { fn_gpio_get } },
+        { GPIO_SERVICE_ID, false, false, 0, "gpio_set", { fn_gpio_set } },
+        { GPIO_SERVICE_ID, false, false, 0, "gpio_setup", { fn_gpio_setup } },
+    };
+    
+    int i;
+    for (i = 0; i < 3; i++) 
+        sh_func_register (&fn_entries[i]);
 
     return SVCS_ERR_SUCCESS;
 }
@@ -246,34 +344,50 @@ gpio_on_msg_output_set (dtlv_ctx_t * msg_in, dtlv_ctx_t * msg_out)
     uint8           gpio_id = (uint8) GPIO_ID_NONE;
     uint16          pulse_us = 0;
     uint8           value = 0xFF;
-    while (dtlv_avp_decode (msg_in, &davp) == DTLV_ERR_SUCCESS) {
-	if (!dtlv_check_namespace (&davp, GPIO_SERVICE_ID))
-	    break;
+    uint8           pullup = 0xFF;
+    uint8           func = 0xFF;
 
-	switch (davp.havpd.nscode.comp.code) {
-        case COMMON_AVP_PEREPHERIAL_GPIO_ID:
-            dtlv_avp_get_uint8 (&davp, &gpio_id);
-            break;
-        case GPIO_PORT_PULSE_US:
-            dtlv_avp_get_uint16 (&davp, &pulse_us);
-            break;
-        case GPIO_PORT_VALUE:
-            dtlv_avp_get_uint8 (&davp, &value);
-            break;
-        }
-    }
+    dtlv_seq_decode_begin (msg_in, GPIO_SERVICE_ID);
+    dtlv_seq_decode_uint8 (COMMON_AVP_PEREPHERIAL_GPIO_ID, &gpio_id);
+    dtlv_seq_decode_uint16 (GPIO_PORT_PULSE_US, &pulse_us);
+    dtlv_seq_decode_uint8 (GPIO_PORT_VALUE, &value);
+    dtlv_seq_decode_uint8 (GPIO_PORT_FUNCTION_SET, &func);
+    dtlv_seq_decode_uint8 (GPIO_PORT_PULLUP, &pullup);
+    dtlv_seq_decode_end (msg_in);
 
     if (gpio_id == GPIO_ID_NONE)
 	return SVCS_INVALID_MESSAGE;
 
+    gpio_result_t   res = gpio_common_check (gpio_id);
+    if (res != GPIO_RESULT_SUCCESS) {
+        encode_service_result_ext (msg_out, res);
+	return SVCS_ERR_SUCCESS;
+    }
+
+    uint8           gpio_pin = GPIO_ID_PIN (gpio_id);
+
     if (value == 0xFF) {
-        GPIO_DIS_OUTPUT (GPIO_ID_PIN (gpio_id));
+        GPIO_DIS_OUTPUT (gpio_pin);
     }
     else {
-        GPIO_OUTPUT_SET (GPIO_ID_PIN (gpio_id), (value != 0) );
+        uint32          addr = gpio_layout[gpio_id].addr;
+        if (func != 0xFF) {
+            PIN_FUNC_SELECT (addr, func);
+            d_log_iprintf (GPIO_SERVICE_NAME, "set gpio_id:%u, addr:%p,func:%u", gpio_id, addr, func);
+        }
+        if (pullup != 0xFF) {
+            if (pullup) {
+	        PIN_PULLUP_EN (addr);
+	    }
+	    else {
+	        PIN_PULLUP_DIS (addr);
+	    }
+	}
+
+        GPIO_OUTPUT_SET (gpio_pin, (value != 0) );
         if (pulse_us > 0) {
             os_delay_us (pulse_us);
-            GPIO_OUTPUT_SET (GPIO_ID_PIN (gpio_id), (value == 0));
+            GPIO_OUTPUT_SET (gpio_pin, (value == 0));
         }
     }
 

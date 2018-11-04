@@ -56,9 +56,9 @@
 #define d_pointer_equal(x, y)		( (void*)x == (void*)y )
 
 // BIT buffer operations
-#define	d_bitbuf_get(buf, n)		( ((buf)[(n) >> 3] >> ((n) & 7)) & 0b1 )
-#define	d_bitbuf_set(buf, n)		( (buf)[(n) >> 3] |= (1 << ((n) & 7)) )
-#define	d_bitbuf_clear(buf, n)		( (buf)[(n) >> 3] &= ~(1 << ((n) & 7)) )
+#define	d_bitbuf_get(buf, n)		( ((buf)[(n) >> 3] >> (7-((n) & 7))) & 0b1 )
+#define	d_bitbuf_set(buf, n)		( (buf)[(n) >> 3] |= (1 << (7-((n) & 7))) )
+#define	d_bitbuf_clear(buf, n)		( (buf)[(n) >> 3] &= ~(1 << (7-((n) & 7))) )
 #define d_bitbuf_size(size)		(((size) + 7) >> 3)
 #define	d_bitbuf_rset(buf, s, e)	\
 	{ \

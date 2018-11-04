@@ -36,9 +36,9 @@ typedef struct gpio_def_s {
 
 // ESP-12E Layout
 LOCAL gpio_def_t const gpio_layout[GPIO_PIN_COUNT] = {
-    {PERIPHS_IO_MUX_GPIO0_U, FUNC_GPIO0, false},	// GPIO_0    High (Low for flash)
+    {PERIPHS_IO_MUX_GPIO0_U, FUNC_GPIO0, true},	// GPIO_0    High (Low for flash)
     {PERIPHS_IO_MUX_U0TXD_U, FUNC_U0TXD, false},	// GPIO_1    U0TXD
-    {PERIPHS_IO_MUX_GPIO2_U, FUNC_GPIO2, false},	// GPIO_2    High
+    {PERIPHS_IO_MUX_GPIO2_U, FUNC_GPIO2, true},	// GPIO_2    High
     {PERIPHS_IO_MUX_U0RXD_U, 0, false},	// GPIO_3    U0RXD
     {PERIPHS_IO_MUX_GPIO4_U, FUNC_GPIO4, true},	// GPIO_4
     {PERIPHS_IO_MUX_GPIO5_U, FUNC_GPIO5, true},	// GPIO_5
@@ -67,6 +67,7 @@ typedef enum PACKED gpio_msgtype_e {
 
 typedef enum __packed gpio_result_e {
     GPIO_RESULT_SUCCESS = 0,
+    GPIO_RESULT_ERROR,
     GPIO_RESULT_INVALID_GPIOID,
     GPIO_RESULT_NOT_USABLE,
     GPIO_RESULT_INUSE,
@@ -81,6 +82,7 @@ typedef enum PACKED gpio_avp_code_e {
     GPIO_PORT_AVAILABLE = 106,
     GPIO_PORT_VALUE = 107,
     GPIO_PORT_PULSE_US = 108,
+    GPIO_PORT_PULLUP = 109,
 } gpio_avp_code_t;
 
 gpio_result_t   gpio_acquire (uint8 gpio_id, bool pullup, gpio_cb_func_t intr_cb);

@@ -209,11 +209,11 @@ $(BUILD_DIR)%.o:%.cxx
 #-------------------------------------
 image:$(IMAGES) $(IMAGEINFO) $(SDK_IMAGES)
 	@echo '*******************************************************'
-	@echo -e flash 512k:\\n\\t esptool.py -p /dev/ttyUSB0 -b 115200 write_flash $(ESPTOOL_PARAMS) --verify \
+	@echo -e flash 512k:\\n\\t sudo esptool.py -p /dev/ttyUSB0 -b 115200 write_flash $(ESPTOOL_PARAMS) --verify \
   0x00000 boot_v1.7.bin \
-  0x01000 $(APP).spi$(SPI_MODE).app1.bin $(FLASH_ADD_ADDR) \\n
-	@echo -e bootloader messages:\\n\\t miniterm.py /dev/ttyUSB0 74880 \\n
-	@echo -e AT commands:\\n\\t miniterm.py /dev/ttyUSB0 115200 \\n
+  0x01000 $(APP)-$(APP_SUFFIX).spi$(SPI_MODE).app1.bin $(FLASH_ADD_ADDR) \\n
+	@echo -e bootloader messages:\\n\\t sudo miniterm.py /dev/ttyUSB0 74880 \\n
+	@echo -e AT commands:\\n\\t sudo miniterm.py /dev/ttyUSB0 115200 \\n
 	@echo '*******************************************************'
 
 $(SDK_IMAGES): $(BINDIR)%:$(SDK_DIR)/bin/%

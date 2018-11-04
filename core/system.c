@@ -58,14 +58,14 @@ typedef struct reg_service_s {
 #endif
 LOCAL reg_service_t const reg_services[REG_SERVICE_MAX] ICACHE_RODATA_ATTR = {
     {syslog_service_install, SYSLOG_SERVICE_NAME},
+    {lsh_service_install, LSH_SERVICE_NAME},
+    {sched_service_install, SCHED_SERVICE_NAME},
 #ifdef ARCH_XTENSA
     {espadmin_service_install, ESPADMIN_SERVICE_NAME},
     {gpio_service_install, GPIO_SERVICE_NAME},
 #endif
     {udpctl_service_install, UDPCTL_SERVICE_NAME},
-    {lsh_service_install, LSH_SERVICE_NAME},
     {ntp_service_install, NTP_SERVICE_NAME},
-    {sched_service_install, SCHED_SERVICE_NAME},
 #ifdef ARCH_XTENSA
     {dht_service_install, DHT_SERVICE_NAME},
 #endif

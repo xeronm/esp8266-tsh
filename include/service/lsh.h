@@ -59,6 +59,7 @@ typedef enum PACKED sh_errcode_e {
     SH_ALLOCATION_ERROR = 16,
     SH_STMT_EXISTS = 17,
     SH_STMT_NOT_EXISTS = 18,
+    SH_FUNC_ERROR = 19,
 } sh_errcode_t;
 
 typedef enum PACKED sh_msgtype_e {
@@ -76,6 +77,7 @@ typedef enum PACKED sh_avp_code_e {
     SH_AVP_STMT_CODE = 104,
     SH_AVP_STMT_PARSE_TIME = 105,
     SH_AVP_STMT_ARGUMENTS = 106,
+    SH_AVP_FUNCTION_NAME = 110,
 } sh_avp_code_t;
 
 typedef struct sh_eval_ctx_s {

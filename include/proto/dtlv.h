@@ -137,6 +137,21 @@ dtlv_errcode_t  dtlv_ctx_reset_encode (dtlv_ctx_t * ctx);
 		    trg = d_pointer_as( type, davp.avp->data ); \
 		    break;
 
+#define dtlv_seq_decode_uint8(code, trg) \
+		case code: \
+		    dtlv_avp_get_uint8 (&davp, trg); \
+		    break;
+
+#define dtlv_seq_decode_uint16(code, trg) \
+		case code: \
+		    dtlv_avp_get_uint16 (&davp, trg); \
+		    break;
+
+#define dtlv_seq_decode_uint32(code, trg) \
+		case code: \
+		    dtlv_avp_get_uint32 (&davp, trg); \
+		    break;
+
 #define dtlv_seq_decode_end(ctx) 	}}}
 
 

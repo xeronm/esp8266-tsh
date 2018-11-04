@@ -34,7 +34,7 @@
 
 #define SYSLOG_STORAGE_PAGES		1
 #define SYSLOG_STORAGE_PAGE_BLOCKS	8
-#define SYSLOG_MESSAGE_MAX_LEN		300
+#define SYSLOG_MESSAGE_MAX_LEN		380
 #define SYSLOG_IMDB_CLS_NAME		"syslog$"
 
 typedef struct syslog_data_s {

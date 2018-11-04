@@ -16,6 +16,11 @@ typedef enum __packed dht_result_e {
     DHT_RESULT_ERROR_CHKSUM,
 } dht_result_t;
 
+typedef enum __packed dht_type_e {
+    DHT_DHT11 = 0,
+    DHT_AM2302,
+} dht_type_t;
+
 typedef struct dht_s {
     uint16          hmdt;
     uint16          temp;
@@ -26,13 +31,14 @@ typedef struct dht_s {
 #define DHT_SERVICE_NAME		"dev.dht"
 
 #define DHT_HISTORY_LENGTH		40
-#define DHT_MIN_QUERY_TIMEOUT_SEC	1
+#define DHT_MIN_QUERY_TIMEOUT_SEC	5
 #define DHT_FAIL_RETRY_COUNT		3
-#define DHT_MIN_STAT_TIMEOUT_SEC	10
+#define DHT_MIN_STAT_TIMEOUT_SEC	20
 
 #define DHT_DEFAULT_EMA_ALPHA_PCT	90	// Exponentioal moving average alpha PCT
-#define DHT_DEFAULT_GPIO		5
-#define DHT_DEFAULT_STAT_TIMEOUT_SEC	15
+#define DHT_DEFAULT_SENSOR_TYPE		DHT_DHT11
+#define DHT_DEFAULT_GPIO		4
+#define DHT_DEFAULT_STAT_TIMEOUT_SEC	20
 #define DHT_DEFAULT_HIST_INTERVAL	4
 
 typedef enum PACKED dht_msgtype_e {
@@ -41,6 +47,7 @@ typedef enum PACKED dht_msgtype_e {
 } dht_msgtype_t;
 
 typedef enum PACKED dht_avp_code_e {
+    DHT_SENSOR_TYPE = 100,
     DHT_STAT_TIMEOUT = 101,
     DHT_STAT_HIST_INTERVAL = 102,
     DHT_STAT_EMA_ALPHA_PCT = 103,
@@ -50,6 +57,7 @@ typedef enum PACKED dht_avp_code_e {
     DHT_STAT_LAST_TIME = 107,
     DHT_STAT_LAST = 108,
     DHT_STAT_AVERAGE = 109,
+    DHT_STAT_EMA_INIT_COUNT = 110,
 } dht_avp_code_t;
 
 

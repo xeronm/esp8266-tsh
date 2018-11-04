@@ -211,6 +211,8 @@ sh_forall_func_find (void *ptr, void *data)
 sh_errcode_t    ICACHE_FLASH_ATTR
 sh_func_get (char *func_name, sh_func_entry_t ** entry)
 {
+    d_check_init();
+
     sh_func_find_ctx_t find_ctx;
     os_memset (&find_ctx, 0, sizeof (sh_func_find_ctx_t));
     find_ctx.func_name = func_name;
@@ -229,6 +231,8 @@ sh_func_get (char *func_name, sh_func_entry_t ** entry)
 sh_errcode_t    ICACHE_FLASH_ATTR
 sh_func_register (sh_func_entry_t * func_entry)
 {
+    d_check_init();
+
     sh_func_entry_t *entry;
 
     sh_errcode_t res = sh_func_get (func_entry->func_name, &entry);
@@ -245,7 +249,7 @@ sh_func_register (sh_func_entry_t * func_entry)
 
     //os_memset(entry, 0, sizeof(sh_func_entry_t));
     os_memcpy (entry, func_entry, sizeof (sh_func_entry_t));
-    os_printf("-- register: func=%s, ptr=%p\n", entry->func_name, entry->func.ptr);
+    //debug// os_printf("-- register: func=%s, ptr=%p\n", entry->func_name, entry->func.ptr);
     d_log_dprintf (LSH_SERVICE_NAME, "register: func=%s, ptr=%p\n", entry->func_name, entry->func.ptr);
 
     return SH_ERR_SUCCESS;
@@ -372,7 +376,7 @@ typedef struct sh_bc_oper_s {
 } sh_bc_oper_t;
 
 typedef struct sh_gvar_s {
-    sh_parse_arg_type_t type;
+    sh_bc_arg_type_t type;
     uint16          use_count;
     sh_bc_arg_t     arg;
 } sh_gvar_t;
@@ -514,8 +518,7 @@ bc_set_pointer_arg (sh_parse_ctx_t * ctx, char **pbuf_ptr, sh_bc_oper_t * bc_ope
     bytecode_size_t *vptr = d_pointer_as (bytecode_size_t, &arg_ptr->data);
     *vptr = d_pointer_diff (bc_oper, ctx->bc_buf);
     *pbuf_ptr = d_pointer_add (char, arg_ptr, sizeof (sh_parse_arg_t) + d_align (arg_ptr->length));
-    os_printf("-- 30 bc_set_pointer_arg: arg_addr=%p, vptr=%04x, bufptr=%p \n", arg_ptr, *vptr,
-		   *pbuf_ptr);
+    //debug// os_printf("-- 30 bc_set_pointer_arg: arg_addr=%p, vptr=%04x, bufptr=%p \n", arg_ptr, *vptr, *pbuf_ptr);
     d_log_dprintf (LSH_SERVICE_NAME, "bc_set_pointer_arg: arg_addr=%p, vptr=%04x, bufptr=%p", arg_ptr, *vptr,
 		   *pbuf_ptr);
 }
@@ -527,7 +530,7 @@ bc_set_pointer_arg (sh_parse_ctx_t * ctx, char **pbuf_ptr, sh_bc_oper_t * bc_ope
 *  - gaddr: result pointer to globals
 */
 LOCAL sh_errcode_t ICACHE_FLASH_ATTR
-bc_global_add (sh_parse_arg_t * arg, sh_parse_arg_type_t type, sh_gvar_t ** gaddr)
+bc_global_add (sh_parse_arg_t * arg, sh_bc_arg_type_t type, sh_gvar_t ** gaddr)
 {
     sh_gvar_t      *gvar;
     *gaddr = NULL;
@@ -543,7 +546,7 @@ bc_global_add (sh_parse_arg_t * arg, sh_parse_arg_type_t type, sh_gvar_t ** gadd
 	default:
 	    gvar->arg.arg.value = 0;
 	}
-	os_printf("-- bc_global_add: token=%s, addr=%p\n", arg->data, gvar);
+	//debug// os_printf("-- bc_global_add: token=%s, addr=%p\n", arg->data, gvar);
 
 	d_log_dprintf (LSH_SERVICE_NAME, "bc_global_add: token=%s, addr=%p", arg->data, gvar);
     }
@@ -566,7 +569,7 @@ LOCAL sh_errcode_t ICACHE_FLASH_ATTR
 bc_serialize_arg (sh_parse_ctx_t * ctx, char **bc_ptr, sh_bc_oper_t * bc_oper, sh_parse_arg_t * arg, uint8 * bytepos)
 {
     sh_bc_arg_t    *bc_arg = d_pointer_as (sh_bc_arg_t, *bc_ptr);
-    os_printf("-- serialize arg %p, %u\n", d_pointer_diff(bc_arg, ctx->bc_buf), arg->type);
+    //debug// os_printf("-- serialize arg %p, %u\n", d_pointer_diff(bc_arg, ctx->bc_buf), arg->type);
     d_bc_buffer_alloc (ctx, bc_ptr, sizeof (sh_bc_arg_t));
 
     switch (arg->type) {
@@ -595,7 +598,7 @@ bc_serialize_arg (sh_parse_ctx_t * ctx, char **bc_ptr, sh_bc_oper_t * bc_oper, s
     case SH_ARG_FUNC:
 	{
 	    sh_gvar_t      *gaddr;
-	    sh_errcode_t    err = bc_global_add (arg, SH_ARG_FUNC, &gaddr);
+	    sh_errcode_t    err = bc_global_add (arg, SH_BC_ARG_FUNC, &gaddr);
 	    if (err != SH_ERR_SUCCESS)
 		d_stmt_err_ret (ctx, err);
 	    bc_arg->arg.ptr = gaddr;
@@ -605,7 +608,7 @@ bc_serialize_arg (sh_parse_ctx_t * ctx, char **bc_ptr, sh_bc_oper_t * bc_oper, s
 	}
     case SH_ARG_POINTER:
 	bc_arg->arg.ptr = (void *) ((uint32) 0 + *d_pointer_as (bytecode_size_t, arg->data));
-        os_printf("-- serialize arg ptr %p\n", bc_arg->arg.ptr);
+        //debug// os_printf("-- serialize arg ptr %p\n", bc_arg->arg.ptr);
 	bc_oper->bitmask |= (0x3 << *bytepos);
 	(*bytepos)++;
 	break;
@@ -631,8 +634,7 @@ bc_serialize_oper_header (sh_parse_ctx_t * ctx, char **bc_ptr, sh_oper_type_t op
     sh_bc_oper_t   *bc_oper_ptr = d_pointer_as (sh_bc_oper_t, *bc_ptr);
     sh_oper_desc_t *opdesc = &sh_oper_desc[optype];
 
-    os_printf("-- bc_serialize_ophdr: depth=%u, addr=%04x, " OD2T_STR " , args=%u\n", ctx->depth,
-		   *bc_ptr - ctx->bc_buf, OD2T (opdesc), arg_count);
+    //debug// os_printf("-- bc_serialize_ophdr: depth=%u, addr=%04x, " OD2T_STR " , args=%u\n", ctx->depth, *bc_ptr - ctx->bc_buf, OD2T (opdesc), arg_count);
     d_log_dprintf (LSH_SERVICE_NAME, "bc_serialize_ophdr: depth=%u, addr=%04x, " OD2T_STR " , args=%u", ctx->depth,
 		   *bc_ptr - ctx->bc_buf, OD2T (opdesc), arg_count);
 
@@ -664,8 +666,7 @@ INLINED sh_errcode_t ICACHE_FLASH_ATTR
 bc_serialize_oper_ctl (sh_parse_ctx_t * ctx, char **bc_ptr, char **pbuf_ptr, sh_parse_arg_t ** arg,
 		       sh_oper_type_t optype)
 {
-    os_printf("-- serialize_oper_ctl: depth=%u, addr=%04x, optype=%u\n", ctx->depth,
-		   *bc_ptr - ctx->bc_buf, optype);
+    //debug// os_printf("-- serialize_oper_ctl: depth=%u, addr=%04x, optype=%u\n", ctx->depth, *bc_ptr - ctx->bc_buf, optype);
 
     d_log_dprintf (LSH_SERVICE_NAME, "serialize_oper_ctl: depth=%u, addr=%04x, optype=%u", ctx->depth,
 		   *bc_ptr - ctx->bc_buf, optype);
@@ -673,6 +674,18 @@ bc_serialize_oper_ctl (sh_parse_ctx_t * ctx, char **bc_ptr, char **pbuf_ptr, sh_
     uint8           bytepos = 0;
     bc_serialize_oper_header (ctx, bc_ptr, optype, 2, &bc_oper_ptr, &bytepos);
     d_stmt_check_err (ctx);
+
+    if (optype == SH_OPER_ELSE) {
+        bytecode_size_t *vptr = d_pointer_as (bytecode_size_t, &(*arg)->data);
+        //debug// os_printf("-- cond vptr %p\n", *vptr);
+        sh_bc_oper_t * bc_oper0 = d_pointer_add(sh_bc_oper_t, ctx->bc_buf, *vptr);
+	sh_bc_arg_t  * cond0_arg = d_pointer_add(sh_bc_arg_t, bc_oper0, sizeof (sh_bc_arg_t));
+
+        //debug// os_printf("-- cond0 vptr %p\n", cond0_arg->arg.ptr);
+        bc_oper0 = d_pointer_add(sh_bc_oper_t, ctx->bc_buf, cond0_arg->arg.ptr);
+        *vptr = cond0_arg->arg.ptr;
+    }
+
 
     // condition arg
     d_assert ((*arg), "left argument missed");
@@ -683,11 +696,11 @@ bc_serialize_oper_ctl (sh_parse_ctx_t * ctx, char **bc_ptr, char **pbuf_ptr, sh_
     bc_oper_ptr->bitmask |= (0x3 << bytepos);
     bytepos += 2;
     sh_bc_arg_t    *bc_arg = d_pointer_as (sh_bc_arg_t, *bc_ptr);
-    os_printf("-- serialize jmparg %p\n", d_pointer_diff(bc_arg, ctx->bc_buf));
+    //debug// os_printf("-- serialize jmparg %p\n", d_pointer_diff(bc_arg, ctx->bc_buf));
     d_bc_buffer_alloc (ctx, bc_ptr, sizeof (sh_bc_arg_t));
     bc_arg->arg.ptr = 0;
 
-    // set left_arg pointer to bc_oper jump arg
+    // set left_arg pointer to cond oper
     bc_set_pointer_arg (ctx, pbuf_ptr, bc_oper_ptr, arg);
 
     return SH_ERR_SUCCESS;
@@ -727,7 +740,7 @@ bc_serialize_var (sh_parse_ctx_t * ctx, char **bc_ptr, sh_parse_oper_t * oper, s
     d_bc_buffer_alloc (ctx, bc_ptr, sizeof (sh_bc_arg_t));
     if (oper->optype == SH_OPER_GVAR) {
 	sh_gvar_t      *gvar;
-	sh_errcode_t    err = bc_global_add (arg_ptr, SH_ARG_INT, &gvar);
+	sh_errcode_t    err = bc_global_add (arg_ptr, SH_BC_ARG_INT, &gvar);
 	if (err != SH_ERR_SUCCESS)
 	    d_stmt_err_ret (ctx, err);
 
@@ -841,21 +854,25 @@ bc_serialize_oper (sh_parse_ctx_t * ctx, char **bc_ptr, char **pbuf_ptr, sh_pars
 	return SH_ERR_SUCCESS;
 
     sh_bc_oper_t   *bc_oper_ptr;
-    os_printf("-- bc_serialize_oper %p\n", bc_oper_ptr);
+    //debug// os_printf("-- bc_serialize_oper %p\n", bc_oper_ptr);
     if (oper_tmp->optype == SH_OPER_BLOCK) {
 	uint8           bytepos;
 	bc_serialize_oper_header (ctx, bc_ptr, oper_tmp->optype, 0, &bc_oper_ptr, &bytepos);
     }
     else if (oper_tmp->control) {
 	d_assert ((oper_tmp->left_arg), "left argument missed");
-	bc_oper_ptr = d_pointer_add (sh_bc_oper_t, ctx->bc_buf, *(bytecode_size_t *) & oper_tmp->left_arg->data);
+        bytecode_size_t *vptr = d_pointer_as (bytecode_size_t, &oper_tmp->left_arg->data);
+        //debug// os_printf("-- ctl left vptr: %p\n", *vptr);
+	bc_oper_ptr = d_pointer_add (sh_bc_oper_t, ctx->bc_buf, *vptr);
 	// use second arg for jump target
 	sh_bc_arg_t    *bc_arg = d_pointer_add (sh_bc_arg_t, bc_oper_ptr, sizeof (sh_bc_oper_t) + sizeof (sh_bc_arg_t));
 	bc_arg->arg.ptr = (void *) d_pointer_diff (*bc_ptr, ctx->bc_buf);
+
+        //debug// os_printf("-- bc_serialize_oper: ctl jump vptr=+0x %04x\n", bc_arg->arg.ptr);
+	d_log_dprintf (LSH_SERVICE_NAME, "bc_serialize_oper: ctl jump vptr=+0x%04x", bc_arg->arg.ptr);
     }
     else {
-        os_printf("-- bc_serialize_oper: depth=%u, addr=%04x, " OP2T_STR " , args=%u\n", ctx->depth,
-		       *bc_ptr - ctx->bc_buf, OP2T (ctx, oper_tmp), oper_tmp->arg_count);
+        //debug// os_printf("-- bc_serialize_oper: depth=%u, addr=%04x, " OP2T_STR " , args=%u\n", ctx->depth, *bc_ptr - ctx->bc_buf, OP2T (ctx, oper_tmp), oper_tmp->arg_count);
 	d_log_dprintf (LSH_SERVICE_NAME, "bc_serialize_oper: depth=%u, addr=%04x, " OP2T_STR " , args=%u", ctx->depth,
 		       *bc_ptr - ctx->bc_buf, OP2T (ctx, oper_tmp), oper_tmp->arg_count);
 	if ((oper_tmp->optype == SH_OPER_VAR) || (oper_tmp->optype == SH_OPER_GVAR)) {
@@ -1065,20 +1082,20 @@ stmt_parse_ext (sh_parse_ctx_t * ctx, char **szstr, char **bc_ptr, char **pbuf_p
     while (**szstr != '\0') {
 	char           *ptr_start = *szstr;
 	// check operator term
-        os_printf("-- 000 %p %c\n", oper, **szstr);
+        //debug// os_printf("-- 000 %p %c\n", oper, **szstr);
 
 	d_skip_space (*szstr);
 	if ((ctx->term_oper) && (ctx->term_oper->term == **szstr)) {
 	    (*szstr)++;
 	    while (oper != ctx->term_oper) {
-        	os_printf("-- 1\n");
+        	//debug// os_printf("-- 1\n");
 		bc_serialize_oper (ctx, bc_ptr, pbuf_ptr, &arg, &oper);
-        	os_printf("-- 2\n");
+        	//debug// os_printf("-- 2\n");
 		d_stmt_check_err (ctx);
 	    }
-            os_printf("-- 3\n");
+            //debug// os_printf("-- 3\n");
 	    bc_serialize_oper (ctx, bc_ptr, pbuf_ptr, &arg, &oper);
-            os_printf("-- 4\n");
+            //debug// os_printf("-- 4\n");
 	    d_stmt_check_err (ctx);
 
 	    // look for prev term
@@ -1096,9 +1113,9 @@ stmt_parse_ext (sh_parse_ctx_t * ctx, char **szstr, char **bc_ptr, char **pbuf_p
 	    (*szstr)++;
             if (oper) {	// default terminator
 	        while (oper && (oper->optype != SH_OPER_BLOCK)) {
-                    os_printf("-- 5\n");
+                    //debug// os_printf("-- 5\n");
 		    bc_serialize_oper (ctx, bc_ptr, pbuf_ptr, &arg, &oper);
-                    os_printf("-- 6\n");
+                    //debug// os_printf("-- 6\n");
 		    d_stmt_check_err (ctx);
 	        }
 	    }
@@ -1107,16 +1124,16 @@ stmt_parse_ext (sh_parse_ctx_t * ctx, char **szstr, char **bc_ptr, char **pbuf_p
 	}
 
 	// try parsing an operator
-	os_printf("-- 7\n");
+	//debug// os_printf("-- 7\n");
 	if (stmt_parse_oper (ctx, szstr, bc_ptr, pbuf_ptr, &arg, &oper) != SH_OPER_NONE) {
 	    continue;		// try parse term and operaror
 	}
 	d_stmt_check_err (ctx);
 
 	// try to parsing an argument
-	os_printf("-- 8\n");
+	//debug// os_printf("-- 8\n");
 	stmt_parse_arg (ctx, szstr, pbuf_ptr, oper, &arg);
-	os_printf("-- 9\n");
+	//debug// os_printf("-- 9\n");
 	d_stmt_check_err (ctx);
 	d_skip_space (*szstr);
 
@@ -1126,9 +1143,9 @@ stmt_parse_ext (sh_parse_ctx_t * ctx, char **szstr, char **bc_ptr, char **pbuf_p
     }
 
     while (oper) {
-	os_printf("-- 3\n");
+	//debug// os_printf("-- 3\n");
 	bc_serialize_oper (ctx, bc_ptr, pbuf_ptr, &arg, &oper);
-	os_printf("-- 4\n");
+	//debug// os_printf("-- 4\n");
 	d_stmt_check_err (ctx);
     }
 
@@ -1139,6 +1156,8 @@ stmt_parse_ext (sh_parse_ctx_t * ctx, char **szstr, char **bc_ptr, char **pbuf_p
 sh_errcode_t    ICACHE_FLASH_ATTR
 stmt_parse (char *szstr, char * stmt_name, sh_hndlr_t * hstmt)
 {
+    d_check_init();
+
     char           *ptr = szstr;
     char           *bc_ptr;
     char           *pbuf_ptr;
@@ -1212,6 +1231,8 @@ stmt_parse (char *szstr, char * stmt_name, sh_hndlr_t * hstmt)
 sh_errcode_t    ICACHE_FLASH_ATTR
 stmt_free (const sh_hndlr_t hstmt)
 {
+    d_check_init();
+
     d_sh_check_hndlr (hstmt);
     sh_stmt_t      *stmt = d_hndlr2obj (sh_stmt_t, hstmt);
     d_sh_check_imdb_error (imdb_clsobj_delete (sdata->hstmt, (void *) stmt));
@@ -1290,7 +1311,14 @@ stmt_dump (const sh_hndlr_t hstmt, char *buf, size_t len, bool resolve_glob)
 		break;
             case SH_BC_ARG_GLOBAL:
 		if (resolve_glob) {
-		    buf_ptr += os_sprintf (buf_ptr, "<%s>", ih_hash8_v2key (sdata->token_idx, bc_arg->arg.ptr));
+                    sh_gvar_t      *gvar = d_pointer_as(sh_gvar_t, bc_arg->arg.ptr);
+                    char           *gname = ih_hash8_v2key (sdata->token_idx, (char *) gvar);
+		    if (gvar->type == SH_BC_ARG_INT)
+                        buf_ptr += os_sprintf (buf_ptr, "<%s: %u>", gname, gvar->arg.arg.value);
+		    else if (gvar->type == SH_BC_ARG_CHAR)
+                        buf_ptr += os_sprintf (buf_ptr, "<%s: \"%s\">", gname, gvar->arg.data);
+                    else 
+                        buf_ptr += os_sprintf (buf_ptr, "<%s>", gname);
 		}
 		else {
 		    buf_ptr += os_sprintf (buf_ptr, "ptr=%p", bc_arg->arg.ptr);
@@ -1331,7 +1359,7 @@ stmt_eval_popvar (sh_stmt_t * stmt, char ** bc_ptr, uint16 * mask, sh_bc_arg_t *
         return SH_INTERNAL_ERROR;
 
     *arg_type = sh_pop_bcarg_type (mask, *bc_arg);
-    os_printf("-- 7.1 %u\n", *arg_type);
+    //debug// os_printf("-- 7.1 %u\n", *arg_type);
     switch (*arg_type) {
     case SH_BC_ARG_INT:
         break;
@@ -1344,20 +1372,20 @@ stmt_eval_popvar (sh_stmt_t * stmt, char ** bc_ptr, uint16 * mask, sh_bc_arg_t *
 	    sh_bc_arg_t *arg = NULL;
 	    if ((*bc_arg)->arg.ptr > (void *) 0xFFFF) {        
 	        sh_gvar_t      *gvar = d_pointer_as(sh_gvar_t, (*bc_arg)->arg.ptr);
-                os_printf("-- 7.2 %p\n", gvar);
+                //debug// os_printf("-- 7.2 %p\n", gvar);
 	        arg = &gvar->arg;
 
-                if (!arg->arg.ptr) {
+                if ((gvar->type == SH_BC_ARG_FUNC) && (!arg->arg.ptr)) {
                     char            *func_name = ih_hash8_v2key (sdata->token_idx, (char *) gvar);
                     d_sh_check_error (sh_func_get (func_name, (sh_func_entry_t **) &(arg->arg.ptr)));
-                    os_printf("-- 7.2.1 %s %p\n", func_name, arg->arg.ptr);
+                    //debug// os_printf("-- 7.2.1 %s %p\n", func_name, arg->arg.ptr);
                 }
-                *arg_type = SH_BC_ARG_FUNC;
+                *arg_type = gvar->type;
 	    }
 	    else {
         	sh_bc_oper_t * bc_oper = d_pointer_add(sh_bc_oper_t, stmt->vardata, (*bc_arg)->arg.ptr);
-                os_printf("-- 7.3 %u\n", bc_oper->optype);
-        	if ((sh_oper_desc[bc_oper->optype].result) || (bc_oper->optype == SH_OPER_VAR)) // Check that oper has result
+                //debug// os_printf("-- 7.3 %u\n", bc_oper->optype);
+        	if ((sh_oper_desc[bc_oper->optype].result) || (bc_oper->optype == SH_OPER_VAR) || (sh_oper_desc[bc_oper->optype].control)) // Check that oper has result
 	            arg = d_pointer_add(sh_bc_arg_t, bc_oper, sizeof (sh_bc_arg_t));
         	else if (bc_oper->optype == SH_OPER_GVAR) {
 	            arg = d_pointer_add(sh_bc_arg_t, bc_oper, sizeof (sh_bc_arg_t));
@@ -1366,7 +1394,7 @@ stmt_eval_popvar (sh_stmt_t * stmt, char ** bc_ptr, uint16 * mask, sh_bc_arg_t *
 	        }
 	        *arg_type = SH_BC_ARG_INT;
 	    }
-            os_printf("-- 7.4 %p\n", arg);
+            //debug// os_printf("-- 7.4 %p\n", arg);
             if (!arg)
                 return SH_INTERNAL_ERROR;
             *bc_arg = arg;
@@ -1375,7 +1403,7 @@ stmt_eval_popvar (sh_stmt_t * stmt, char ** bc_ptr, uint16 * mask, sh_bc_arg_t *
     default:
         return SH_INTERNAL_ERROR;
     }
-    os_printf("-- 7.5 %u\n", *arg_type);
+    //debug// os_printf("-- 7.5 %u\n", *arg_type);
 
     return SH_ERR_SUCCESS;
 }
@@ -1422,10 +1450,10 @@ stmt_eval_func (sh_stmt_t * stmt, sh_bc_oper_t * bc_oper, char ** bc_ptr)
         d_sh_check_error (stmt_eval_popvar (stmt, bc_ptr, &mask, &bc_args[idx], &arg_types[idx]));
     }
 
-    os_printf("-- 8.1\n");
+    //debug// os_printf("-- 8.1\n");
     sh_func_entry_t *entry = func_arg->arg.ptr;
     entry->func.func (res_arg, count, arg_types, bc_args);
-    os_printf("-- 8.2\n");
+    //debug// os_printf("-- 8.2\n");
 
     return SH_ERR_SUCCESS;
 }
@@ -1572,7 +1600,7 @@ stmt_eval (const sh_hndlr_t hstmt, sh_eval_ctx_t * ctx)
     while (bc_ptr < ptr_max) {
 	sh_bc_oper_t   *bc_oper_ptr = d_pointer_as (sh_bc_oper_t, bc_ptr);
 	sh_oper_desc_t *opdesc = &sh_oper_desc[bc_oper_ptr->optype];
-	os_printf ("%04x:\t%s%s %u\n", bc_ptr - (char *) stmt->vardata, opdesc->token, opdesc->term, bc_oper_ptr->arg_count);
+	//debug// os_printf ("%04x:\t%s%s %u\n", bc_ptr - (char *) stmt->vardata, opdesc->token, opdesc->term, bc_oper_ptr->arg_count);
 
 	bc_ptr += sizeof (sh_bc_oper_t);
 	if (bc_ptr > ptr_max)
@@ -1599,6 +1627,35 @@ stmt_eval (const sh_hndlr_t hstmt, sh_eval_ctx_t * ctx)
 	case SH_OPER_FUNC:
 	    d_sh_check_error ( stmt_eval_func(stmt, bc_oper_ptr, &bc_ptr));
 	    break;
+	case SH_OPER_IF:
+	case SH_OPER_IFRET:
+	case SH_OPER_ELSE:
+	    {
+                uint16          mask = bc_oper_ptr->bitmask;
+                sh_bc_arg_type_t arg_type;
+                sh_bc_arg_t    *bc_arg = d_pointer_as (sh_bc_arg_t, bc_ptr);
+                d_sh_check_error (stmt_eval_popvar (stmt, &bc_ptr, &mask, &bc_arg, &arg_type));
+
+	        sh_bc_arg_t    *jmp_arg = d_pointer_as (sh_bc_arg_t, bc_ptr);
+                sh_pop_bcarg_type(&mask, jmp_arg);
+	        bc_ptr += sizeof (sh_bc_arg_t);
+                //debug// os_printf("-- cond %p %u\n", d_pointer_diff(bc_arg, stmt->vardata), bc_arg->arg.value);
+
+                if ( ((bc_arg->arg.value) && (bc_oper_ptr->optype != SH_OPER_ELSE))
+                     || ((!bc_arg->arg.value) && (bc_oper_ptr->optype == SH_OPER_ELSE))) 
+                {
+	            arg_count_t     count = bc_oper_ptr->arg_count + (opdesc->result ? 1 : 0) - 2;
+                    arg_count_t     idx;
+                    for (idx = 0; idx < count; idx++) {
+                        d_sh_check_error (stmt_eval_popvar (stmt, &bc_ptr, &mask, &bc_arg, &arg_type));
+                    }
+                }
+                else {
+                    //debug// os_printf("-- jump %u\n", jmp_arg->arg.value);
+                    bc_ptr = stmt->vardata + jmp_arg->arg.value;
+                }
+            }
+	    break;
 	default:
 	    if (opdesc->concat) {
 	        d_sh_check_error ( stmt_eval_foper_concat(stmt, bc_oper_ptr, &bc_ptr));
@@ -1613,25 +1670,24 @@ stmt_eval (const sh_hndlr_t hstmt, sh_eval_ctx_t * ctx)
     return SH_ERR_SUCCESS;
 }
 
-void    ICACHE_FLASH_ATTR
+LOCAL void    ICACHE_FLASH_ATTR
 fn_sysdate (sh_bc_arg_t * ret_arg, const arg_count_t arg_count, sh_bc_arg_type_t arg_type[], sh_bc_arg_t * bc_args[]) 
 {
     ret_arg->arg.value = lt_time (NULL);
 }
 
-void    ICACHE_FLASH_ATTR
+LOCAL void    ICACHE_FLASH_ATTR
 fn_sysctime (sh_bc_arg_t * ret_arg, const arg_count_t arg_count, sh_bc_arg_type_t arg_type[], sh_bc_arg_t * bc_args[]) 
 {
     ret_arg->arg.value = lt_ctime ();
 }
 
-void    ICACHE_FLASH_ATTR
+LOCAL void    ICACHE_FLASH_ATTR
 fn_print (sh_bc_arg_t * ret_arg, const arg_count_t arg_count, sh_bc_arg_type_t arg_type[], sh_bc_arg_t * bc_args[]) 
 {
    char            buffer[80];
    char           *buf_ptr = buffer;
    arg_count_t i;
-   // Fixme: not support CHAR ARG
    for (i = 0; i < arg_count; i++) {
         if (i > 0) {
 	    buf_ptr += os_sprintf (buf_ptr, ", ");
@@ -1648,7 +1704,7 @@ fn_print (sh_bc_arg_t * ret_arg, const arg_count_t arg_count, sh_bc_arg_type_t a
        }
    }
 
-   d_log_iprintf (LSH_SERVICE_NAME, "print: %s", buffer);
+   d_log_iprintf (LSH_SERVICE_NAME, "out: %s", buffer);
 }
 
 typedef struct sh_find_ctx_s {
@@ -1843,31 +1899,48 @@ sh_on_msg_info (dtlv_ctx_t * msg_out)
 {
     dtlv_avp_t     *gavp;
 
-    d_svcs_check_imdb_error ( dtlv_avp_encode_list (msg_out, 0, SH_AVP_STATEMENT, DTLV_TYPE_OBJECT, &gavp));
-
+    d_svcs_check_dtlv_error ( dtlv_avp_encode_list (msg_out, 0, SH_AVP_STATEMENT, DTLV_TYPE_OBJECT, &gavp));
     imdb_hndlr_t    hcur;
     d_svcs_check_imdb_error (imdb_class_query (sdata->hstmt, PATH_NONE, &hcur));
 
-    sh_stmt_t      *stmts[10];
+    void           *entries[10];
     uint16          rowcount;
-    d_svcs_check_imdb_error (imdb_class_fetch (hcur, 10, &rowcount, (void **)stmts));
+    d_svcs_check_imdb_error (imdb_class_fetch (hcur, 10, &rowcount, entries));
 
     bool            fcont = true;
     while (rowcount && fcont) {
 	int             i;
 	for (i = 0; i < rowcount; i++) {
-
+            sh_stmt_t      *stmt = d_pointer_as(sh_stmt_t, entries[i]);
 	    dtlv_avp_t     *gavp_in;
 	    d_svcs_check_dtlv_error (dtlv_avp_encode_grouping (msg_out, 0, SH_AVP_STATEMENT, &gavp_in)
-				     || dtlv_avp_encode_nchar (msg_out, SH_AVP_STMT_NAME, sizeof (sh_stmt_name_t), stmts[i]->info.name)
-				     || dtlv_avp_encode_uint16 (msg_out, SH_AVP_STMT_OBJSIZE, stmts[i]->info.length)
-				     || dtlv_avp_encode_uint32 (msg_out, SH_AVP_STMT_PARSE_TIME, lt_time (&stmts[i]->info.parse_time))
+				     || dtlv_avp_encode_nchar (msg_out, SH_AVP_STMT_NAME, sizeof (sh_stmt_name_t), stmt->info.name)
+				     || dtlv_avp_encode_uint16 (msg_out, SH_AVP_STMT_OBJSIZE, stmt->info.length)
+				     || dtlv_avp_encode_uint32 (msg_out, SH_AVP_STMT_PARSE_TIME, lt_time (&stmt->info.parse_time))
 				     || dtlv_avp_encode_group_done (msg_out, gavp_in));
 	}
 
-        d_svcs_check_imdb_error (imdb_class_fetch (hcur, 10, &rowcount, (void **)stmts));
+        d_svcs_check_imdb_error (imdb_class_fetch (hcur, 10, &rowcount, entries));
     }
+    imdb_class_close (hcur);
+    d_svcs_check_imdb_error (dtlv_avp_encode_group_done (msg_out, gavp));
 
+
+    d_svcs_check_dtlv_error (dtlv_avp_encode_list (msg_out, 0, SH_AVP_FUNCTION_NAME, DTLV_TYPE_CHAR, &gavp));
+    d_svcs_check_imdb_error (imdb_class_query (sdata->hfunc, PATH_NONE, &hcur));
+
+    d_svcs_check_imdb_error (imdb_class_fetch (hcur, 10, &rowcount, entries));
+    fcont = true;
+    while (rowcount && fcont) {
+	int             i;
+	for (i = 0; i < rowcount; i++) {
+            sh_func_entry_t *func = d_pointer_as(sh_func_entry_t, entries[i]);
+	    d_svcs_check_dtlv_error (dtlv_avp_encode_nchar (msg_out, SH_AVP_FUNCTION_NAME, sizeof (sh_func_name_t), func->func_name));
+	}
+
+        d_svcs_check_imdb_error (imdb_class_fetch (hcur, 10, &rowcount, entries));
+    }
+    imdb_class_close (hcur);
     d_svcs_check_imdb_error (dtlv_avp_encode_group_done (msg_out, gavp));
 
     return SVCS_ERR_SUCCESS;
