@@ -10,7 +10,7 @@
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Foobar is distributed in the hope that it will be useful,
+ * ESP8266 Things Shell is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
@@ -67,7 +67,8 @@
  *  - clients_limit: maximum authorized connections
  *  - auth_tx: authorization timer (in seconds)
  *  - idle_tx: idlle timer (in seconds)
- *  - conn_tx: connection timer (in seconds)
+ *  - recycle_tx: connection timer (in seconds)
+ *  - softap_idle_timeout: TODO: in STATIONAP mode timeout for disable SOFTAP if station has IP and no active udpctl connection throught SOFTAP
  */
 typedef struct udpctl_conf_s {
     ip_port_t       port;
@@ -77,6 +78,7 @@ typedef struct udpctl_conf_s {
     uint8           auth_tx;
     uint8           idle_tx;
     uint8           recycle_tx;
+    uint8           softap_idle_timeout;
 } udpctl_conf_t;
 
 typedef struct udpctl_data_s {

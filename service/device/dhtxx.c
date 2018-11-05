@@ -10,7 +10,7 @@
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Foobar is distributed in the hope that it will be useful,
+ * ESP8266 Things Shell is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
@@ -384,7 +384,7 @@ dht_on_msg_info (dtlv_ctx_t * msg_out)
 				        || dtlv_avp_encode_uint16 (msg_out, DHT_HUMIDITY, sdata->stat_ema_value.hmdt)
 				        || dtlv_avp_encode_uint16 (msg_out, DHT_TEMPERATURE, sdata->stat_ema_value.temp)
 				        || dtlv_avp_encode_group_done (msg_out, gavp)) : 
-                                     dtlv_avp_encode_uint8 (msg_out, DHT_STAT_EMA_INIT_COUNT, sdata->conf.stat_ema_initcnt));
+                                     dtlv_avp_encode_uint8 (msg_out, DHT_STAT_EMA_INIT_COUNT, sdata->stat_ema_initcnt));
     }
     else {
 	d_svcs_check_dtlv_error (dtlv_avp_encode_grouping (msg_out, 0, DHT_STAT_LAST, &gavp) ||

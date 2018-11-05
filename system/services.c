@@ -10,13 +10,13 @@
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Foobar is distributed in the hope that it will be useful,
+ * ESP8266 Things Shell is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Foobar.  If not, see <https://www.gnu.org/licenses/>.
+ * along with ESP8266 Things Shell.  If not, see <https://www.gnu.org/licenses/>.
  *
  */
 
@@ -39,14 +39,14 @@
 
 #define	SERVICES_SERVICE_NAME			"svcs"
 
-#define SERVICES_DATA_STORAGE_PAGES		4
+#define SERVICES_DATA_STORAGE_PAGES		1
 #define SERVICES_DATA_STORAGE_PAGE_BLOCKS	2
 
 #define SERVICES_STORAGE_PAGES		1
 #define SERVICES_STORAGE_PAGE_BLOCKS	1
 
-#define SERVICES_CONFIG_STORAGE_PAGES		1
-#define SERVICES_CONFIG_STORAGE_PAGE_BLOCKS	2
+#define SERVICES_CONFIG_STORAGE_PAGES		8
+#define SERVICES_CONFIG_STORAGE_PAGE_BLOCKS	4
 
 #define SERVICES_IMDB_CLS_DATA		"svcs$data"
 #define SERVICES_IMDB_CLS_SERVICE	"svcs$service"
@@ -449,11 +449,11 @@ SERVICES_STORAGE_PAGE_BLOCKS, sizeof (svcs_service_t) };
     d_svcs_check_svcs_error (imdb_class_create (hmdb, &cdef2, &sdata->hsvcs)
 	);
 
-    imdb_class_def_t cdef3 =
-	{ SERVICES_IMDB_CLS_CONFIG, false, true, false, 0, SERVICES_CONFIG_STORAGE_PAGES,
-SERVICES_CONFIG_STORAGE_PAGE_BLOCKS, SERVICES_CONFIG_STORAGE_PAGE_BLOCKS, sizeof (svcs_service_conf_t) };
-    d_svcs_check_svcs_error (imdb_class_create (hmdb, &cdef3, &sdata->hconf)
-	);
+//    imdb_class_def_t cdef3 =
+//	{ SERVICES_IMDB_CLS_CONFIG, false, true, false, 0, SERVICES_CONFIG_STORAGE_PAGES,
+//SERVICES_CONFIG_STORAGE_PAGE_BLOCKS, SERVICES_CONFIG_STORAGE_PAGE_BLOCKS, sizeof (svcs_service_conf_t) };
+//    d_svcs_check_svcs_error (imdb_class_create (hmdb, &cdef3, &sdata->hconf)
+//	);
 
     d_log_wprintf (SERVICES_SERVICE_NAME, "started");
     return SVCS_ERR_SUCCESS;

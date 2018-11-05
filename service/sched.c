@@ -10,7 +10,7 @@
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Foobar is distributed in the hope that it will be useful,
+ * ESP8266 Things Shell is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
@@ -31,7 +31,7 @@
 
 #define SCHED_IMDB_CLS_ENTRY		"sched$entry"
 #define SCHED_ENTRY_STORAGE_PAGES	1
-#define SCHED_ENTRY_STORAGE_PAGE_BLOCKS	2
+#define SCHED_ENTRY_STORAGE_PAGE_BLOCKS	1
 
 #define SCHED_ENTRYIDX_BUFFER_SIZE	512
 

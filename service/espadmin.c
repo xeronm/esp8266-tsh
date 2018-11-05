@@ -10,7 +10,7 @@
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Foobar is distributed in the hope that it will be useful,
+ * ESP8266 Things Shell is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
@@ -105,6 +105,7 @@ espadmin_on_msg_system (dtlv_ctx_t * msg_out)
 			     dtlv_avp_encode_uint32 (msg_out, ESPADMIN_AVP_SYS_CHIP_ID, system_get_chip_id ()) ||
 			     dtlv_avp_encode_uint32 (msg_out, ESPADMIN_AVP_SYS_FLASH_ID, spi_flash_get_id ()) ||
 			     dtlv_avp_encode_uint32 (msg_out, ESPADMIN_AVP_SYS_UPTIME, lt_ctime ()) ||
+			     dtlv_avp_encode_uint32 (msg_out, ESPADMIN_AVP_SYS_HEAP_FREE, system_get_free_heap_size ()) ||
 			     dtlv_avp_encode_uint8 (msg_out, ESPADMIN_AVP_SYS_RST_REASON, rsti->reason));
     if ((rsti->reason == REASON_EXCEPTION_RST) || (rsti->exccause)) {
 	dtlv_avp_t     *gavp_in;
@@ -223,12 +224,18 @@ espadmin_on_msg_imdb (dtlv_ctx_t * msg_out)
 				 || dtlv_avp_encode_list (msg_out, 0, ESPADMIN_AVP_IMDB_CLASS, DTLV_TYPE_OBJECT,
 							  &gavp_in));
 	int             i;
+	size_t          total_free = 0;
+	uint16          total_blocks = 0;
+
 	for (i = 0; i < MIN (_imdb_info.class_count, IMDB_INFO_ARRAY_SIZE); i++) {
 	    dtlv_avp_t     *gavp_in2;
 	    d_svcs_check_dtlv_error (dtlv_avp_encode_grouping (msg_out, 0, ESPADMIN_AVP_IMDB_CLASS, &gavp_in2));
 
 	    uint32          objcount = 0;
 	    imdb_class_forall (info_array[i].hclass, (void *) &objcount, forall_count);
+
+            total_blocks += info_array[i].blocks;
+            total_free += info_array[i].slots_free_size + info_array[i].blocks_free * _imdb_info.db_def.block_size;
 
 	    d_svcs_check_dtlv_error (dtlv_avp_encode_nchar
 				     (msg_out, ESPADMIN_AVP_IMDB_CLASS_NAME, sizeof (class_name_t),
@@ -241,12 +248,14 @@ espadmin_on_msg_imdb (dtlv_ctx_t * msg_out)
 								info_array[i].slots_free)
 				     || dtlv_avp_encode_uint32 (msg_out, ESPADMIN_AVP_IMDB_FREE_SIZE,
 								info_array[i].slots_free_size +
-								info_array[i].blocks_free * _imdb_info.size_block)
+								info_array[i].blocks_free * _imdb_info.db_def.block_size)
 				     || dtlv_avp_encode_uint16 (msg_out, ESPADMIN_AVP_IMDB_OBJECT_COUNT, objcount)
 				     || dtlv_avp_encode_group_done (msg_out, gavp_in2));
 	}
 
-	d_svcs_check_dtlv_error (dtlv_avp_encode_group_done (msg_out, gavp_in));
+	d_svcs_check_dtlv_error (dtlv_avp_encode_group_done (msg_out, gavp_in)
+                                 || dtlv_avp_encode_uint16 (msg_out, ESPADMIN_AVP_IMDB_BLOCK_COUNT, total_blocks)
+                                 || dtlv_avp_encode_uint32 (msg_out, ESPADMIN_AVP_IMDB_FREE_SIZE, total_free));
     }
 
     d_svcs_check_dtlv_error (dtlv_avp_encode_group_done (msg_out, gavp));

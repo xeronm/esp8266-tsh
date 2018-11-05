@@ -10,13 +10,13 @@
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Foobar is distributed in the hope that it will be useful,
+ * ESP8266 Things Shell is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Foobar.  If not, see <https://www.gnu.org/licenses/>.
+ * along with ESP8266 Things Shell.  If not, see <https://www.gnu.org/licenses/>.
  *
  */
 
@@ -38,7 +38,8 @@
 #include "service/device/dhtxx.h"
 #endif
 
-imdb_hndlr_t    hmdb;
+imdb_hndlr_t    hmdb = 0;
+imdb_hndlr_t    hfdb = 0;
 os_timer_t      timer_overflow;
 
 #define STARTUP_SERVICE_NAME	"startup"
@@ -98,6 +99,9 @@ wifi_event_handler_cb (System_Event_t * event)
     if (event->event == EVENT_STAMODE_GOT_IP) {
 	svcctl_service_message (0, 0, event, SVCS_MSGTYPE_NETWORK, NULL, NULL);
     }
+    else if (event->event == EVENT_STAMODE_DISCONNECTED) {
+	svcctl_service_message (0, 0, event, SVCS_MSGTYPE_NETWORK_LOSS, NULL, NULL);
+    }
 }
 
 void            ICACHE_FLASH_ATTR
@@ -117,9 +121,12 @@ system_init (void)
 		   system_get_free_heap_size ());
 
 #ifndef DISABLE_SYSTEM
-    d_log_iprintf (STARTUP_SERVICE_NAME, "imdb block_size:%u", SYSTEM_IMDB_BLOCK_SIZE);
-    imdb_def_t      db_def = { SYSTEM_IMDB_BLOCK_SIZE, BLOCK_CRC_NONE };
+    d_log_iprintf (STARTUP_SERVICE_NAME, "imdb block_size:%u, fdb block_size:%u", SYSTEM_IMDB_BLOCK_SIZE, SYSTEM_FDB_BLOCK_SIZE);
+    imdb_def_t      db_def = { SYSTEM_IMDB_BLOCK_SIZE, BLOCK_CRC_NONE, false, 0 };
     imdb_init (&db_def, &hmdb);
+
+    imdb_def_t      db_def2 = { SYSTEM_FDB_BLOCK_SIZE, BLOCK_CRC_NONE, true, 1 };
+    imdb_init (&db_def2 , &hfdb);
 
     svcctl_start (hmdb);
     // installing services
@@ -157,6 +164,12 @@ imdb_hndlr_t    ICACHE_FLASH_ATTR
 get_hmdb (void)
 {
     return hmdb;
+}
+
+imdb_hndlr_t    ICACHE_FLASH_ATTR
+get_fdb (void)
+{
+    return hfdb;
 }
 
 uint8           ICACHE_FLASH_ATTR

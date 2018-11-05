@@ -10,7 +10,7 @@
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Foobar is distributed in the hope that it will be useful,
+ * ESP8266 Things Shell is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
@@ -33,7 +33,7 @@
 #include "service/syslog.h"
 
 #define SYSLOG_STORAGE_PAGES		1
-#define SYSLOG_STORAGE_PAGE_BLOCKS	8
+#define SYSLOG_STORAGE_PAGE_BLOCKS	4
 #define SYSLOG_MESSAGE_MAX_LEN		380
 #define SYSLOG_IMDB_CLS_NAME		"syslog$"
 

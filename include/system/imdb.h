@@ -99,10 +99,14 @@ typedef struct imdb_stat_s {
  * imdb general storage definition
  *   - block_size: block size in bytes
  *   - block_crc: block CRC mode
+ *   - opt_media: use media storage
+ *   - buffer_size: buffer cache size in blocks when use media storage
  */
 typedef struct imdb_def_s {
     block_size_t    block_size;
-    imdb_block_crc_t block_crc;
+    imdb_block_crc_t block_crc: 7;
+    bool            opt_media: 1;
+    uint32          buffer_size; // TODO: At this moment support only 1 block
 } imdb_def_t;
 
 /*

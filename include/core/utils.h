@@ -1,20 +1,24 @@
-/* Copyright (c) 2018 by Denis Muratov <xeronm@gmail.com>. All rights reserved
-
-   FileName: utils.c
-   Source: https://dtec.pro/gitbucket/git/esp8266/esp8266_lsh.git
-
-   Description: Utility auxiliary function and defines
-
-*/
-/*
-	API Functions:
-		parse_uint	- parse unsigned int from string
-		estlen_qstr	- estimate quoted string length, for accurate memory allocation
-		parse_qstr	- parse quoted string from string
-		estlen_token	- estimate token length, for accurate memory allocation
-		parse_token	- parse token from string
-
-*/
+/* 
+ * ESP8266 Auxiliary Function and Defines
+ * Copyright (c) 2018 Denis Muratov <xeronm@gmail.com>.
+ * https://dtec.pro/gitbucket/git/esp8266/esp8266-tsh.git
+ *
+ * This file is part of ESP8266 Things Shell.
+ *
+ * ESP8266 Things Shell is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * ESP8266 Things Shell is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with ESP8266 Things Shell.  If not, see <https://www.gnu.org/licenses/>.
+ *
+ */
 
 #ifndef UTILS_H_
 #define UTILS_H_

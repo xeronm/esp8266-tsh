@@ -10,7 +10,7 @@
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Foobar is distributed in the hope that it will be useful,
+ * ESP8266 Things Shell is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
@@ -64,13 +64,17 @@
 #define LSH_FUNC_STORAGE_PAGE_BLOCKS		1
 
 #define LSH_STMT_STORAGE_PAGES			2
-#define LSH_STMT_STORAGE_PAGE_BLOCKS		8
+#define LSH_STMT_STORAGE_PAGE_BLOCKS		4
+
+#define LSH_STMT_SRC_STORAGE_PAGES		8
+#define LSH_STMT_SRC_STORAGE_PAGE_BLOCKS	1
 
 #define LSH_TOKENIDX_BUFFER_SIZE		512
 #define LSH_OPER_ARG_COUNT_MAX			14
 
 #define LSH_IMDB_CLS_FUNC		"lsh$func"
 #define LSH_IMDB_CLS_STMT		"lsh$stmt"
+#define LSH_IMDB_CLS_STMT_SRC		"lsh$src"
 
 #undef LSH_BUFFERS_IMDB
 
@@ -123,6 +127,7 @@ LOCAL const char *sz_sh_error[] RODATA = {
     "memory allocation error: %u",
     "statement \"%s\" already exists",
     "statement \"%s\" not exists",
+    "function \"%s\" call error",
 };
 
 typedef enum PACKED sh_oper_type_e {
@@ -172,6 +177,7 @@ typedef struct lsh_data_s {
     imdb_hndlr_t    hdata;	// service data storage
     imdb_hndlr_t    hfunc;	// function storage
     imdb_hndlr_t    hstmt;	// parsed statement storage
+    imdb_hndlr_t    hstmt_src;	// statement source storage
     char            token_idx[LSH_TOKENIDX_BUFFER_SIZE];	// hash map 
     // Fixme: should make separate index segment in imdb
 } lsh_data_t;
@@ -683,7 +689,7 @@ bc_serialize_oper_ctl (sh_parse_ctx_t * ctx, char **bc_ptr, char **pbuf_ptr, sh_
 
         //debug// os_printf("-- cond0 vptr %p\n", cond0_arg->arg.ptr);
         bc_oper0 = d_pointer_add(sh_bc_oper_t, ctx->bc_buf, cond0_arg->arg.ptr);
-        *vptr = cond0_arg->arg.ptr;
+        *vptr = (uint32) cond0_arg->arg.ptr;
     }
 
 
@@ -2024,6 +2030,13 @@ LSH_STMT_STORAGE_PAGE_BLOCKS, sizeof (sh_stmt_t) };
 	IH_ERR_SUCCESS) {
 	return SH_INTERNAL_ERROR;
     }
+
+
+    imdb_class_def_t cdef3 =
+	{ LSH_IMDB_CLS_STMT_SRC, false, true, false, 0, LSH_STMT_SRC_STORAGE_PAGES, LSH_STMT_SRC_STORAGE_PAGE_BLOCKS,
+LSH_STMT_STORAGE_PAGE_BLOCKS, sizeof (sh_stmt_t) };
+    d_svcs_check_imdb_error (imdb_class_create (get_fdb (), &cdef3, &(tmp_sdata->hstmt_src))
+	);
 
     sdata = tmp_sdata;
 
