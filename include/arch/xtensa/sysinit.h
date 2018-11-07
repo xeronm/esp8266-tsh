@@ -99,6 +99,12 @@ void            __os_conn_remote_addr (ip_conn_t * pconn, ipv4_addr_t * ipaddr);
 #define os_conn_free(conn)			espconn_delete((conn))
 #define os_conn_set_recvcb(conn, recv_cb)	espconn_regist_recvcb((conn), (recv_cb))
 
+
+size_t          fio_user_read(uint32 addr, uint32 *buffer, uint32 size);
+size_t          fio_user_write(uint32 addr, uint32 *buffer, uint32 size);
+size_t          fio_user_size(void);
+
+
 /*
    User Init
 */

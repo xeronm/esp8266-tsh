@@ -23,6 +23,7 @@
 
 #include "sysinit.h"
 #include "fwupgrade.h"
+#include "flashmap.h"
 #include "core/logging.h"
 #include "core/utils.h"
 #include "core/config.h"
@@ -80,10 +81,13 @@ espadmin_on_msg_firmware (dtlv_ctx_t * msg_out)
 {
     dtlv_avp_t     *gavp;
     // FIRMWARE
+    flash_ota_map_t * fwmap = get_flash_ota_map ();
     d_svcs_check_dtlv_error (dtlv_avp_encode_grouping (msg_out, 0, ESPADMIN_AVP_FIRMWARE, &gavp) ||
 			     dtlv_avp_encode_uint32 (msg_out, ESPADMIN_AVP_FW_ADDR, system_get_userbin_addr ()) ||
 			     dtlv_avp_encode_uint8 (msg_out, ESPADMIN_AVP_FW_SIZE_MAP, system_get_flash_size_map ()) ||
 			     dtlv_avp_encode_uint32 (msg_out, ESPADMIN_AVP_FW_BIN_SIZE, fw_info.binsize) ||
+			     dtlv_avp_encode_uint32 (msg_out, ESPADMIN_AVP_FW_USER_DATA_ADDR, d_flash_user2_data_addr (fwmap)) ||
+			     dtlv_avp_encode_uint32 (msg_out, ESPADMIN_AVP_FW_USER_DATA_SIZE, fio_user_size ()) ||
 			     dtlv_avp_encode_uint32 (msg_out, ESPADMIN_AVP_FW_RELEASE_DATE, fw_info.release_date) ||
 			     dtlv_avp_encode_octets (msg_out, ESPADMIN_AVP_FW_DIGEST, sizeof (fw_info.digest),
 						     (char *) fw_info.digest)

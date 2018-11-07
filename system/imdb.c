@@ -24,6 +24,7 @@
 #include "core/utils.h"
 #include "core/logging.h"
 #include "system/imdb.h"
+#include "crypto/crc.h"
 
 #define IMDB_PCT_FREE_MAX		30	// 60% (4 bits, 1unit = 2%)
 #define IMDB_BLOCK_SIZE_MIN		512	// 512 Bytes
@@ -57,14 +58,29 @@ struct imdb_block_s;
 struct imdb_block_page_s;
 struct imdb_block_class_s;
 
+typedef union class_ptr_u {
+    struct imdb_block_class_s *mptr;
+    size_t fptr;
+} class_ptr_t;
+
 typedef struct imdb_s {
     imdb_def_t      db_def;
     obj_size_t      obj_bsize_max;
-    imdb_stat_t     stat;	//
-    struct imdb_block_class_s *class_first;	//
-    struct imdb_block_class_s *class_last;	//
+    imdb_stat_t     stat;
+    class_ptr_t     class_first;
+    class_ptr_t     class_last;
     imdb_hndlr_t    hcurs;
 } imdb_t;
+
+typedef struct imdb_file_s {
+    uint16          version;
+    uint16          crc16;
+    uint32          scn;
+    block_size_t    block_size;
+    class_ptr_t     class_last;
+    size_t          file_size;
+    size_t          file_hwm;
+} imdb_file_t;
 
 #define	d_stat_alloc(imdb, size)	{ (imdb)->stat.mem_alloc += (size); }
 #define	d_stat_free(imdb, size)		{ (imdb)->stat.mem_free += (size); }
@@ -1105,10 +1121,11 @@ imdb_class_instance_alloc (imdb_block_class_t * class_block, void **ptr, size_t 
 /*
 [public] Initialize imdb instance
   - hndlr: result handler to imdb instance
+  - hcurmdb: handler
   - result: imdb error code
 */
 imdb_errcode_t  ICACHE_FLASH_ATTR
-imdb_init (imdb_def_t * imdb_def, imdb_hndlr_t * himdb)
+imdb_init (imdb_def_t * imdb_def, imdb_hndlr_t hcurmdb, imdb_hndlr_t * himdb)
 {
     imdb_t         *imdb;
     st_zalloc (imdb, imdb_t);
@@ -1131,9 +1148,39 @@ imdb_init (imdb_def_t * imdb_def, imdb_hndlr_t * himdb)
 
     *himdb = d_obj2hndlr (imdb);
 
-    imdb_class_def_t cdef =
-	{ IMDB_CLS_CURSOR, false, false, false, 0, 0, 1, IMDB_CURSOR_PAGE_BLOCKS, sizeof (imdb_cursor_t) };
-    imdb_class_create (*himdb, &cdef, &imdb->hcurs);
+    if (hcurmdb) {
+        imdb_t         *curimdb = d_hndlr2obj (imdb_t, hcurmdb);
+        imdb->hcurs = curimdb->hcurs;
+    }
+    else {
+        imdb_class_def_t cdef =
+	    { IMDB_CLS_CURSOR, false, false, false, 0, 0, 1, IMDB_CURSOR_PAGE_BLOCKS, sizeof (imdb_cursor_t) };
+        imdb_class_create (*himdb, &cdef, &imdb->hcurs);
+    }
+
+    if (imdb_def->opt_media) {
+        // read header
+        imdb_file_t hdr_file;
+        fio_user_read(0, (uint32 *) &hdr_file, sizeof(imdb_file_t));
+        uint16 crc = hdr_file.crc16;
+        hdr_file.crc16 = 0;
+        if (crc16(&hdr_file, sizeof(imdb_file_t)) != crc) {
+            hdr_file.version = IMDB_FILE_HEADER_VERSION;
+            hdr_file.block_size = imdb_def->block_size;
+            hdr_file.class_last.fptr = 0;
+            hdr_file.file_size = MIN(imdb_def->file_size, fio_user_size ()/imdb_def->block_size);
+            hdr_file.file_hwm = 0;
+            hdr_file.scn = 1;
+            hdr_file.crc16 = crc16(&hdr_file, sizeof(imdb_file_t));
+            d_log_wprintf (IMDB_SERVICE_NAME, "file header crc error, new: %ublk", hdr_file.file_size);
+            fio_user_write(0, (uint32 *) &hdr_file, sizeof(imdb_file_t));
+        }
+        else {
+            d_log_wprintf (IMDB_SERVICE_NAME, "read data file [SCN:%u,size:%ublk]", hdr_file.scn, hdr_file.file_size);
+            imdb->class_first.fptr = (hdr_file.file_hwm) ? 1 : 0;
+            imdb->class_last.fptr = hdr_file.class_last.fptr;
+        }
+    }
 
     return IMDB_ERR_SUCCESS;
 }
@@ -1150,7 +1197,7 @@ imdb_done (imdb_hndlr_t hmdb)
 
     imdb_t         *imdb = d_hndlr2obj (imdb_t, hmdb);
 
-    imdb_block_class_t *class_block = imdb->class_first;
+    imdb_block_class_t *class_block = imdb->class_first.mptr;
     while (class_block) {
 	imdb_hndlr_t    hclass = d_obj2hndlr (class_block);
 	class_block = class_block->dbclass.class_next;
@@ -1190,7 +1237,7 @@ imdb_info (imdb_hndlr_t hmdb, imdb_info_t * imdb_info, imdb_class_info_t info_ar
     imdb_info->size_cursor = sizeof (imdb_cursor_t);
 
     imdb_info->class_count = 0;
-    imdb_block_class_t *class_block = imdb->class_first;
+    imdb_block_class_t *class_block = imdb->class_first.mptr;
     while (class_block) {
 	imdb_info->class_count++;
 	if (array_len >= imdb_info->class_count) {
@@ -1216,6 +1263,9 @@ imdb_class_create (imdb_hndlr_t hmdb, imdb_class_def_t * cdef, imdb_hndlr_t * hc
     d_imdb_check_hndlr (hmdb);
     imdb_t         *imdb = d_hndlr2obj (imdb_t, hmdb);
 
+    if (imdb->db_def.opt_media)
+        return IMDB_INTERNAL_ERROR;
+
     cdef->page_blocks = MAX (IMDB_FIRST_PAGE_BLOCKS_MIN, cdef->page_blocks);
     cdef->obj_size = d_size_align (cdef->obj_size);
     obj_size_t      obj_bsize_min = d_size_bptr (cdef->obj_size);
@@ -1239,14 +1289,14 @@ imdb_class_create (imdb_hndlr_t hmdb, imdb_class_def_t * cdef, imdb_hndlr_t * hc
     imdb_block_class_t *class_block = imdb_class_page_alloc (imdb, cdef);
     imdb_class_t   *dbclass = &class_block->dbclass;
     dbclass->obj_bsize_min = obj_bsize_min;
-    if (imdb->class_last) {
-	dbclass->class_prev = imdb->class_last;
-	imdb->class_last->dbclass.class_next = class_block;
-	imdb->class_last = class_block;
+    if (imdb->class_last.mptr) {
+	dbclass->class_prev = imdb->class_last.mptr;
+	imdb->class_last.mptr->dbclass.class_next = class_block;
+	imdb->class_last.mptr = class_block;
     }
     else {
-	imdb->class_first = class_block;
-	imdb->class_last = class_block;
+	imdb->class_first.mptr = class_block;
+	imdb->class_last.mptr = class_block;
     }
 
     *hclass = d_obj2hndlr (class_block);
@@ -1281,7 +1331,7 @@ imdb_class_destroy (imdb_hndlr_t hclass)
 	dbclass->class_prev->dbclass.class_next = dbclass->class_next;
     }
     else {
-	dbclass->imdb->class_first = class_block;
+	dbclass->imdb->class_first.mptr = class_block;
     }
     if (dbclass->class_next) {
 	dbclass->class_next->dbclass.class_prev = dbclass->class_prev;
