@@ -65,7 +65,7 @@ LOCAL void      ICACHE_FLASH_ATTR
 log_vprintf (const log_severity_t severity, const char *svc, const char *fmt, va_list al)
 {
     if (severity <= LOG_WARNING)
-        os_vsnprintf(__last_error, LOGGIGN_LAST_ERROR_BUFFER_SIZE-1, fmt, al);
+        os_vsnprintf(__last_error, LOGGIGN_LAST_ERROR_BUFFER_SIZE - 1, fmt, al);
 
     if (severity > __log_severity)
 	return;

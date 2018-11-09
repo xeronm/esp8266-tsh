@@ -98,7 +98,7 @@ typedef struct svcs_find_conf_ctx_s {
 } svcs_find_conf_ctx_t;
 
 
-static imdb_errcode_t ICACHE_FLASH_ATTR
+LOCAL imdb_errcode_t ICACHE_FLASH_ATTR
 svcctl_forall_find_conf (void *ptr, void *data)
 {
     svcs_service_conf_t *conf = d_pointer_as (svcs_service_conf_t, ptr);
@@ -110,7 +110,7 @@ svcctl_forall_find_conf (void *ptr, void *data)
     return IMDB_ERR_SUCCESS;
 }
 
-static svcs_errcode_t ICACHE_FLASH_ATTR
+LOCAL svcs_errcode_t ICACHE_FLASH_ATTR
 svcctl_find_conf (service_ident_t service_id, svcs_service_conf_t ** conf)
 {
     d_check_is_run ();
@@ -126,7 +126,7 @@ svcctl_find_conf (service_ident_t service_id, svcs_service_conf_t ** conf)
     return (*conf) ? SVCS_ERR_SUCCESS : SVCS_NOT_EXISTS;
 }
 
-static svcs_errcode_t ICACHE_FLASH_ATTR
+LOCAL svcs_errcode_t ICACHE_FLASH_ATTR
 svcctl_svc_conf_get (svcs_service_t * svc, dtlv_ctx_t * conf)
 {
     svcs_service_conf_t *conf_data;
@@ -144,7 +144,7 @@ svcctl_svc_conf_get (svcs_service_t * svc, dtlv_ctx_t * conf)
     return SVCS_ERR_SUCCESS;
 }
 
-static svcs_errcode_t ICACHE_FLASH_ATTR
+LOCAL svcs_errcode_t ICACHE_FLASH_ATTR
 svcctl_svc_conf_set (svcs_service_t * svc, dtlv_ctx_t * conf)
 {
     svcs_service_conf_t *conf_data;
@@ -155,7 +155,7 @@ svcctl_svc_conf_set (svcs_service_t * svc, dtlv_ctx_t * conf)
     return SVCS_ERR_SUCCESS;
 }
 
-static imdb_errcode_t ICACHE_FLASH_ATTR
+LOCAL imdb_errcode_t ICACHE_FLASH_ATTR
 svcctl_svc_stop (svcs_service_t * svc)
 {
     switch (svc->info.state) {
@@ -184,7 +184,7 @@ svcctl_svc_stop (svcs_service_t * svc)
     return svc->info.errcode;
 }
 
-static imdb_errcode_t ICACHE_FLASH_ATTR
+LOCAL imdb_errcode_t ICACHE_FLASH_ATTR
 svcctl_svc_start (svcs_service_t * svc)
 {
     switch (svc->info.state) {
@@ -202,11 +202,13 @@ svcctl_svc_start (svcs_service_t * svc)
     dtlv_ctx_t      conf;
     dtlv_ctx_t     *conf_ptr = NULL;
     {
+        os_printf("--- %s\n", svc->info.name);
 	svcs_errcode_t  res = svcctl_svc_conf_get (svc, &conf);
 	if (res == SVCS_ERR_SUCCESS) {
 	    conf_ptr = &conf;
 	}
 	else if (res != SVCS_NOT_EXISTS) {
+            os_printf("--- %s\n", svc->info.name);
 	    d_log_wprintf (SERVICES_SERVICE_NAME, "\"%s\" config res:%u", svc->info.name, res);
 	}
     }
@@ -225,7 +227,7 @@ svcctl_svc_start (svcs_service_t * svc)
     return svc->info.errcode;
 }
 
-static imdb_errcode_t ICACHE_FLASH_ATTR
+LOCAL imdb_errcode_t ICACHE_FLASH_ATTR
 svcctl_forall_stop (void *ptr, void *data)
 {
     svcs_service_t *svc = d_pointer_as (svcs_service_t, ptr);
@@ -278,7 +280,7 @@ typedef struct svcs_message_ctx_s {
     dtlv_ctx_t     *msg_out;
 } svcs_message_ctx_t;
 
-static imdb_errcode_t ICACHE_FLASH_ATTR
+LOCAL imdb_errcode_t ICACHE_FLASH_ATTR
 svcctl_forall_message (void *ptr, void *data)
 {
     svcs_service_t *svc = d_pointer_as (svcs_service_t, ptr);
@@ -567,7 +569,7 @@ svcctl_service_install (service_ident_t service_id, const char *name, svcs_servi
     svc->info.service_id = service_id;
     svc->info.state = SVCS_STATE_STOPPED;
     svc->info.enabled = sdef->enabled;
-    os_memcpy (&svc->info.name, name, MIN (os_strlen (name), sizeof (service_name_t)));
+    os_memcpy (svc->info.name, name, MIN (os_strlen (name), sizeof (service_name_t)));
 
     ret = SVCS_ERR_SUCCESS;
     if (svc->info.enabled) {

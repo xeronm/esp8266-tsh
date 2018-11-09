@@ -1378,6 +1378,8 @@ imdb_class_destroy (imdb_hndlr_t hclass)
 imdb_errcode_t  ICACHE_FLASH_ATTR
 imdb_clsobj_insert (imdb_hndlr_t hclass, void **ptr, size_t length)
 {
+    d_imdb_check_hndlr (hclass);
+
     imdb_block_class_t *dbclass = d_hndlr2obj (imdb_block_class_t, hclass);
     return imdb_class_instance_alloc (dbclass, ptr, length);
 }
@@ -1392,6 +1394,7 @@ imdb_errcode_t  ICACHE_FLASH_ATTR
 imdb_clsobj_delete (imdb_hndlr_t hclass, void *ptr)
 {
     d_imdb_check_hndlr (hclass);
+
     imdb_block_class_t *class_block = d_hndlr2obj (imdb_block_class_t, hclass);
     imdb_class_t   *dbclass = &class_block->dbclass;
 
@@ -1464,6 +1467,7 @@ imdb_errcode_t  ICACHE_FLASH_ATTR
 imdb_clsobj_resize (imdb_hndlr_t hclass, void *ptr_old, void **ptr, size_t length)
 {
     d_imdb_check_hndlr (hclass);
+
     imdb_block_class_t *class_block = d_hndlr2obj (imdb_block_class_t, hclass);
     imdb_class_t   *dbclass = &class_block->dbclass;
 
@@ -1485,6 +1489,7 @@ imdb_errcode_t  ICACHE_FLASH_ATTR
 imdb_clsobj_length (imdb_hndlr_t hclass, void *ptr, size_t * length)
 {
     d_imdb_check_hndlr (hclass);
+
     imdb_block_class_t *class_block = d_hndlr2obj (imdb_block_class_t, hclass);
     if (class_block->dbclass.cdef.opt_variable) {
 	imdb_slot_data4_t *data_slot4 = d_pointer_add (imdb_slot_data4_t, ptr, -sizeof (imdb_slot_data4_t));
@@ -1507,6 +1512,7 @@ imdb_errcode_t  ICACHE_FLASH_ATTR
 imdb_class_info (imdb_hndlr_t hclass, imdb_class_info_t * class_info)
 {
     d_imdb_check_hndlr (hclass);
+
     imdb_block_class_t *class_block = d_hndlr2obj (imdb_block_class_t, hclass);
     imdb_class_t   *dbclass = &class_block->dbclass;
     imdb_t         *imdb = dbclass->imdb;
@@ -1818,6 +1824,8 @@ imdb_cursor_forall (imdb_hndlr_t hcur, void *data, imdb_forall_func forall_func)
 imdb_errcode_t  ICACHE_FLASH_ATTR
 imdb_class_forall (imdb_hndlr_t hclass, void *data, imdb_forall_func forall_func)
 {
+    d_imdb_check_hndlr (hclass);
+
     imdb_hndlr_t    hcur;
     imdb_errcode_t  ret = imdb_class_query (hclass, PATH_NONE, &hcur);
     if (ret != IMDB_ERR_SUCCESS) {
