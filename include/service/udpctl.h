@@ -99,7 +99,7 @@ typedef struct udpctl_packet_auth_s {
     udpctl_digest_t auth;	// 32 bytes
 } udpctl_packet_auth_t;
 
-typedef enum PACKED udpctl_clnt_state_e {
+typedef enum udpctl_clnt_state_e {
     UCTL_CLNT_STATE_NONE = 0,
     UCTL_CLNT_STATE_FAIL,
     UCTL_CLNT_STATE_TIMEOUT,
@@ -107,7 +107,7 @@ typedef enum PACKED udpctl_clnt_state_e {
     UCTL_CLNT_STATE_OPEN,
 } udpctl_clnt_state_t;
 
-typedef enum PACKED udpctl_errcode_e {
+typedef enum udpctl_errcode_e {
     UDPCTL_ERR_SUCCESS = 0,
     UDPCTL_INTERNAL_ERROR = 1,
     UDPCTL_SERVER_SECURED = 2,
@@ -123,13 +123,13 @@ typedef enum PACKED udpctl_errcode_e {
     UDPCTL_DECODING_ERROR = 12,
 } udpctl_errcode_t;
 
-typedef enum PACKED udpctl_cmd_code_e {
+typedef enum udpctl_cmd_code_e {
     UCTL_CMD_CODE_AUTH = 1,
     UCTL_CMD_CODE_TERMINATE = 2,
     UCTL_CMD_CODE_SRVMSG = 3,
 } udpctl_cmd_code_t;
 
-typedef enum PACKED udpctl_avp_code_e {
+typedef enum udpctl_avp_code_e {
     UDPCTL_AVP_PROTOCOL = 100,
     UDPCTL_AVP_IDLE_TIMEOUT = 102,
     UDPCTL_AVP_AUTH_TIMEOUT = 103,
@@ -143,7 +143,7 @@ typedef enum PACKED udpctl_avp_code_e {
     UDPCTL_AVP_SOFTAP_IDLE_TIMEOUT = 111,
 } udpctl_avp_code_t;
 
-typedef enum PACKED udpctl_result_code_e {
+typedef enum udpctl_result_code_e {
     RESULT_CODE_SUCCESS = 1,
     RESULT_CODE_COMMAND_ERROR = 2,
     RESULT_CODE_SERVICE_ERROR = 3,

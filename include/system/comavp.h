@@ -11,7 +11,7 @@
 #ifndef _COMAVP_H_
 #define _COMAVP_H_ 1
 
-typedef enum PACKED common_avp_code_e {
+typedef enum common_avp_code_e {
     COMMON_AVP_APP_PRODUCT = 1,
     COMMON_AVP_APP_VERSION = 2,
     COMMON_AVP_RESULT_CODE = 3,

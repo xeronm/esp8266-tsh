@@ -31,16 +31,20 @@
 #include "service/ntp.h"
 #include "service/lsh.h"
 #include "service/sched.h"
+
 #ifdef ARCH_XTENSA
-#include "uart.h"
-#include "service/espadmin.h"
-#include "service/gpioctl.h"
-#include "service/device/dhtxx.h"
+#  include "uart.h"
+#  include "service/espadmin.h"
+#  include "service/gpioctl.h"
+#  include "service/device/dhtxx.h"
 #endif
 
 imdb_hndlr_t    hmdb = 0;
 imdb_hndlr_t    hfdb = 0;
+
+#ifdef ARCH_XTENSA
 os_timer_t      timer_overflow;
+#endif
 
 #define STARTUP_SERVICE_NAME	"startup"
 #define SHUTDOWN_SERVICE_NAME	"shutdown"
@@ -57,7 +61,7 @@ typedef struct reg_service_s {
 #else
 #define REG_SERVICE_MAX	5
 #endif
-LOCAL reg_service_t const reg_services[REG_SERVICE_MAX] ICACHE_RODATA_ATTR = {
+LOCAL reg_service_t const reg_services[REG_SERVICE_MAX] RODATA = {
     {syslog_service_install, SYSLOG_SERVICE_NAME},
     {lsh_service_install, LSH_SERVICE_NAME},
     {sched_service_install, SCHED_SERVICE_NAME},
@@ -79,6 +83,7 @@ time_overflow_timeout (void *args)
     lt_get_ctime (&ts);
 }
 
+#ifdef ARCH_XTENSA
 LOCAL void      ICACHE_FLASH_ATTR
 time_overflow_setup (void)
 {
@@ -91,8 +96,9 @@ time_overflow_setup (void)
     d_log_iprintf (MAIN_SERVICE_NAME, "overflow timer:%u min", timeout_min);
     os_timer_arm (&timer_overflow, timeout_min * MSEC_PER_MIN, true);
 }
+#endif
 
-
+#ifdef ARCH_XTENSA
 LOCAL void      ICACHE_FLASH_ATTR
 wifi_event_handler_cb (System_Event_t * event)
 {
@@ -103,22 +109,27 @@ wifi_event_handler_cb (System_Event_t * event)
 	svcctl_service_message (0, 0, event, SVCS_MSGTYPE_NETWORK_LOSS, NULL, NULL);
     }
 }
+#endif
 
 void            ICACHE_FLASH_ATTR
 system_init (void)
 {
-#ifdef ENABLE_AT
+#ifdef ARCH_XTENSA
+  #ifdef ENABLE_AT
     at_init ();
     atcmd_init ();
-#else
+  #else
     uart_init (BIT_RATE_115200, BIT_RATE_115200);
+  #endif
 #endif
     os_printf (LINE_END LINE_END "*** system_startup ***" LINE_END);
 
+#ifdef ARCH_XTENSA
     d_log_wprintf (STARTUP_SERVICE_NAME, "*** %s, ver:%s, sdk:%s (build:" __DATE__ " " __TIME__ ") ***", APP_PRODUCT,
 		   APP_VERSION, system_get_sdk_version ());
     d_log_wprintf (STARTUP_SERVICE_NAME, "***  userbin:0x%06x, fmem:%d  ***", system_get_userbin_addr (),
 		   system_get_free_heap_size ());
+#endif
 
 #ifndef DISABLE_SYSTEM
     d_log_iprintf (STARTUP_SERVICE_NAME, "imdb block_size:%u, fdb block_size:%u", SYSTEM_IMDB_BLOCK_SIZE, SYSTEM_FDB_BLOCK_SIZE);
@@ -136,9 +147,11 @@ system_init (void)
     }
 #endif
 
+#ifdef ARCH_XTENSA
     time_overflow_setup ();
 
     wifi_set_event_handler_cb (wifi_event_handler_cb);
+#endif
 
     d_log_wprintf (STARTUP_SERVICE_NAME, "done, fmem:%d", system_get_free_heap_size ());
 
@@ -155,7 +168,9 @@ system_shutdown (void)
 
     imdb_done (hmdb);
 #endif
+#ifdef ARCH_XTENSA
     wifi_station_disconnect ();
+#endif
     d_log_wprintf (SHUTDOWN_SERVICE_NAME, "done, fmem:%d", system_get_free_heap_size ());
     os_printf (LINE_END LINE_END "*** system_shutdown ***" LINE_END);
 }
@@ -176,8 +191,10 @@ uint8           ICACHE_FLASH_ATTR
 system_get_default_secret (unsigned char *buf, uint8 len)
 {
     uint8           macaddr[6];
+#ifdef ARCH_XTENSA
     if (wifi_get_macaddr (STATION_IF, macaddr))
 	return buf2hex ((char *) buf, (char *) &macaddr, MIN (sizeof (macaddr), len / 2));
     else
+#endif
 	return 0;
 }

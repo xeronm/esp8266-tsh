@@ -28,7 +28,7 @@
 #include "system/imdb.h"
 #include "service/ntp.h"
 #ifdef ARCH_XTENSA
-#include "espconn.h"
+#  include "espconn.h"
 #endif
 
 #define NTPv1	1		/* NTPv3 */
@@ -95,10 +95,11 @@ typedef struct ntp_data_s {
 #endif
     ntp_tx_state_t  tx_state;
     os_time_t       tx_state_time;
+#ifdef ARCH_XTENSA
     os_timer_t      tx_timer;
-    ntp_query_cb_func_t tx_done_cb;
-
     os_timer_t      poll_timer;
+#endif
+    ntp_query_cb_func_t tx_done_cb;
 
     ntp_peer_t      peers[NTP_MAX_PEERS];
     uint8           precision;
@@ -199,14 +200,18 @@ ntp_time_from_usec (ntp_timestamp_t * dst, const uint64_t usec)
 LOCAL void      ICACHE_FLASH_ATTR
 tx_timer_set (void)
 {
+#ifdef ARCH_XTENSA
     os_timer_disarm (&sdata->tx_timer);
     os_timer_arm (&sdata->tx_timer, NTP_REQ_TIMEOUT_SEC * MSEC_PER_SEC, true);
+#endif
 }
 
 LOCAL void      ICACHE_FLASH_ATTR
 tx_timer_reset (void)
 {
+#ifdef ARCH_XTENSA
     os_timer_disarm (&sdata->tx_timer);
+#endif
 }
 
 
@@ -275,9 +280,13 @@ ntp_peer_send (uint8 peer_idx, ntp_peer_t * peer)
     htobets (packet.transmit_ts);
     os_memcpy (&packet.origin_ts, &packet.transmit_ts, sizeof (ntp_timestamp_t));
 
+#ifdef ARCH_XTENSA
     os_memcpy (sdata->ntpudp.remote_ip, peer->ipaddr.bytes, sizeof (ipv4_addr_t));
     sdata->ntpudp.remote_port = NTP_PORT;
     sint16          cres = espconn_sendto (&sdata->ntpconn, d_pointer_as (uint8, &packet), sizeof (ntp_packet_t));
+#else 
+    sint16          cres = 0;
+#endif
 
     if (cres) {
 	peer->state = NTP_PEER_STATE_ERROR;
@@ -310,6 +319,7 @@ ntp_query_next (void)
 	    peer->rtt_mean = 0;
 	    peer->rtt_m2 = 0;
 
+#ifdef ARCH_XTENSA
 	    err_t           dnsres =
 		espconn_gethostbyname (&sdata->dnsconn, (char *) &hostname[0], &peer->ipaddr.ip, dns_result);
 	    switch (dnsres) {
@@ -326,6 +336,7 @@ ntp_query_next (void)
 		peer->state = NTP_PEER_STATE_ERROR;
 		break;
 	    }
+#endif
 	}
 
 	if ((peer->state == NTP_PEER_STATE_REQ) || (peer->state == NTP_PEER_STATE_DNS))
@@ -424,13 +435,16 @@ ntp_recv_cb (void *arg, char *pusrdata, unsigned short length)
     ntp_timestamp_t recv_ts;
     ntp_time (&recv_ts);
 
+#ifdef ARCH_XTENSA
     struct espconn *conn = d_pointer_as (struct espconn, arg);
     remot_info     *con_info;
     espconn_get_connection_info (conn, &con_info, 0);
+#endif
 
     ipv4_addr_t     remote_ipaddr;
+#ifdef ARCH_XTENSA
     os_memcpy (remote_ipaddr.bytes, con_info->remote_ip, sizeof (ipv4_addr_t));
-
+#endif
     d_log_dprintf (NTP_SERVICE_NAME, "recv len=%d from " IPSTR ":%d->%d", length, IP2STR (remote_ipaddr),
 		   sdata->udp.remote_port, sdata->udp.local_port);
 
@@ -661,7 +675,6 @@ ntp_setup (void)
 
     sdata->dnsconn.type = ESPCONN_TCP;
     sdata->dnsconn.proto.tcp = &(sdata->dnstcp);
-#endif
     d_log_iprintf (NTP_SERVICE_NAME, "timezone: " TZSTR ", localport: %u", TZ2STR (sdata->conf.time_zone),
 		   sdata->ntpudp.local_port);
 
@@ -674,6 +687,7 @@ ntp_setup (void)
     d_log_iprintf (NTP_SERVICE_NAME, "poll timer: %u min", sdata->conf.poll_timeout);
     os_timer_disarm (&sdata->poll_timer);
     os_timer_arm (&sdata->poll_timer, sdata->conf.poll_timeout * MSEC_PER_MIN, true);
+#endif
 }
 
 svcs_errcode_t  ICACHE_FLASH_ATTR
@@ -689,12 +703,13 @@ ntp_on_start (imdb_hndlr_t himdb, imdb_hndlr_t hdata, dtlv_ctx_t * conf)
 
     sdata->tx_state = NTP_TX_STATE_NONE;
 
+#ifdef ARCH_XTENSA
     os_timer_disarm (&sdata->tx_timer);
     os_timer_setfn (&sdata->tx_timer, ntp_tx_timeout, NULL);
 
     os_timer_disarm (&sdata->poll_timer);
     os_timer_setfn (&sdata->poll_timer, ntp_poll_timeout, NULL);
-
+#endif
     ntp_on_cfgupd (conf);
 
     return SVCS_ERR_SUCCESS;
@@ -706,12 +721,13 @@ ntp_on_stop ()
     if (!sdata)
 	return SVCS_NOT_RUN;
 
+#ifdef ARCH_XTENSA
     os_timer_disarm (&sdata->tx_timer);
     os_timer_disarm (&sdata->poll_timer);
 
     if (os_conn_free (&sdata->ntpconn)) //|| os_conn_free (&sdata->dnsconn))
 	d_log_eprintf (NTP_SERVICE_NAME, "conn free error");
-
+#endif
     d_svcs_check_imdb_error (imdb_clsobj_delete (sdata->hdata, sdata));
     sdata = NULL;
 

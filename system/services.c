@@ -88,7 +88,7 @@ static services_data_t *sdata = NULL;
 
 typedef struct svcs_find_ctx_s {
     service_ident_t service_id;
-    char           *name;
+    const char     *name;
     svcs_service_t *svc;
 } svcs_find_ctx_t;
 
@@ -251,8 +251,8 @@ svcctl_forall_find (void *ptr, void *data)
     return IMDB_ERR_SUCCESS;
 }
 
-svcs_errcode_t  ICACHE_FLASH_ATTR
-svcctl_find (service_ident_t service_id, char *name, svcs_service_t ** svc)
+LOCAL svcs_errcode_t  ICACHE_FLASH_ATTR
+svcctl_find (service_ident_t service_id, const char *name, svcs_service_t ** svc)
 {
     if (!sdata)
 	return SVCS_NOT_RUN;
@@ -531,7 +531,7 @@ svcctl_info (uint8 * count, svcs_service_info_t * info_array, uint8 array_len)
   - result: svcs_errcode_t
 */
 svcs_errcode_t  ICACHE_FLASH_ATTR
-svcctl_service_install (service_ident_t service_id, char *name, svcs_service_def_t * sdef)
+svcctl_service_install (service_ident_t service_id, const char *name, svcs_service_def_t * sdef)
 {
     d_check_is_run ();
 
@@ -583,7 +583,7 @@ svcctl_service_install (service_ident_t service_id, char *name, svcs_service_def
   - result: svcs_errcode_t
 */
 svcs_errcode_t  ICACHE_FLASH_ATTR
-svcctl_service_uninstall (char *name)
+svcctl_service_uninstall (const char *name)
 {
     d_check_is_run ();
 
@@ -615,7 +615,7 @@ svcctl_service_uninstall (char *name)
   - result: svcs_errcode_t
 */
 svcs_errcode_t  ICACHE_FLASH_ATTR
-svcctl_service_start (service_ident_t service_id, char *name)
+svcctl_service_start (service_ident_t service_id, const char *name)
 {
     svcs_service_t *svc = NULL;
     svcs_errcode_t  ret = svcctl_find (service_id, name, &svc);
@@ -631,7 +631,7 @@ svcctl_service_start (service_ident_t service_id, char *name)
   - result: svcs_errcode_t
 */
 svcs_errcode_t  ICACHE_FLASH_ATTR
-svcctl_service_stop (service_ident_t service_id, char *name)
+svcctl_service_stop (service_ident_t service_id, const char *name)
 {
     svcs_service_t *svc = NULL;
     svcs_errcode_t  ret = svcctl_find (service_id, name, &svc);

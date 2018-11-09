@@ -60,8 +60,16 @@ struct imdb_block_class_s;
 
 typedef union class_ptr_u {
     struct imdb_block_class_s *mptr;
-    size_t fptr;
+    size_t          fptr; // relative datafile pointer
 } class_ptr_t;
+
+typedef struct imdb_bc_block_s {
+    struct imdb_block_s *mptr; // pointer to memory
+    bool            dirty: 1;
+    uint32          use_count;
+} imdb_bc_block_t;
+
+#define d_buffer_cache_map_size()	
 
 typedef struct imdb_s {
     imdb_def_t      db_def;
@@ -70,6 +78,7 @@ typedef struct imdb_s {
     class_ptr_t     class_first;
     class_ptr_t     class_last;
     imdb_hndlr_t    hcurs;
+    uint8          *buffer_cache;
 } imdb_t;
 
 typedef struct imdb_file_s {
@@ -93,14 +102,14 @@ typedef struct imdb_file_s {
 #define	d_stat_slot_data(imdb, slot_ss)	{ (imdb)->stat.slot_data++; (imdb)->stat.slot_skipscan += (slot_ss); }
 #define	d_stat_slot_split(imdb)		{ (imdb)->stat.slot_split++; }
 
-typedef enum PACKED imdb_data_slot_type_s {
+typedef enum imdb_data_slot_type_s {
     DATA_SLOT_TYPE_1 = 0,
     DATA_SLOT_TYPE_2 = 1,
     DATA_SLOT_TYPE_3 = 2,
     DATA_SLOT_TYPE_4 = 3
 } imdb_data_slot_type_t;
 
-typedef enum PACKED imdb_lock_s {
+typedef enum imdb_lock_s {
     DATA_LOCK_NONE = 0,
     DATA_LOCK_WRITE = 1,
     DATA_LOCK_RD_EXCLUSIVE = 2,
@@ -210,7 +219,7 @@ Free Slot (Footer used for variable length or with Tx)
 
 */
 
-typedef enum PACKED imdb_block_type_s {
+typedef enum imdb_block_type_s {
     BLOCK_TYPE_NONE = 0,
     BLOCK_TYPE_PAGE = 1,
     BLOCK_TYPE_CLASS = 2,
@@ -1164,14 +1173,14 @@ imdb_init (imdb_def_t * imdb_def, imdb_hndlr_t hcurmdb, imdb_hndlr_t * himdb)
         fio_user_read(0, (uint32 *) &hdr_file, sizeof(imdb_file_t));
         uint16 crc = hdr_file.crc16;
         hdr_file.crc16 = 0;
-        if (crc16(&hdr_file, sizeof(imdb_file_t)) != crc) {
+        if (crc16 (d_pointer_as (unsigned char, &hdr_file), sizeof(imdb_file_t)) != crc) {
             hdr_file.version = IMDB_FILE_HEADER_VERSION;
             hdr_file.block_size = imdb_def->block_size;
             hdr_file.class_last.fptr = 0;
             hdr_file.file_size = MIN(imdb_def->file_size, fio_user_size ()/imdb_def->block_size);
             hdr_file.file_hwm = 0;
             hdr_file.scn = 1;
-            hdr_file.crc16 = crc16(&hdr_file, sizeof(imdb_file_t));
+            hdr_file.crc16 = crc16( d_pointer_as (unsigned char, &hdr_file), sizeof(imdb_file_t));
             d_log_wprintf (IMDB_SERVICE_NAME, "file header crc error, new: %ublk", hdr_file.file_size);
             fio_user_write(0, (uint32 *) &hdr_file, sizeof(imdb_file_t));
         }
@@ -1180,6 +1189,8 @@ imdb_init (imdb_def_t * imdb_def, imdb_hndlr_t hcurmdb, imdb_hndlr_t * himdb)
             imdb->class_first.fptr = (hdr_file.file_hwm) ? 1 : 0;
             imdb->class_last.fptr = hdr_file.class_last.fptr;
         }
+        // create buffer cache
+        imdb->buffer_cache = os_malloc(imdb_def->buffer_size * imdb_def->block_size);
     }
 
     return IMDB_ERR_SUCCESS;

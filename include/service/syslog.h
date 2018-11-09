@@ -52,6 +52,7 @@ svcs_errcode_t  syslog_on_message (service_ident_t orig_id, service_msgtype_t ms
 				   dtlv_ctx_t * msg_in, dtlv_ctx_t * msg_out);
 
 bool            syslog_available (void);
+svcs_errcode_t  syslog_query(imdb_hndlr_t* hcur);
 svcs_errcode_t  syslog_write (const log_severity_t severity, const char *svc, size_t * length, char **buf);
 svcs_errcode_t  syslog_write_msg (const log_severity_t severity, const char *svc, char *msg);
 svcs_errcode_t  syslog_vprintf (const log_severity_t severity, const char *svc, const char *fmt, va_list al);

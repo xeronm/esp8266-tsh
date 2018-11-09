@@ -21,8 +21,10 @@
  */
 
 #include "sysinit.h"
-#include "gpio.h"
-#include "eagle_soc.h"
+#ifdef ARCH_XTENSA
+#  include "gpio.h"
+#  include "eagle_soc.h"
+#endif
 #include "core/logging.h"
 #include "system/services.h"
 #include "system/comavp.h"
@@ -37,8 +39,9 @@ typedef struct gpio_data_s {
 
 LOCAL gpio_data_t *sdata = NULL;
 
+#ifdef ARCH_XTENSA
 // global interrupt handler
-LOCAL void
+LOCAL void ICACHE_FLASH_ATTR
 gpio_intr_handler (void *args)
 {
     uint32          gpio_status;
@@ -58,6 +61,7 @@ gpio_intr_handler (void *args)
 
     ETS_GPIO_INTR_ENABLE ();
 }
+#endif
 
 // check that at least one GPIO has a interrupt callback
 LOCAL bool      ICACHE_FLASH_ATTR
@@ -76,10 +80,12 @@ gpio_has_intr (void)
 LOCAL gpio_result_t ICACHE_FLASH_ATTR
 gpio_common_check (uint8 gpio_id)
 {
+#ifdef ARCH_XTENSA
     if (!GPIO_ID_IS_PIN_REGISTER (gpio_id)) {
 	d_log_eprintf (GPIO_SERVICE_NAME, "unregistered gpio_id:%u", gpio_id);
 	return GPIO_RESULT_INVALID_GPIOID;
     }
+#endif
 
     if ((gpio_layout[gpio_id].addr == 0) || (!gpio_layout[gpio_id].available)) {
 	d_log_eprintf (GPIO_SERVICE_NAME, "unusable gpio_id:%u, addr:%p", gpio_id, gpio_layout[gpio_id].addr);
@@ -110,6 +116,7 @@ gpio_acquire (uint8 gpio_id, bool pullup, gpio_cb_func_t intr_cb)
 	return GPIO_RESULT_INUSE;
     }
 
+#ifdef ARCH_XTENSA
     if (intr_cb != NULL) {
 	if (!gpio_has_intr ()) {
 	    ETS_GPIO_INTR_ATTACH (gpio_intr_handler, NULL);
@@ -124,12 +131,14 @@ gpio_acquire (uint8 gpio_id, bool pullup, gpio_cb_func_t intr_cb)
 	GPIO_REG_WRITE (GPIO_STATUS_W1TC_ADDRESS, BIT (gpio_id));
 	ETS_GPIO_INTR_ENABLE ();
     }
+#endif
 
     gpio_use->in_use = true;
     gpio_use->intr_cb = intr_cb;
     gpio_use->func = gpio_layout[gpio_id].func;
     uint32          addr = gpio_layout[gpio_id].addr;
 
+#ifdef ARCH_XTENSA
     PIN_FUNC_SELECT (addr, gpio_use->func);
 
     if (pullup) {
@@ -138,6 +147,7 @@ gpio_acquire (uint8 gpio_id, bool pullup, gpio_cb_func_t intr_cb)
     else {
 	PIN_PULLUP_DIS (addr);
     }
+#endif
     d_log_iprintf (GPIO_SERVICE_NAME, "acquire gpio_id:%u, addr:%p,func:%u,pull:%u", gpio_id, addr, gpio_use->func, pullup);
 
     return GPIO_RESULT_SUCCESS;
@@ -165,6 +175,7 @@ gpio_release (uint8 gpio_id)
 
     d_log_iprintf (GPIO_SERVICE_NAME, "release gpio_id:%u", gpio_id);
 
+#ifdef ARCH_XTENSA
     if (gpio_use->intr_cb) {
 	ETS_GPIO_INTR_DISABLE ();
 	//clear status
@@ -176,6 +187,7 @@ gpio_release (uint8 gpio_id)
 	    ETS_GPIO_INTR_ENABLE ();
 	}
     }
+#endif
     os_memset (gpio_use, 0, sizeof (gpio_use_t));
 
     //PIN_FUNC_SELECT(gpio_def->addr, gpio_def->src_func);  
@@ -192,7 +204,8 @@ gpio_release (uint8 gpio_id)
 LOCAL void    ICACHE_FLASH_ATTR
 fn_gpio_get (sh_bc_arg_t * ret_arg, const arg_count_t arg_count, sh_bc_arg_type_t arg_type[], sh_bc_arg_t * bc_args[]) 
 {
-    uint8 gpio_id = GPIO_ID_NONE;
+#ifdef ARCH_XTENSA
+    uint32          gpio_id = GPIO_ID_NONE;
     if (arg_count > 1)
         gpio_id = bc_args[0]->arg.value;
 
@@ -200,6 +213,7 @@ fn_gpio_get (sh_bc_arg_t * ret_arg, const arg_count_t arg_count, sh_bc_arg_type_
         ret_arg->arg.value = GPIO_INPUT_GET (GPIO_ID_PIN (gpio_id));
     else
         ret_arg->arg.value = gpio_input_get ();
+#endif
 }
 
 /*
@@ -215,14 +229,16 @@ fn_gpio_set (sh_bc_arg_t * ret_arg, const arg_count_t arg_count, sh_bc_arg_type_
         return;
     }
 
-    uint8           gpio_id = bc_args[0]->arg.value;
+    uint32          gpio_id = bc_args[0]->arg.value;
     gpio_result_t   res = gpio_common_check (gpio_id);
     if (res != GPIO_RESULT_SUCCESS) {
         ret_arg->arg.value = res;
         return;
     }
 
+#ifdef ARCH_XTENSA
     GPIO_OUTPUT_SET (GPIO_ID_PIN (gpio_id), (bc_args[1]->arg.value != 0));
+#endif
     ret_arg->arg.value = GPIO_RESULT_SUCCESS;
 }
 
@@ -249,10 +265,12 @@ fn_gpio_setup (sh_bc_arg_t * ret_arg, const arg_count_t arg_count, sh_bc_arg_typ
     }
 
     uint32          addr = gpio_layout[gpio_id].addr;
+#ifdef ARCH_XTENSA
     PIN_FUNC_SELECT (addr, bc_args[1]->arg.value);
-    
+#endif    
     d_log_iprintf (GPIO_SERVICE_NAME, "set gpio_id:%u, addr:%p,func:%u", gpio_id, addr, bc_args[1]->arg.value);
         
+#ifdef ARCH_XTENSA
     uint8           pullup = bc_args[2]->arg.value;
     if (pullup != 0xFF) {
         if (pullup) {
@@ -262,6 +280,7 @@ fn_gpio_setup (sh_bc_arg_t * ret_arg, const arg_count_t arg_count, sh_bc_arg_typ
 	    PIN_PULLUP_DIS (addr);
 	}
     }	
+#endif    
 
     ret_arg->arg.value = GPIO_RESULT_SUCCESS;
 }
@@ -311,7 +330,9 @@ gpio_on_msg_info (dtlv_ctx_t * msg_out)
     d_svcs_check_imdb_error (dtlv_avp_encode_list (msg_out, 0, GPIO_GPIO_PORT, DTLV_TYPE_OBJECT, &gavp));
 
     int             i;
+#ifdef ARCH_XTENSA
     uint32          value = gpio_input_get ();
+#endif
     for (i = 0; i < GPIO_PIN_COUNT; i++) {
 	gpio_use_t     *gpio_use = &sdata->gpio[i];
 
@@ -325,7 +346,9 @@ gpio_on_msg_info (dtlv_ctx_t * msg_out)
 				 dtlv_avp_encode_uint8 (msg_out, GPIO_PORT_INUSE, gpio_use->in_use) ||
 				 dtlv_avp_encode_uint8 (msg_out, GPIO_PORT_FUNCTION_DEFAULT, gpio_layout[i].func) ||
 				 dtlv_avp_encode_uint8 (msg_out, GPIO_PORT_FUNCTION_SET, gpio_use->func) ||
+#ifdef ARCH_XTENSA
 				 dtlv_avp_encode_uint8 (msg_out, GPIO_PORT_VALUE, (value >> i) & BIT0) ||
+#endif
 				 dtlv_avp_encode_group_done (msg_out, gavp_in));
     }
 
@@ -340,7 +363,7 @@ gpio_on_msg_output_set (dtlv_ctx_t * msg_in, dtlv_ctx_t * msg_out)
     if (!msg_in)
 	return SVCS_INVALID_MESSAGE;
 
-    dtlv_davp_t     davp;
+#ifdef ARCH_XTENSA
     uint8           gpio_id = (uint8) GPIO_ID_NONE;
     uint16          pulse_us = 0;
     uint8           value = 0xFF;
@@ -390,7 +413,7 @@ gpio_on_msg_output_set (dtlv_ctx_t * msg_in, dtlv_ctx_t * msg_out)
             GPIO_OUTPUT_SET (gpio_pin, (value == 0));
         }
     }
-
+#endif
 
     return SVCS_ERR_SUCCESS;
 }

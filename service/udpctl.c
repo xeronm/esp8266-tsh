@@ -52,7 +52,7 @@
 #include "proto/dtlv.h"
 #include "service/udpctl.h"
 #ifdef ARCH_XTENSA
-#include "espconn.h"
+#  include "espconn.h"
 #endif
 
 #define UDPCTL_STORAGE_PAGES		1
@@ -243,8 +243,9 @@ udpctl_packet_answer_digest (udpctl_client_t * client, udpctl_packet_sec_t * pac
 	udpctl_packet_auth_t *auth_packet = d_pointer_as (udpctl_packet_auth_t, packet);
 
 	udpctl_digest_t initial;
+#ifdef ARCH_XTENSA
 	os_random_buffer (initial, sizeof (udpctl_digest_t));
-
+#endif
 	hmac (SHA256, initial, sizeof (udpctl_digest_t), sdata->conf.secret, sdata->conf.secret_len, auth_packet->auth);
     }
 
@@ -555,10 +556,10 @@ udpctl_sync_request (ipv4_addr_t * addr, ip_port_t * port, char *data_in, packet
 LOCAL void      ICACHE_FLASH_ATTR
 uctl_recv_cb (void *arg, char *pusrdata, unsigned short length)
 {
+#ifdef ARCH_XTENSA
     struct espconn *conn = d_pointer_as (struct espconn, arg);
     remot_info     *con_info;
     espconn_get_connection_info (conn, &con_info, 0);
-
     ipv4_addr_t     addr;
     ip_port_t       port = con_info->remote_port;
     os_memcpy (addr.bytes, con_info->remote_ip, sizeof (ipv4_addr_t));
@@ -576,6 +577,7 @@ uctl_recv_cb (void *arg, char *pusrdata, unsigned short length)
 	if (cres)
 	    d_log_wprintf (UDPCTL_SERVICE_NAME, IPSTR ":%u sent failed:%u", IP2STR (&addr), port, cres);
     }
+#endif
 }
 
 
@@ -586,12 +588,12 @@ udpctl_setup (void)
     sdata->conn.type = ESPCONN_UDP;
     sdata->conn.proto.udp = &sdata->proto_udp;
     sdata->proto_udp.local_port = sdata->conf.port;
-#endif
     d_log_iprintf (UDPCTL_SERVICE_NAME, "listen port:%u, secret length:%u", sdata->conf.port, sdata->conf.secret_len);
     if (os_conn_create (&sdata->conn) || os_conn_set_recvcb (&sdata->conn, uctl_recv_cb)) {
 	d_log_eprintf (UDPCTL_SERVICE_NAME, "conn setup failed");
 	return;
     }
+#endif
 }
 
 svcs_errcode_t  ICACHE_FLASH_ATTR
@@ -616,9 +618,10 @@ udpctl_on_stop ()
     if (!sdata)
 	return SVCS_NOT_RUN;
 
+#ifdef ARCH_XTENSA
     if (os_conn_free (&sdata->conn))
 	d_log_eprintf (UDPCTL_SERVICE_NAME, "conn free error");
-
+#endif
     d_svcs_check_imdb_error (imdb_clsobj_delete (sdata->hdata, sdata));
 
     sdata = NULL;

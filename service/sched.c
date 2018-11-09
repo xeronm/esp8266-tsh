@@ -44,14 +44,15 @@ typedef struct sched_data_s {
     imdb_hndlr_t    hdata;	// service data storage
     imdb_hndlr_t    hentry;	// entry storage
     // Fixme: should make separate index segment in imdb
-
+#ifdef ARCH_XTENSA
     os_timer_t      next_timer;
+#endif
     os_time_t       next_ctime;
 } sched_data_t;
 
 LOCAL sched_data_t *sdata = NULL;
 
-typedef enum PACKED parse_state_e {
+typedef enum parse_state_e {
     PS_NONE = 0,
     PS_NUMBER,
     PS_RANGE,
@@ -82,9 +83,9 @@ LOCAL const char *sz_sched_error[] RODATA = {
 
 
 LOCAL parse_state_t ICACHE_FLASH_ATTR
-parse_tsmask (uint8 * buf, unsigned int vmin, unsigned int vmax, char **szstr)
+parse_tsmask (uint8 * buf, unsigned int vmin, unsigned int vmax, const char **szstr)
 {
-    char           *ptr = *szstr;
+    const char     *ptr = *szstr;
     unsigned int    prev_num;
     unsigned int    last_num;
     parse_state_t   state = PS_NONE;
@@ -193,11 +194,11 @@ parse_end:
  *  - entry: result entry
  */
 LOCAL bool      ICACHE_FLASH_ATTR
-parse_tsentry (char *szentry, tsentry_t * entry)
+parse_tsentry (const char *szentry, tsentry_t * entry)
 {
     os_memset(entry, 0, sizeof(tsentry_t));
 
-    char           *ptr = szentry;
+    const char     *ptr = szentry;
     d_skip_space (ptr);
 
     if (*ptr == '@') {
@@ -328,6 +329,7 @@ LOCAL void      next_timer_timeout (void *args);
 LOCAL void      ICACHE_FLASH_ATTR
 next_timer_set (sched_entry_t *entry)
 {
+#ifdef ARCH_XTENSA
     os_timer_disarm (&sdata->next_timer);
     if (! entry) {
         sdata->next_ctime = SCHED_NEXT_CTIME_NONE;
@@ -349,6 +351,7 @@ next_timer_set (sched_entry_t *entry)
         os_timer_setfn (&sdata->next_timer, next_timer_timeout, NULL);
         os_timer_arm (&sdata->next_timer, SCHED_MAX_TIMEOUT_SEC*MSEC_PER_SEC, false);
     }
+#endif
 }
 
 typedef struct sched_setnext_ctx_s {
@@ -403,7 +406,7 @@ next_timer_timeout (void *args)
 }
 
 typedef struct sched_find_ctx_s {
-    char             *entry_name;
+    const char       *entry_name;
     sched_entry_t    *entry;
 } sched_find_ctx_t;
 
@@ -429,7 +432,7 @@ sched_forall_find (void *ptr, void *data)
  * - return: the pointer on function entry
  */
 sched_errcode_t ICACHE_FLASH_ATTR
-sched_entry_get (char * entry_name, sched_entry_t ** entry)
+sched_entry_get (const char * entry_name, const sched_entry_t ** entry)
 {
     sched_find_ctx_t find_ctx;
     os_memset (&find_ctx, 0, sizeof (sched_find_ctx_t));
@@ -443,12 +446,12 @@ sched_entry_get (char * entry_name, sched_entry_t ** entry)
 
 
 sched_errcode_t ICACHE_FLASH_ATTR
-sched_entry_add (entry_name_t * entry_name, char * sztsentry, sh_stmt_name_t * stmt_name, char * vardata, size_t varlen)
+sched_entry_add (const entry_name_t * entry_name, const char * sztsentry, const sh_stmt_name_t * stmt_name, const char * vardata, size_t varlen)
 {
     d_check_init();
 
     sched_entry_t    *entry;
-    if (sched_entry_get ( (char *)entry_name, &entry) == SCHED_ERR_SUCCESS) {
+    if (sched_entry_get ( (const char *)entry_name, (const sched_entry_t **) &entry) == SCHED_ERR_SUCCESS) {
 	d_log_wprintf (SCHED_SERVICE_NAME, sz_sched_error[SCHED_ENTRY_EXISTS], entry_name);
 	return SCHED_ENTRY_EXISTS;
     }
@@ -499,12 +502,12 @@ sched_entry_add (entry_name_t * entry_name, char * sztsentry, sh_stmt_name_t * s
 }
 
 sched_errcode_t ICACHE_FLASH_ATTR
-sched_entry_remove (entry_name_t * entry_name)
+sched_entry_remove (const entry_name_t * entry_name)
 {
     d_check_init();
 
-    sched_entry_t    *entry;
-    sched_errcode_t   res = sched_entry_get ( (char *)entry_name, &entry);
+    sched_entry_t *entry;
+    sched_errcode_t   res = sched_entry_get ( (const char *)entry_name, (const sched_entry_t **) &entry);
     if (res == SCHED_ENTRY_NOTEXISTS) {
 	d_log_wprintf (SCHED_SERVICE_NAME, sz_sched_error[res], entry_name);
 	return res;
@@ -522,12 +525,12 @@ sched_entry_remove (entry_name_t * entry_name)
 }
 
 sched_errcode_t ICACHE_FLASH_ATTR
-sched_entry_run (entry_name_t * entry_name)
+sched_entry_run (const entry_name_t * entry_name)
 {
     d_check_init();
 
     sched_entry_t    *entry;
-    sched_errcode_t   res = sched_entry_get ( (char *)entry_name, &entry);
+    sched_errcode_t   res = sched_entry_get ( (const char *)entry_name, (const sched_entry_t **) &entry);
     if (res == SCHED_ENTRY_NOTEXISTS) {
 	d_log_wprintf (SCHED_SERVICE_NAME, sz_sched_error[res], entry_name);
 	return res;
@@ -598,10 +601,10 @@ sched_on_message (service_ident_t orig_id,
 	    return SVCS_INVALID_MESSAGE;
         {
 	    dtlv_davp_t     davp;
-	    entry_name_t   *entry_name = NULL;
-	    char           *sztsentry = NULL;
-            sh_stmt_name_t *stmt_name = NULL;
-            char           *vardata;
+	    const entry_name_t *entry_name = NULL;
+	    const char     *sztsentry = NULL;
+            const sh_stmt_name_t *stmt_name = NULL;
+            const char     *vardata;
             size_t          varlen = 0;
 
 	    while (dtlv_avp_decode (msg_in, &davp) == DTLV_ERR_SUCCESS) {
@@ -609,10 +612,10 @@ sched_on_message (service_ident_t orig_id,
 		    break;
 		switch (davp.havpd.nscode.comp.code) {
 		case SCHED_AVP_ENTRY_NAME:
-		    entry_name = d_pointer_as(entry_name_t, davp.avp->data);
+		    entry_name = d_pointer_as(const entry_name_t, davp.avp->data);
 		    break;
 		case SCHED_AVP_STMT_NAME:
-		    stmt_name = d_pointer_as(sh_stmt_name_t, davp.avp->data);
+		    stmt_name = d_pointer_as(const sh_stmt_name_t, davp.avp->data);
 		    break;
 		case SCHED_AVP_SCHEDULE_STRING:
 		    sztsentry = davp.avp->data;
@@ -638,13 +641,13 @@ sched_on_message (service_ident_t orig_id,
 	    return SVCS_INVALID_MESSAGE;
         {
 	    dtlv_davp_t     davp;
-	    entry_name_t   *entry_name = NULL;
+	    const entry_name_t *entry_name = NULL;
 	    while (dtlv_avp_decode (msg_in, &davp) == DTLV_ERR_SUCCESS) {
 		if (!dtlv_check_namespace (&davp, SCHED_SERVICE_ID))
 		    break;
 		switch (davp.havpd.nscode.comp.code) {
 		case SCHED_AVP_ENTRY_NAME:
-		    entry_name = d_pointer_as (entry_name_t, davp.avp->data);
+		    entry_name = d_pointer_as (const entry_name_t, davp.avp->data);
 		    break;
 		}
 	    }
@@ -717,9 +720,10 @@ sched_on_start (imdb_hndlr_t hmdb, imdb_hndlr_t hdata, dtlv_ctx_t * conf)
     sdata = tmp_sdata;
 
     sdata->next_ctime = SCHED_NEXT_CTIME_NONE;
+#ifdef ARCH_XTENSA
     os_timer_disarm (&sdata->next_timer);
     os_timer_setfn (&sdata->next_timer, next_timer_timeout, NULL);
-
+#endif
     return SVCS_ERR_SUCCESS;
 }
 

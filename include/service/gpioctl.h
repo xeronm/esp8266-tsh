@@ -34,6 +34,7 @@ typedef struct gpio_def_s {
     bool            available;
 } gpio_def_t;
 
+#ifdef ARCH_XTENSA
 // ESP-12E Layout
 LOCAL gpio_def_t const gpio_layout[GPIO_PIN_COUNT] = {
     {PERIPHS_IO_MUX_GPIO0_U, FUNC_GPIO0, true},	// GPIO_0    High (Low for flash)
@@ -53,6 +54,9 @@ LOCAL gpio_def_t const gpio_layout[GPIO_PIN_COUNT] = {
     {PERIPHS_IO_MUX_MTMS_U, FUNC_GPIO14, true},	// GPIO_14
     {PERIPHS_IO_MUX_MTDO_U, FUNC_GPIO15, true},	// GPIO_15
 };
+#else
+LOCAL gpio_def_t const gpio_layout[] = {};
+#endif
 
 typedef struct gpio_use_s {
     uint8           func;
@@ -61,11 +65,11 @@ typedef struct gpio_use_s {
     gpio_cb_func_t  intr_cb;
 } gpio_use_t;
 
-typedef enum PACKED gpio_msgtype_e {
+typedef enum gpio_msgtype_e {
     GPIO_MSGTYPE_OUTPUT_SET = 10,
 } gpio_msgtype_t;
 
-typedef enum __packed gpio_result_e {
+typedef enum gpio_result_e {
     GPIO_RESULT_SUCCESS = 0,
     GPIO_RESULT_ERROR,
     GPIO_RESULT_INVALID_GPIOID,
@@ -74,7 +78,7 @@ typedef enum __packed gpio_result_e {
     GPIO_RESULT_NOT_USED,
 } gpio_result_t;
 
-typedef enum PACKED gpio_avp_code_e {
+typedef enum gpio_avp_code_e {
     GPIO_GPIO_PORT = 101,
     GPIO_PORT_FUNCTION_DEFAULT = 103,
     GPIO_PORT_FUNCTION_SET = 104,

@@ -22,8 +22,10 @@
 
 
 #include "sysinit.h"
-#include "fwupgrade.h"
-#include "flashmap.h"
+#ifdef ARCH_XTENSA
+#  include "fwupgrade.h"
+#  include "flashmap.h"
+#endif
 #include "core/logging.h"
 #include "core/utils.h"
 #include "core/config.h"
@@ -34,6 +36,7 @@
 
 #define IMDB_INFO_ARRAY_SIZE	10
 
+#ifdef ARCH_XTENSA
 firmware_info_t fw_info RODATA = {
     APP_PRODUCT,
     {{APP_VERSION_MAJOR, APP_VERSION_MINOR, APP_VERSION_PATCH}
@@ -47,6 +50,7 @@ firmware_info_t fw_info RODATA = {
     0xFFFFFFFF,
     APP_INIT_DIGEST
 };
+#endif
 
 svcs_errcode_t  ICACHE_FLASH_ATTR
 espadmin_on_start (imdb_hndlr_t hmdb, imdb_hndlr_t hdata, dtlv_ctx_t * conf)
@@ -67,18 +71,20 @@ espadmin_on_stop ()
 LOCAL svcs_errcode_t ICACHE_FLASH_ATTR
 espadmin_on_msg_product (dtlv_ctx_t * msg_out)
 {
+#ifdef ARCH_XTENSA
     char            version[VERSION_BUFFER_SIZE];
     os_snprintf (version, VERSION_BUFFER_SIZE, FW_VERSTR, FW_VER2STR (&fw_info));
     d_svcs_check_dtlv_error (dtlv_avp_encode_nchar
 			     (msg_out, COMMON_AVP_APP_PRODUCT, sizeof (fw_info.product), fw_info.product)
 			     || dtlv_avp_encode_nchar (msg_out, COMMON_AVP_APP_VERSION, VERSION_BUFFER_SIZE, version));
-
+#endif
     return SVCS_ERR_SUCCESS;
 }
 
 LOCAL svcs_errcode_t ICACHE_FLASH_ATTR
 espadmin_on_msg_firmware (dtlv_ctx_t * msg_out)
 {
+#ifdef ARCH_XTENSA
     dtlv_avp_t     *gavp;
     // FIRMWARE
     flash_ota_map_t * fwmap = get_flash_ota_map ();
@@ -93,13 +99,14 @@ espadmin_on_msg_firmware (dtlv_ctx_t * msg_out)
 						     (char *) fw_info.digest)
 			     || dtlv_avp_encode_octets (msg_out, ESPADMIN_AVP_FW_INIT_DIGEST, sizeof (fw_info.digest),
 							APP_INIT_DIGEST) || dtlv_avp_encode_group_done (msg_out, gavp));
-
+#endif
     return SVCS_ERR_SUCCESS;
 }
 
 LOCAL svcs_errcode_t ICACHE_FLASH_ATTR
 espadmin_on_msg_system (dtlv_ctx_t * msg_out)
 {
+#ifdef ARCH_XTENSA
     dtlv_avp_t     *gavp;
     // SYSTEM
     struct rst_info *rsti = system_get_rst_info ();
@@ -130,7 +137,7 @@ espadmin_on_msg_system (dtlv_ctx_t * msg_out)
     d_svcs_check_dtlv_error (dtlv_avp_encode_uint8 (msg_out, ESPADMIN_AVP_SYS_CPUFREQ, system_get_cpu_freq ()) ||
 			     dtlv_avp_encode_uint8 (msg_out, ESPADMIN_AVP_SYS_BOOTVER, system_get_boot_version ()) ||
 			     dtlv_avp_encode_group_done (msg_out, gavp));
-
+#endif
     return SVCS_ERR_SUCCESS;
 }
 
@@ -138,6 +145,7 @@ espadmin_on_msg_system (dtlv_ctx_t * msg_out)
 LOCAL svcs_errcode_t ICACHE_FLASH_ATTR
 espadmin_on_msg_wireless (dtlv_ctx_t * msg_out)
 {
+#ifdef ARCH_XTENSA
     dtlv_avp_t     *gavp;
     // WIRELESS
     uint8           wifi_mode = wifi_get_opmode ();
@@ -205,7 +213,7 @@ espadmin_on_msg_wireless (dtlv_ctx_t * msg_out)
 	d_svcs_check_dtlv_error (dtlv_avp_encode_group_done (msg_out, gavp_in));
     }
     dtlv_avp_encode_group_done (msg_out, gavp);
-
+#endif
     return SVCS_ERR_SUCCESS;
 }
 
@@ -307,6 +315,7 @@ espadmin_on_msg_info (dtlv_ctx_t * msg_in, dtlv_ctx_t * msg_out)
     return SVCS_ERR_SUCCESS;
 }
 
+#ifdef ARCH_XTENSA
 LOCAL svcs_errcode_t ICACHE_FLASH_ATTR
 espadmin_on_msg_fwupdate_info (dtlv_ctx_t * msg_out, upgrade_err_t ures)
 {
@@ -317,10 +326,11 @@ espadmin_on_msg_fwupdate_info (dtlv_ctx_t * msg_out, upgrade_err_t ures)
 			     dtlv_avp_encode_uint8 (msg_out, ESPADMIN_AVP_OTA_STATE, info.state) ||
 			     dtlv_avp_encode_uint32 (msg_out, ESPADMIN_AVP_FW_ADDR, info.fwbin_start_addr) ||
 			     dtlv_avp_encode_uint32 (msg_out, ESPADMIN_AVP_OTA_CURRENT_ADDR, info.fwbin_curr_addr));
-
     return SVCS_ERR_SUCCESS;
 }
+#endif
 
+#ifdef ARCH_XTENSA
 LOCAL svcs_errcode_t ICACHE_FLASH_ATTR
 espadmin_on_msg_fwupdate_init (dtlv_ctx_t * msg_in, dtlv_ctx_t * msg_out)
 {
@@ -355,7 +365,9 @@ espadmin_on_msg_fwupdate_init (dtlv_ctx_t * msg_in, dtlv_ctx_t * msg_out)
 
     return SVCS_ERR_SUCCESS;
 }
+#endif
 
+#ifdef ARCH_XTENSA
 LOCAL svcs_errcode_t ICACHE_FLASH_ATTR
 espadmin_on_msg_fwupdate_upload (dtlv_ctx_t * msg_in, dtlv_ctx_t * msg_out)
 {
@@ -377,16 +389,18 @@ espadmin_on_msg_fwupdate_upload (dtlv_ctx_t * msg_in, dtlv_ctx_t * msg_out)
 	upgrade_err_t   ures = fwupdate_upload ((uint8 *) davp.avp->data, davp.havpd.length - sizeof (dtlv_havpe_t));
 	d_svcs_check_svcs_error (espadmin_on_msg_fwupdate_info (msg_out, ures));
     }
-
     return SVCS_ERR_SUCCESS;
 }
+#endif
 
+#ifdef ARCH_XTENSA
 LOCAL void      ICACHE_FLASH_ATTR
 system_restart_timeout (void *args)
 {
     system_shutdown ();
     system_restart ();
 }
+#endif
 
 svcs_errcode_t  ICACHE_FLASH_ATTR
 espadmin_on_message (service_ident_t orig_id, service_msgtype_t msgtype, void *ctxdata, dtlv_ctx_t * msg_in,
@@ -397,6 +411,7 @@ espadmin_on_message (service_ident_t orig_id, service_msgtype_t msgtype, void *c
     case SVCS_MSGTYPE_INFO:
 	res = espadmin_on_msg_info (msg_in, msg_out);
 	break;
+#ifdef ARCH_XTENSA
     case ESPADMIN_MSGTYPE_RESTART:
         {
             os_timer_t     *timer;
@@ -425,6 +440,7 @@ espadmin_on_message (service_ident_t orig_id, service_msgtype_t msgtype, void *c
 				   fw_verify (&fw_info, (firmware_digest_t *) APP_INIT_DIGEST));
 	}
 	break;
+#endif
     default:
 	res = SVCS_MSGTYPE_INVALID;
     }
@@ -435,6 +451,7 @@ espadmin_on_message (service_ident_t orig_id, service_msgtype_t msgtype, void *c
 svcs_errcode_t  ICACHE_FLASH_ATTR
 espadmin_on_cfgupd (dtlv_ctx_t * conf)
 {
+#ifdef ARCH_XTENSA
     uint8           wifi_mode = ESPADMIN_DEFAULT_WIFI_MODE;
     uint8           wifi_st_ssid[32] = ESPADMIN_DEFAULT_WIFI_ST_SSID;
     uint8           wifi_st_password[64] = ESPADMIN_DEFAULT_WIFI_ST_PASSWORD;
@@ -489,6 +506,7 @@ espadmin_on_cfgupd (dtlv_ctx_t * conf)
 	d_log_iprintf (ESPADMIN_SERVICE_NAME, "\tsoftap ssid:%s, password:%s", config.ssid, config.password);
 	wifi_softap_set_config (&config);
     }
+#endif
 
     return SVCS_ERR_SUCCESS;
 }

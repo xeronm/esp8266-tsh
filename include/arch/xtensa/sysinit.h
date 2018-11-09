@@ -34,6 +34,7 @@ typedef uint32  os_time_t;
 
 #define IMDB_SMALL_RAM
 
+#define ALIGN_DATA	_Alignas(uint32)
 #define PACKED		//__packed
 #define LOCAL       	static
 #define INLINED       	inline

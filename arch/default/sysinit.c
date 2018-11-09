@@ -44,3 +44,34 @@ system_get_time (void)
 {
     return 0;
 }
+
+uint32          ICACHE_FLASH_ATTR 
+system_rtc_clock_cali_proc(void)
+{
+    return 0;
+}
+
+
+size_t          ICACHE_FLASH_ATTR
+fio_user_read(uint32 addr, uint32 *buffer, uint32 size) 
+{
+    FILE * fp = fopen ("userdata.bin", "r");
+    fseek (fp, addr, SEEK_SET);
+    fread (buffer, 1, size, fp);
+    fclose (fp);
+}
+
+size_t          ICACHE_FLASH_ATTR 
+fio_user_write(uint32 addr, uint32 *buffer, uint32 size)
+{
+    FILE * fp = fopen ("userdata.bin", "w+");
+    fseek (fp, addr, SEEK_SET);
+    fwrite (buffer, 1, size, fp);
+    fclose (fp);
+}
+
+size_t          ICACHE_FLASH_ATTR 
+fio_user_size(void)
+{
+    return 2*1024*1024; // 2 Mb
+}

@@ -54,6 +54,7 @@
 #include "sysinit.h"
 #include "misc/idxhash.h"
 #include "core/logging.h"
+#include "core/system.h"
 #include "core/ltime.h"
 #include "proto/dtlv.h"
 #include "system/comavp.h"
@@ -130,7 +131,7 @@ LOCAL const char *sz_sh_error[] RODATA = {
     "function \"%s\" call error",
 };
 
-typedef enum PACKED sh_oper_type_e {
+typedef enum sh_oper_type_e {
     SH_OPER_NONE = 0,
     SH_OPER_FUNC = 1,
     SH_OPER_BLOCK = 2,
@@ -166,7 +167,7 @@ typedef enum PACKED sh_oper_type_e {
     SH_OPER_MAX = 31
 } sh_oper_type_t;
 
-typedef enum PACKED sh_operand_pos_s {
+typedef enum sh_operand_pos_s {
     SH_OPERAND_NONE = 0,
     SH_OPERAND_OPT,
     SH_OPERAND_MAND,
@@ -186,11 +187,11 @@ LOCAL lsh_data_t *sdata = NULL;
 
 typedef struct sh_stmt_s {
     sh_stmt_info_t  info;
-    _Alignas (uint32) char vardata[];
+    ALIGN_DATA char vardata[];
 } sh_stmt_t;
 
 typedef struct sh_func_find_ctx_s {
-    char           *func_name;
+    const char      *func_name;
     sh_func_entry_t *entry;
 } sh_func_find_ctx_t;
 
@@ -215,7 +216,7 @@ sh_forall_func_find (void *ptr, void *data)
   - return: the pointer on function entry
 */
 sh_errcode_t    ICACHE_FLASH_ATTR
-sh_func_get (char *func_name, sh_func_entry_t ** entry)
+sh_func_get (const char *func_name, sh_func_entry_t ** entry)
 {
     d_check_init();
 
@@ -308,7 +309,7 @@ LOCAL sh_oper_desc_t sh_oper_desc[] RODATA = {
     {16, true, false, false, SH_OPERAND_MAND, SH_OPERAND_OPT, ",", "\0"},	// ... , ...
 };
 
-typedef enum PACKED sh_parse_assoc_type_e {
+typedef enum sh_parse_assoc_type_e {
     SH_PARSE_ASSOC_TYPE_NONE = 0,
     SH_PARSE_ASSOC_TYPE_L2R,
     SH_PARSE_ASSOC_TYPE_CONCAT,
@@ -317,7 +318,7 @@ typedef enum PACKED sh_parse_assoc_type_e {
 
 #define ERROR_MESSAGE_LENGTH	80
 
-typedef enum PACKED sh_parse_arg_type_e {
+typedef enum sh_parse_arg_type_e {
     SH_ARG_NONE,
     SH_ARG_INT,
     SH_ARG_CHAR,
@@ -329,19 +330,19 @@ typedef enum PACKED sh_parse_arg_type_e {
 typedef struct sh_parse_arg_s {
     sh_parse_arg_type_t type;
     parse_size_t    length;
-    _Alignas(uint32) char data[];
+    ALIGN_DATA char data[];
 } sh_parse_arg_t;
 
 /* used in parsing process */
 typedef struct sh_parse_oper_s {
-    char           *stmt_start;
+    const char     *stmt_start;
     bool            control:1;
     sh_oper_type_t  optype:7;
     char            term;
     arg_count_t     arg_count;
     sh_parse_arg_t *left_arg;
     struct sh_parse_oper_s *prev_oper;
-    _Alignas(uint32) char varargs[];
+    ALIGN_DATA char varargs[];
 } sh_parse_oper_t;
 
 
@@ -363,7 +364,7 @@ typedef struct sh_parse_buffers_s {
  * - errmsg: error text message
  */
 typedef struct sh_parse_ctx_s {
-    char           *stmt_start;
+    const char     *stmt_start;
     char           *parse_buf;
     char           *bc_buf;
     ih_hndlr_t      varmap;
@@ -378,7 +379,7 @@ typedef struct sh_bc_oper_s {
     sh_oper_type_t  optype:8;
     arg_count_t     arg_count;
     uint16          bitmask;
-    _Alignas(uint32) char varargs[];
+    ALIGN_DATA char varargs[];
 } sh_bc_oper_t;
 
 typedef struct sh_gvar_s {
@@ -401,7 +402,7 @@ typedef struct sh_gvar_s {
   - result: operator type
 */
 INLINED sh_oper_type_t ICACHE_FLASH_ATTR
-parse_optype (char **szstr)
+parse_optype (const char **szstr)
 {
     sh_oper_type_t  optype = SH_OPER_NONE;
     switch (**szstr) {
@@ -541,7 +542,7 @@ bc_global_add (sh_parse_arg_t * arg, sh_bc_arg_type_t type, sh_gvar_t ** gaddr)
     sh_gvar_t      *gvar;
     *gaddr = NULL;
     if (ih_hash8_search (sdata->token_idx, arg->data, arg->length - 1, (char **) &gvar) == IH_ENTRY_NOTFOUND) {
-	ih_hash8_add (sdata->token_idx, arg->data, arg->length - 1, (char **) &gvar);
+	ih_hash8_add (sdata->token_idx, arg->data, arg->length - 1, (char **) &gvar, 0);
 	gvar->type = type;
 	gvar->use_count = 1;
 
@@ -589,7 +590,7 @@ bc_serialize_arg (sh_parse_ctx_t * ctx, char **bc_ptr, sh_bc_oper_t * bc_oper, s
 	    if (ih_hash8_search (ctx->varmap, arg->data, arg->length - 1, (char **) &bptr) != IH_ERR_SUCCESS) {
 		d_stmt_err_ret (ctx, SH_CODE_VARIABLE_UNDEF, arg->data, 0);
 	    }
-	    bc_arg->arg.ptr = (void *) ((uint32) 0 + *bptr);
+	    bc_arg->arg.vptr = *bptr;
 	    bc_oper->bitmask |= (0x3 << *bytepos);
 	    (*bytepos)++;
 	    break;
@@ -613,7 +614,7 @@ bc_serialize_arg (sh_parse_ctx_t * ctx, char **bc_ptr, sh_bc_oper_t * bc_oper, s
 	    break;
 	}
     case SH_ARG_POINTER:
-	bc_arg->arg.ptr = (void *) ((uint32) 0 + *d_pointer_as (bytecode_size_t, arg->data));
+	bc_arg->arg.vptr = *d_pointer_as (bytecode_size_t, arg->data);
         //debug// os_printf("-- serialize arg ptr %p\n", bc_arg->arg.ptr);
 	bc_oper->bitmask |= (0x3 << *bytepos);
 	(*bytepos)++;
@@ -689,7 +690,7 @@ bc_serialize_oper_ctl (sh_parse_ctx_t * ctx, char **bc_ptr, char **pbuf_ptr, sh_
 
         //debug// os_printf("-- cond0 vptr %p\n", cond0_arg->arg.ptr);
         bc_oper0 = d_pointer_add(sh_bc_oper_t, ctx->bc_buf, cond0_arg->arg.ptr);
-        *vptr = (uint32) cond0_arg->arg.ptr;
+        *vptr = (bytecode_size_t) cond0_arg->arg.vptr;
     }
 
 
@@ -731,7 +732,7 @@ bc_serialize_var (sh_parse_ctx_t * ctx, char **bc_ptr, sh_parse_oper_t * oper, s
     d_assert (arg_ptr->type == SH_ARG_TOKEN, "variable name is token");
 
     bytecode_size_t *addr;
-    ih_errcode_t    ihres = ih_hash8_add (ctx->varmap, arg_ptr->data, arg_ptr->length - 1, (char **) &addr);
+    ih_errcode_t    ihres = ih_hash8_add (ctx->varmap, arg_ptr->data, arg_ptr->length - 1, (char **) &addr, 0);
     *addr = d_pointer_diff (bc_oper_ptr, ctx->bc_buf);
     if (ihres != IH_ERR_SUCCESS) {
 	if (ihres == IH_ENTRY_EXISTS) {
@@ -917,7 +918,7 @@ bc_serialize_oper (sh_parse_ctx_t * ctx, char **bc_ptr, char **pbuf_ptr, sh_pars
 */
 INLINED sh_oper_type_t ICACHE_FLASH_ATTR
 stmt_parse_oper (sh_parse_ctx_t * ctx,
-		 char **szstr, char **bc_ptr, char **pbuf_ptr, sh_parse_arg_t ** arg, sh_parse_oper_t ** oper)
+		 const char **szstr, char **bc_ptr, char **pbuf_ptr, sh_parse_arg_t ** arg, sh_parse_oper_t ** oper)
 {
     sh_oper_type_t  optype = parse_optype (szstr);
     if (optype == SH_OPER_NONE)
@@ -1016,7 +1017,7 @@ stmt_parse_oper (sh_parse_ctx_t * ctx,
   - result: parse result
 */
 INLINED sh_errcode_t ICACHE_FLASH_ATTR
-stmt_parse_arg (sh_parse_ctx_t * ctx, char **szstr, char **pbuf_ptr, sh_parse_oper_t * oper, sh_parse_arg_t ** arg)
+stmt_parse_arg (sh_parse_ctx_t * ctx, const char **szstr, char **pbuf_ptr, sh_parse_oper_t * oper, sh_parse_arg_t ** arg)
 {
     *arg = NULL;
     // Fixme: Check buffer length
@@ -1038,7 +1039,9 @@ stmt_parse_arg (sh_parse_ctx_t * ctx, char **szstr, char **pbuf_ptr, sh_parse_op
     else if (d_char_is_quote (*szstr)) {
 	// constant string
 	arg_ptr->type = SH_ARG_CHAR;
-	estlen_qstr (szstr, (unsigned int *) &arg_ptr->length);
+	size_t length;
+	estlen_qstr (*szstr, &length);
+        arg_ptr->length = (parse_size_t) length;
 	// null-terminate
 	arg_ptr->data[arg_ptr->length] = '\0';
 	arg_ptr->length++;
@@ -1053,7 +1056,9 @@ stmt_parse_arg (sh_parse_ctx_t * ctx, char **szstr, char **pbuf_ptr, sh_parse_op
     else if (d_char_is_token1 (*szstr)) {
 	// function | variable | extended operator | nested statement
 	arg_ptr->type = SH_ARG_TOKEN;
-	estlen_token (szstr, (unsigned int *) &arg_ptr->length);
+	size_t length;
+	estlen_token (*szstr, &length);
+        arg_ptr->length = (parse_size_t) length;
 	// null-terminate
 	arg_ptr->data[arg_ptr->length] = '\0';
 	arg_ptr->length++;
@@ -1079,14 +1084,14 @@ stmt_parse_arg (sh_parse_ctx_t * ctx, char **szstr, char **pbuf_ptr, sh_parse_op
 }
 
 INLINED sh_errcode_t ICACHE_FLASH_ATTR
-stmt_parse_ext (sh_parse_ctx_t * ctx, char **szstr, char **bc_ptr, char **pbuf_ptr)
+stmt_parse_ext (sh_parse_ctx_t * ctx, const char **szstr, char **bc_ptr, char **pbuf_ptr)
 {
     sh_parse_oper_t *oper = NULL;
     sh_parse_arg_t *arg = NULL;
 
     d_skip_space (*szstr);
     while (**szstr != '\0') {
-	char           *ptr_start = *szstr;
+	const char     *ptr_start = *szstr;
 	// check operator term
         //debug// os_printf("-- 000 %p %c\n", oper, **szstr);
 
@@ -1160,11 +1165,11 @@ stmt_parse_ext (sh_parse_ctx_t * ctx, char **szstr, char **bc_ptr, char **pbuf_p
 
 
 sh_errcode_t    ICACHE_FLASH_ATTR
-stmt_parse (char *szstr, char * stmt_name, sh_hndlr_t * hstmt)
+stmt_parse (const char *szstr, const char * stmt_name, sh_hndlr_t * hstmt)
 {
     d_check_init();
 
-    char           *ptr = szstr;
+    const char     *ptr = szstr;
     char           *bc_ptr;
     char           *pbuf_ptr;
     char           *varmap_ptr;
@@ -1190,7 +1195,7 @@ stmt_parse (char *szstr, char * stmt_name, sh_hndlr_t * hstmt)
     varmap_ptr = (char *) &buffers->varmap;
 #endif
 
-    if (ih_init8 (varmap_ptr, LSH_STMT_VARIDX_BUFFER_SIZE, 16, 0, true, sizeof (bytecode_size_t), &ctx.varmap) !=
+    if (ih_init8 (varmap_ptr, LSH_STMT_VARIDX_BUFFER_SIZE, 16, 0, sizeof (bytecode_size_t), &ctx.varmap) !=
 	IH_ERR_SUCCESS) {
 	return SH_INTERNAL_ERROR;
     }
@@ -1258,7 +1263,7 @@ sh_pop_bcarg_type(uint16 * mask, sh_bc_arg_t * bc_arg) {
 
     if (*mask & 1) {
 	if (*mask & 0x2)
-	    res = (bc_arg->arg.ptr > (void *) 0xFFFF) ? SH_BC_ARG_GLOBAL : SH_BC_ARG_LOCAL;
+	    res = (bc_arg->arg.vptr > SH_BYTECODE_SIZE_MAX) ? SH_BC_ARG_GLOBAL : SH_BC_ARG_LOCAL;
 	else 
 	    res = SH_BC_ARG_CHAR;
         *mask = *mask >> 2;
@@ -1313,12 +1318,13 @@ stmt_dump (const sh_hndlr_t hstmt, char *buf, size_t len, bool resolve_glob)
 		bc_ptr += d_align (bc_arg->arg.dlength);
 		break;
             case SH_BC_ARG_LOCAL:
-		buf_ptr += os_sprintf (buf_ptr, "vptr+0x%x", (uint32) bc_arg->arg.ptr);
+		buf_ptr += os_sprintf (buf_ptr, "vptr+0x%x", bc_arg->arg.vptr);
 		break;
             case SH_BC_ARG_GLOBAL:
 		if (resolve_glob) {
                     sh_gvar_t      *gvar = d_pointer_as(sh_gvar_t, bc_arg->arg.ptr);
-                    char           *gname = ih_hash8_v2key (sdata->token_idx, (char *) gvar);
+                    const char     *gname = ih_hash8_v2key (sdata->token_idx, (const char *) gvar);
+                    
 		    if (gvar->type == SH_BC_ARG_INT)
                         buf_ptr += os_sprintf (buf_ptr, "<%s: %u>", gname, gvar->arg.arg.value);
 		    else if (gvar->type == SH_BC_ARG_CHAR)
@@ -1376,20 +1382,21 @@ stmt_eval_popvar (sh_stmt_t * stmt, char ** bc_ptr, uint16 * mask, sh_bc_arg_t *
     case SH_BC_ARG_GLOBAL:
         {
 	    sh_bc_arg_t *arg = NULL;
-	    if ((*bc_arg)->arg.ptr > (void *) 0xFFFF) {        
+	    if ((*bc_arg)->arg.vptr > SH_BYTECODE_SIZE_MAX) {
 	        sh_gvar_t      *gvar = d_pointer_as(sh_gvar_t, (*bc_arg)->arg.ptr);
                 //debug// os_printf("-- 7.2 %p\n", gvar);
 	        arg = &gvar->arg;
 
                 if ((gvar->type == SH_BC_ARG_FUNC) && (!arg->arg.ptr)) {
-                    char            *func_name = ih_hash8_v2key (sdata->token_idx, (char *) gvar);
+                    const char      *func_name = ih_hash8_v2key (sdata->token_idx, (const char *) gvar);
+
                     d_sh_check_error (sh_func_get (func_name, (sh_func_entry_t **) &(arg->arg.ptr)));
                     //debug// os_printf("-- 7.2.1 %s %p\n", func_name, arg->arg.ptr);
                 }
                 *arg_type = gvar->type;
 	    }
 	    else {
-        	sh_bc_oper_t * bc_oper = d_pointer_add(sh_bc_oper_t, stmt->vardata, (*bc_arg)->arg.ptr);
+        	sh_bc_oper_t * bc_oper = d_pointer_add(sh_bc_oper_t, stmt->vardata, (*bc_arg)->arg.vptr);
                 //debug// os_printf("-- 7.3 %u\n", bc_oper->optype);
         	if ((sh_oper_desc[bc_oper->optype].result) || (bc_oper->optype == SH_OPER_VAR) || (sh_oper_desc[bc_oper->optype].control)) // Check that oper has result
 	            arg = d_pointer_add(sh_bc_arg_t, bc_oper, sizeof (sh_bc_arg_t));
@@ -2026,7 +2033,7 @@ LSH_STMT_STORAGE_PAGE_BLOCKS, sizeof (sh_stmt_t) };
 	);
 
     ih_hndlr_t      varmap;
-    if (ih_init8 (tmp_sdata->token_idx, LSH_TOKENIDX_BUFFER_SIZE, 16, 0, true, sizeof (sh_gvar_t), &varmap) !=
+    if (ih_init8 (tmp_sdata->token_idx, LSH_TOKENIDX_BUFFER_SIZE, 16, 0, sizeof (sh_gvar_t), &varmap) !=
 	IH_ERR_SUCCESS) {
 	return SH_INTERNAL_ERROR;
     }

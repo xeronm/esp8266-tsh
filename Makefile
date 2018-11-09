@@ -44,7 +44,7 @@ INCLUDES_EXTRA =
 CFLAGS = $(addprefix -I,$(INCLUDES)) \
 	-I$(SDK_DIR)/include \
 	$(addprefix -I,$(INCLUDES_EXTRA)) \
-	-mlongcalls \
+	-mlongcalls -Wall \
 	-mtext-section-literals \
 	$(addprefix -D,$(DEFINES))
 # The pre-processor options used by the cpp (man cpp for more).
@@ -112,6 +112,8 @@ MKDIR  = mkdir -p
 CP     = cp -v
 MV     = mv -v
 PYTHON = python
+BININFO = $(PYTHON) ./scripts/bininfo.py
+DIGEST = $(PYTHON) ./scripts/digest.py
 
 ## Stable Section: usually no need to be changed. But you can add more.
 ##==========================================================================
@@ -158,9 +160,9 @@ DEP_OPT = $(shell if `$(CC) --version | grep "GCC" >/dev/null`; then \
 
 DEPEND      = $(CC)  $(DEP_OPT)  $(CFLAGS) $(CPPFLAGS)
 DEPEND.d    = $(subst -g ,,$(DEPEND))
-COMPILE.c   = $(CC)  $(CFLAGS)   $(CPPFLAGS) -c
+COMPILE.c   = $(CC)  $(CFLAGS)   -c
 COMPILE.cxx = $(CXX) $(CXXFLAGS) $(CPPFLAGS) -c
-LINK.c      = $(CC)  $(CFLAGS)   $(CPPFLAGS) $(LDFLAGS)
+LINK.c      = $(CC)  $(CFLAGS)   $(LDFLAGS)
 LINK.cxx    = $(CXX) $(CXXFLAGS) $(CPPFLAGS) $(LDFLAGS)
 
 .PHONY: all objs clean cleanall show buildpath project image release reldate
@@ -220,12 +222,12 @@ $(SDK_IMAGES): $(BINDIR)%:$(SDK_DIR)/bin/%
 	@$(CP) $^ $@
 
 $(IMAGEINFO): $(APPS_INFO)
-	$(PYTHON) bininfo.py $^ $@
+	$(BININFO) $^ $@
 
 $(IMAGES): $(BINDIR)%.bin:$(BUILD_DIR)%
 ifeq ($(SDK_IMAGE_TOOL),0)
 	@esptool.py elf2image --version=2 $(ESPTOOL_PARAMS) -o $@ $^
-	$(PYTHON) digest.py $^ $@
+	$(DIGEST) $^ $@
 else
 	$(eval APPID := $(subst .app,$(SPACE),$^))
 	@echo gen_appbin.py: $(CURDIR)/$^ 2 0 0 $(SPI_MODE) $(word $(words $(APPID)),$(APPID))

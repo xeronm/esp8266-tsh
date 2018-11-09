@@ -28,6 +28,8 @@ Buffer format:
 	| Root Bucket | Overflow Area | ... | Siblings Bucket |
 	+-------------+---------------+-----+-----------------+
 
+        TODO: Siblings Bucket not realized
+
 Inline key and value Entry format:
 	+-------------+-----------+-------------+
 	| Next Entry  |   Value   |  Entry-Key  |
@@ -41,12 +43,10 @@ Inline key and value Entry format:
 
 typedef size_t  ih_entry_ptr_t;
 
-#define IH_HEADER8_VALUE_LNEGTH_MASK	0x3F
 typedef struct ih_header8_s {
     uint8           bucket_size;	// in values
-    bool            key_nullterm:1;	// is key null terminated?
-    uint8           bucket_depth:1;	// Fixme: not realized
-    uint8           value_length:6;	// associated fixed value length in bytes
+    uint8           key_length;	        // Key length stored in Hash-Map (0 - null term, 1 - variable, n - fixed length in bytes)
+    uint8           value_length;	// Value length stored in Hash-Map (0 - null term, 1 - variable, n - fixed length in bytes)
     uint16          bucket_count;	// allocated bucket count
     size_t          overflow_hwm;
     size_t          overflow_pos;
@@ -66,7 +66,7 @@ typedef struct ih_entry_header_s {
   - init: initialize value
 */
 uint8           ICACHE_FLASH_ATTR
-ih_hash8 (char *buf, size_t len, uint8 init)
+ih_hash8 (const char *buf, size_t len, uint8 init)
 {
     uint8           res = 0xb1101 * init;
     bool            haslen = len;
@@ -87,7 +87,7 @@ ih_hash8 (char *buf, size_t len, uint8 init)
   - init: initialize value
 */
 uint16          ICACHE_FLASH_ATTR
-ih_hash16 (char *buf, size_t len, uint8 init)
+ih_hash16 (const char *buf, size_t len, uint8 init)
 {
     uint16          res = 0xb110101 * init;
     bool            haslen = len;
@@ -103,16 +103,15 @@ ih_hash16 (char *buf, size_t len, uint8 init)
 
 
 /*
-* [public] Create Hash-Map Index with inline stored keys and fixed value length
-* - buf: buffer for index
-* - length: buffer length
-* - bucket_size: hash bucket size
-* - depth: bucket tree depth
-* - key_nullterm: flag means that keyis null-terminated string
-* - value_length: fixed value length stored in Hash-Map
-*/
+ * [public] Create Hash-Map Index with inline stored keys and fixed value length
+ * - buf: buffer for index
+ * - length: buffer length
+ * - bucket_size: hash bucket size
+ * - key_length: Key length stored in Hash-Map (0 - null term, 1 - variable, n - fixed length in bytes)
+ * - value_length: Value length stored in Hash-Map (0 - null term, 1 - variable, n - fixed length in bytes)
+ */
 ih_errcode_t    ICACHE_FLASH_ATTR
-ih_init8 (char *buf, size_t length, uint8 bucket_size, uint8 depth, bool key_nullterm, uint8 value_length,
+ih_init8 (char *buf, size_t length, uint8 bucket_size, uint8 key_length, uint8 value_length,
 	  ih_hndlr_t * hndlr)
 {
     size_t          fixed_size = sizeof (ih_header8_t) + bucket_size * sizeof (ih_entry_ptr_t);
@@ -125,46 +124,70 @@ ih_init8 (char *buf, size_t length, uint8 bucket_size, uint8 depth, bool key_nul
     hdr->bucket_size = bucket_size;
     hdr->overflow_hwm = length;
     hdr->overflow_pos = fixed_size;
-    hdr->bucket_depth = depth;
-    hdr->value_length = d_align (value_length) & IH_HEADER8_VALUE_LNEGTH_MASK;
-    hdr->key_nullterm = key_nullterm;
+    hdr->value_length = (value_length > 1) ? d_align (value_length) : value_length;
+    hdr->key_length = key_length;
 
     *hndlr = d_obj2hndlr (hdr);
     return IH_ERR_SUCCESS;
 }
 
-bool            ICACHE_FLASH_ATTR
-ih_entry_cmp (ih_header8_t * hdr, char *entrykey, size_t len, ih_entry_header_t * entry2)
+LOCAL bool      ICACHE_FLASH_ATTR
+ih_entry_cmp (ih_header8_t * hdr, const char *entrykey, size_t len, ih_entry_header_t * entry2)
 {
-    char           *ptr = d_pointer_add (char, entry2, sizeof (ih_entry_header_t) + hdr->value_length);
-    if (hdr->key_nullterm) {
-	return ((len == 0) ? os_strcmp (entrykey, ptr) : os_strncmp (entrykey, ptr, len)) == 0;
+    char           *ptr = d_pointer_add (char, entry2, sizeof (ih_entry_header_t));
+
+    if (!hdr->value_length) {
+        ptr += os_strlen(ptr) + 1;
+    } else if (hdr->value_length == 1) {
+        ptr += sizeof (size_t) + *((size_t *) ptr);
     }
     else {
+        ptr += hdr->value_length;
+    }
+
+    if (! hdr->key_length) {
+	return ((len == 0) ? os_strcmp (entrykey, ptr) : os_strncmp (entrykey, ptr, len)) == 0;
+    }
+    else if (hdr->key_length == 1) {
 	size_t          len2;
 	os_memcpy (&len2, ptr, sizeof (size_t));
 	if (len == len2) {
 	    return (os_memcmp (entrykey, ptr + sizeof (size_t), len) == 0);
 	}
     }
+    else {
+	return (os_memcmp (entrykey, ptr, MIN(len, hdr->key_length)) == 0);
+    }
 
     return false;
 }
 
 
+/*
+ * [public] Add Key-Value to Hash-Map
+ * - hndlr: Hash-Map handler
+ * - entrykey: entry key
+ * - len: entry key length
+ * - value: returns pointer to entry value buffer
+ * - valuelen: entry value length
+ */
 ih_errcode_t    ICACHE_FLASH_ATTR
-ih_hash8_add (ih_hndlr_t hndlr, char *entrykey, size_t len, char **value)
+ih_hash8_add (ih_hndlr_t hndlr, const char *entrykey, size_t len, char **value, size_t valuelen)
 {
     ih_header8_t   *hdr = d_hndlr2obj (ih_header8_t, hndlr);
-    if (len == 0) {
-	if (hdr->key_nullterm) {
-	    len = os_strlen (entrykey);
-	    if (len == 0)
-		return IH_NULL_ENTRY;
-	}
-	else
+    if (hdr->key_length <= 1) {
+        if (len == 0) {
+	    if (!hdr->key_length) { // null-terminated
+	        len = os_strlen (entrykey);
+	        if (len == 0)
+		    return IH_NULL_ENTRY;
+	    }
+	    else // variable length
 	    return IH_NULL_ENTRY;
+	}
     }
+    else  // fixed length
+        len = hdr->key_length;
 
     uint8           hash0 = ih_hash8 (entrykey, len, 0) % hdr->bucket_size;
     ih_entry_ptr_t *entry_ptr =
@@ -187,29 +210,45 @@ ih_hash8_add (ih_hndlr_t hndlr, char *entrykey, size_t len, char **value)
 	*entry_ptr = hdr->overflow_pos;
     }
 
-    if (hdr->overflow_hwm - hdr->overflow_pos <
-	sizeof (ih_entry_header_t) + len + (hdr->key_nullterm ? 1 : sizeof (size_t)) + hdr->value_length) {
+    size_t value_len = (hdr->value_length > 1) ? hdr->value_length : 
+                           ((hdr->value_length) ? sizeof (size_t) : 1) + valuelen;
+    size_t entry_len = sizeof (ih_entry_header_t) + value_len;
+    entry_len += (hdr->key_length > 1) ? hdr->key_length : 
+                       ((hdr->key_length) ? sizeof (size_t) : 1) + len;
+
+    if (hdr->overflow_hwm - hdr->overflow_pos < entry_len) {
 	return IH_BUFFER_OVERFLOW;
     }
+
     entry2 = d_pointer_add (ih_entry_header_t, hdr, hdr->overflow_pos);
     entry2->next_entry = 0;
     *entry_ptr = hdr->overflow_pos;
 
     char           *ptr = d_pointer_add (char, entry2, sizeof (ih_entry_header_t));
-    //os_memcpy(ptr, value, hdr->value_length);
-    *value = ptr;
-    ptr += hdr->value_length;
-    if (hdr->key_nullterm) {
+    if (hdr->value_length == 1) {
+        *((size_t *) ptr) = valuelen;
+        *value = ptr + sizeof (size_t);
+    }
+    else
+        *value = ptr;
+
+    ptr += value_len;
+    if (! hdr->key_length) {
 	os_memcpy (ptr, entrykey, len);
 	ptr += len;
 	*(ptr) = '\0';
-	ptr++;
+        ptr ++;
+
     }
-    else {
+    else if (hdr->key_length == 1) {
 	os_memcpy (ptr, &len, sizeof (size_t));
 	ptr += sizeof (size_t);
 	os_memcpy (ptr, entrykey, len);
 	ptr += len;
+    }
+    else {
+	os_memcpy (ptr, entrykey, len);
+	ptr += hdr->key_length;
     }
 
     hdr->overflow_pos += d_align (d_pointer_diff (ptr, entry2));
@@ -218,7 +257,7 @@ ih_hash8_add (ih_hndlr_t hndlr, char *entrykey, size_t len, char **value)
 }
 
 ih_errcode_t    ICACHE_FLASH_ATTR
-ih_hash8_search (ih_hndlr_t hndlr, char *entrykey, size_t len, char **value)
+ih_hash8_search (ih_hndlr_t hndlr, const char *entrykey, size_t len, char **value)
 {
     ih_header8_t   *hdr = d_hndlr2obj (ih_header8_t, hndlr);
     uint8           hash0 = ih_hash8 (entrykey, len, 0) % hdr->bucket_size;
@@ -244,14 +283,25 @@ ih_hash8_search (ih_hndlr_t hndlr, char *entrykey, size_t len, char **value)
 }
 
 /*
-* [public] Get pointer to inline stored key
-* - hndlr: handler to Hash-Map
-* - value: pointer to inlined stored value
-* - return: pointer to inline stored key
-*/
-char           *ICACHE_FLASH_ATTR
-ih_hash8_v2key (ih_hndlr_t hndlr, char *value)
+ * [public] Get pointer to inline stored key (not aligned)
+ * - hndlr: handler to Hash-Map
+ * - value: pointer to inlined stored value
+ * - key: results pointer to inline stored key
+ * - return: length of inline stored key
+ */
+const char *    ICACHE_FLASH_ATTR
+ih_hash8_v2key (ih_hndlr_t hndlr, const char *value)
 {
     ih_header8_t   *hdr = d_hndlr2obj (ih_header8_t, hndlr);
-    return d_pointer_add (char, value, hdr->value_length);
+
+    if (!hdr->value_length) {
+        value += os_strlen(value) + 1;
+    } 
+    else if (hdr->value_length == 1) {
+        value += d_ih_get_varlength(value);
+    }
+    else
+        value += hdr->value_length;
+
+    return value;
 }

@@ -21,14 +21,14 @@
 
 typedef void   *imdb_hndlr_t;
 
-typedef enum PACKED imdb_block_crc_s {
+typedef enum imdb_block_crc_s {
     BLOCK_CRC_NONE = 0,
     BLOCK_CRC_META = 1,
     BLOCK_CRC_WRITE = 2,
     BLOCK_CRC_ALL = 3
 } imdb_block_crc_t;
 
-typedef enum PACKED imdb_errcode_e {
+typedef enum imdb_errcode_e {
     IMDB_ERR_SUCCESS = 0,
     IMDB_INTERNAL_ERROR = 1,
     IMDB_NOMEM = 2,
@@ -43,7 +43,7 @@ typedef enum PACKED imdb_errcode_e {
     IMDB_CURSOR_FORALL_FUNC = 11,
 } imdb_errcode_t;
 
-typedef enum PACKED imdb_access_path_s {
+typedef enum imdb_access_path_s {
     PATH_NONE = 0,
     PATH_FULL_SCAN = 1,
     PATH_RECYCLE_SCAN = 2,
