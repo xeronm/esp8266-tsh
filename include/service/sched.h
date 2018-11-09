@@ -15,7 +15,7 @@
 #define SCHEDULER_SZENTRY_MAX_LEN	80
 #define SCHEDULER_ENTRY_NAME_LEN	30
 
-typedef enum PACKED sched_errcode_e {
+typedef enum sched_errcode_e {
     SCHED_ERR_SUCCESS = 0,
     SCHED_INTERNAL_ERROR = 1,
     SCHED_ALLOCATION_ERROR = 2,
@@ -26,20 +26,20 @@ typedef enum PACKED sched_errcode_e {
     SCHED_STMT_ERROR = 7,
 } sched_errcode_t;
 
-typedef enum PACKED sched_entry_state_e {
+typedef enum sched_entry_state_e {
     SCHED_ENTRY_STATE_NONE = 0,
     SCHED_ENTRY_STATE_RUNNING = 1,
     SCHED_ENTRY_STATE_QUEUE = 2,
     SCHED_ENTRY_STATE_FAILED = 3,
 } sched_entry_state_t;
 
-typedef enum PACKED sched_msgtype_e {
+typedef enum sched_msgtype_e {
     SCHED_MSGTYPE_ENTRY_ADD = 10,
     SCHED_MSGTYPE_ENTRY_REMOVE = 11,
     SCHED_MSGTYPE_ENTRY_RUN = 12,
 } sched_msgtype_t;
 
-typedef enum PACKED sched_avp_code_e {
+typedef enum sched_avp_code_e {
     SCHED_AVP_ENTRY = 100,
     SCHED_AVP_ENTRY_NAME = 101,
     SCHED_AVP_ENTRY_STATE = 102,
@@ -75,14 +75,14 @@ typedef struct sched_entry_s {
     uint16          fail_count;
     sched_entry_state_t state;
     size_t          varlen;
-    _Alignas(uint32) char vardata[];
+    ALIGN_DATA char vardata[];
 } sched_entry_t;
 
-sched_errcode_t sched_entry_get (char * entry_name, sched_entry_t ** entry);
+sched_errcode_t sched_entry_get (const char * entry_name, const sched_entry_t ** entry);
 
-sched_errcode_t sched_entry_run (entry_name_t * entry_name);
-sched_errcode_t sched_entry_add (entry_name_t * entry_name, char * sztsentry, sh_stmt_name_t * stmt_name, char * vardata, size_t varlen);
-sched_errcode_t sched_entry_remove (entry_name_t * entry_name);
+sched_errcode_t sched_entry_run (const entry_name_t * entry_name);
+sched_errcode_t sched_entry_add (const entry_name_t * entry_name, const char * sztsentry, const sh_stmt_name_t * stmt_name, const char * vardata, size_t varlen);
+sched_errcode_t sched_entry_remove (const entry_name_t * entry_name);
 
 // used by services
 svcs_errcode_t  sched_service_install ();

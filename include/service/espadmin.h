@@ -38,7 +38,7 @@
 #define ESPADMIN_SERVICE_ID		3
 #define ESPADMIN_SERVICE_NAME		"espadmin"
 
-typedef enum PACKED espadmin_msgtype_e {
+typedef enum espadmin_msgtype_e {
     ESPADMIN_MSGTYPE_FW_OTA_INIT = 10,
     ESPADMIN_MSGTYPE_FW_OTA_UPLOAD = 11,
     ESPADMIN_MSGTYPE_RESTART = 12,
@@ -46,7 +46,7 @@ typedef enum PACKED espadmin_msgtype_e {
     ESPADMIN_MSGTYPE_FW_OTA_DONE = 14,
 } espadmin_msgtype_t;
 
-typedef enum PACKED espadmin_avp_code_e {
+typedef enum espadmin_avp_code_e {
     ESPADMIN_AVP_SYSTEM = 102,
     ESPADMIN_AVP_WIRELESS = 103,
     ESPADMIN_AVP_FIRMWARE = 104,
@@ -76,6 +76,8 @@ typedef enum PACKED espadmin_avp_code_e {
     // OTA Update
     ESPADMIN_AVP_FW_INIT_DIGEST = 131,
     ESPADMIN_AVP_FW_INFO = 132,
+    ESPADMIN_AVP_FW_USER_DATA_ADDR = 133,
+    ESPADMIN_AVP_FW_USER_DATA_SIZE = 134,
     // IMDB
     ESPADMIN_AVP_IMDB_BLOCK_SIZE = 135,
     ESPADMIN_AVP_IMDB_CLASS = 136,
@@ -100,7 +102,7 @@ typedef enum PACKED espadmin_avp_code_e {
 
 } espadmin_avp_code_t;
 
-typedef enum PACKED ota_upgrade_sate_e {
+typedef enum ota_upgrade_sate_e {
     OTA_UPGRADE_NONE = 0,
     OTA_UPGRADE_ERROR = 1,
     OTA_UPGRADE_ERASING = 2,

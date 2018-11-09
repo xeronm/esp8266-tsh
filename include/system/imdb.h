@@ -21,14 +21,14 @@
 
 typedef void   *imdb_hndlr_t;
 
-typedef enum PACKED imdb_block_crc_s {
+typedef enum imdb_block_crc_s {
     BLOCK_CRC_NONE = 0,
     BLOCK_CRC_META = 1,
     BLOCK_CRC_WRITE = 2,
     BLOCK_CRC_ALL = 3
 } imdb_block_crc_t;
 
-typedef enum PACKED imdb_errcode_e {
+typedef enum imdb_errcode_e {
     IMDB_ERR_SUCCESS = 0,
     IMDB_INTERNAL_ERROR = 1,
     IMDB_NOMEM = 2,
@@ -43,7 +43,7 @@ typedef enum PACKED imdb_errcode_e {
     IMDB_CURSOR_FORALL_FUNC = 11,
 } imdb_errcode_t;
 
-typedef enum PACKED imdb_access_path_s {
+typedef enum imdb_access_path_s {
     PATH_NONE = 0,
     PATH_FULL_SCAN = 1,
     PATH_RECYCLE_SCAN = 2,
@@ -53,6 +53,8 @@ typedef enum PACKED imdb_access_path_s {
 
 #define IMDB_BLOCK_UNIT_ALIGN	2	// 4 byte aligment
 #define IMDB_CLASS_NAME_LEN	16	//
+
+#define IMDB_FILE_HEADER_VERSION	1
 
 typedef uint16  obj_size_t;	// aligned by IMDB_BLOCK_UNIT_ALIGN
 typedef uint16  block_size_t;	// aligned by IMDB_BLOCK_UNIT_ALIGN
@@ -107,6 +109,8 @@ typedef struct imdb_def_s {
     imdb_block_crc_t block_crc: 7;
     bool            opt_media: 1;
     uint32          buffer_size; // TODO: At this moment support only 1 block
+    uint32          file_size; // file size in blocks
+    imdb_hndlr_t    hcur; // handler to cursor
 } imdb_def_t;
 
 /*
@@ -183,7 +187,7 @@ typedef struct imdb_rowid_s {
     uint16          slot_offset:14;	// slot offset in block
 } imdb_rowid_t;
 
-imdb_errcode_t  imdb_init (imdb_def_t * imdb_def, imdb_hndlr_t * himdb);
+imdb_errcode_t  imdb_init (imdb_def_t * imdb_def, imdb_hndlr_t hcurmdb, imdb_hndlr_t * himdb);
 imdb_errcode_t  imdb_done (imdb_hndlr_t hmdb);
 imdb_errcode_t  imdb_info (imdb_hndlr_t hmdb, imdb_info_t * imdb_info, imdb_class_info_t info_array[], uint8 array_len);
 

@@ -142,11 +142,11 @@
 	}
 
 // string functions
-bool            parse_uint (char **szstr, unsigned int *num);
-bool            estlen_qstr (char **szstr, size_t * len);
-bool            parse_qstr (char **szstr, char *ch);
-bool            estlen_token (char **szstr, size_t * len);
-bool            parse_token (char **szstr, char *token);
+bool            parse_uint (const char **szstr, unsigned int *num);
+bool            estlen_qstr (const char *szstr, size_t * len);
+bool            parse_qstr (const char **szstr, char *ch);
+bool            estlen_token (const char *szstr, size_t * len);
+bool            parse_token (const char **szstr, char *token);
 
 size_t          buf2hex (char *dst, const char *src, const size_t length);
 size_t          hex2buf (char *dst, const size_t length, const char *src);

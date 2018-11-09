@@ -21,7 +21,7 @@
 
 #define SERVICE_SERVICE_ID		1
 
-typedef enum PACKED svcs_errcode_e {
+typedef enum svcs_errcode_e {
     SVCS_ERR_SUCCESS = 0,
     SVCS_INTERNAL_ERROR = 1,
     SVCS_SERVICE_ERROR = 2,
@@ -33,7 +33,7 @@ typedef enum PACKED svcs_errcode_e {
     SVCS_INVALID_MESSAGE = 8,
 } svcs_errcode_t;
 
-typedef enum PACKED svcs_state_e {
+typedef enum svcs_state_e {
     SVCS_STATE_STOPPED = 0,
     SVCS_STATE_RUNNING = 1,
     SVCS_STATE_FAILED = 2,
@@ -41,7 +41,7 @@ typedef enum PACKED svcs_state_e {
     SVCS_STATE_STARTING = 4,
 } svcs_state_t;
 
-typedef enum PACKED svcs_msgtype_e {
+typedef enum svcs_msgtype_e {
     SVCS_MSGTYPE_INFO = 1,
     SVCS_MSGTYPE_CONTROL = 2,
     SVCS_MSGTYPE_CONFIG_GET = 3,
@@ -53,7 +53,7 @@ typedef enum PACKED svcs_msgtype_e {
     SVCS_MSGTYPE_SYSTEM_STOP = 9,
 } svcs_msgtype_t;
 
-typedef enum PACKED svcs_avp_code_e {
+typedef enum svcs_avp_code_e {
     SVCS_AVP_SERVICE = 100,
     SVCS_AVP_SERVICE_ID = 101,
     SVCS_AVP_SERVICE_ENABLED = 103,
@@ -108,10 +108,10 @@ svcs_errcode_t  svcctl_stop ();
 svcs_errcode_t  svcctl_info (uint8 * info_count, svcs_service_info_t * info_array, uint8 array_len);
 
 // Service functions
-svcs_errcode_t  svcctl_service_install (service_ident_t service_id, char *name, svcs_service_def_t * sdef);
-svcs_errcode_t  svcctl_service_uninstall (char *name);
-svcs_errcode_t  svcctl_service_start (service_ident_t service_id, char *name);
-svcs_errcode_t  svcctl_service_stop (service_ident_t service_id, char *name);
+svcs_errcode_t  svcctl_service_install (service_ident_t service_id, const char *name, svcs_service_def_t * sdef);
+svcs_errcode_t  svcctl_service_uninstall (const char *name);
+svcs_errcode_t  svcctl_service_start (service_ident_t service_id, const char *name);
+svcs_errcode_t  svcctl_service_stop (service_ident_t service_id, const char *name);
 
 svcs_errcode_t  svcctl_service_conf_get (service_ident_t service_id, dtlv_ctx_t * conf);
 svcs_errcode_t  svcctl_service_conf_set (service_ident_t service_id, dtlv_ctx_t * conf);

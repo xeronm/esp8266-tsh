@@ -28,7 +28,7 @@ static char     sz_hex_map[16] = "0123456789abcdef";
 
 
 bool            ICACHE_FLASH_ATTR
-parse_hex (char ch, char *num)
+parse_hex (const char ch, char *num)
 {
     if ((ch >= '0') && (ch <= 'F')) {
 	*num += (ch - '0');
@@ -42,9 +42,9 @@ parse_hex (char ch, char *num)
 }
 
 bool            ICACHE_FLASH_ATTR
-parse_uint (char **szstr, unsigned int *num)
+parse_uint (const char **szstr, unsigned int *num)
 {
-    char           *ptr = *szstr;
+    const char     *ptr = *szstr;
     unsigned int    _num = 0;
     unsigned short  _digit = 0;
     while d_char_is_digit
@@ -61,9 +61,9 @@ parse_uint (char **szstr, unsigned int *num)
 
 // estimate quoted string length, for accurate memory allocation
 bool            ICACHE_FLASH_ATTR
-estlen_qstr (char **szstr, size_t * len)
+estlen_qstr (const char *szstr, size_t * len)
 {
-    char           *ptr = *szstr;
+    const char     *ptr = szstr;
     if (!d_char_is_quote (ptr))
 	return false;
     char            qterm = *ptr;
@@ -92,9 +92,9 @@ estlen_qstr (char **szstr, size_t * len)
 [public] Parse quoted string with escape characters
 */
 bool            ICACHE_FLASH_ATTR
-parse_qstr (char **szstr, char *ch)
+parse_qstr (const char **szstr, char *ch)
 {
-    char           *ptr = *szstr;
+    const char     *ptr = *szstr;
     char           *chptr = ch;
     if (!d_char_is_quote (ptr)) {
 	*chptr = '\0';
@@ -147,9 +147,9 @@ parse_qstr (char **szstr, char *ch)
 [public] Estimate token length, for accurate memory allocation
 */
 bool            ICACHE_FLASH_ATTR
-estlen_token (char **szstr, size_t * len)
+estlen_token (const char *szstr, size_t * len)
 {
-    char           *ptr = *szstr;
+    const char     *ptr = szstr;
     // first character can't be a digit
     if (!d_char_is_token1 (ptr))
 	return false;
@@ -159,7 +159,7 @@ estlen_token (char **szstr, size_t * len)
 
     if (!d_char_is_tokend (ptr))
 	return false;
-    *len = (ptr - *szstr);
+    *len = (ptr - szstr);
     return true;
 }
 
@@ -167,9 +167,9 @@ estlen_token (char **szstr, size_t * len)
 * [public] Pasrse token string
 */
 bool            ICACHE_FLASH_ATTR
-parse_token (char **szstr, char *token)
+parse_token (const char **szstr, char *token)
 {
-    char           *ptr = *szstr;
+    const char     *ptr = *szstr;
     char           *tptr = token;
     // first character can't be a digit
     if (!d_char_is_token1 (ptr)) {

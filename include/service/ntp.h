@@ -32,11 +32,11 @@
 #define NTP_MAX_PEERS		2
 #define NTP_SERVER_MAX_LEN	24
 
-typedef enum PACKED ntp_msgtype_e {
+typedef enum ntp_msgtype_e {
     NTP_MSGTYPE_SETDATE = 10,
 } ntp_msgtype_t;
 
-typedef enum PACKED ntp_avp_code_e {
+typedef enum ntp_avp_code_e {
     NTP_AVP_QUERY_STATE = 101,
     NTP_AVP_QUERY_STATE_TIME = 102,
     NTP_AVP_POLL_INTERVAL = 103,
@@ -47,14 +47,14 @@ typedef enum PACKED ntp_avp_code_e {
     NTP_AVP_PEER_OFFSET = 108,
 } ntp_avp_code_t;
 
-typedef enum __packed ntp_tx_state_e {
+typedef enum ntp_tx_state_e {
     NTP_TX_STATE_NONE = 0,
     NTP_TX_STATE_IDLE = 1,
     NTP_TX_STATE_PENDING = 2,
     NTP_TX_STATE_FAILED = 3,
 } ntp_tx_state_t;
 
-typedef enum __packed ntp_peer_state_e {
+typedef enum ntp_peer_state_e {
     NTP_PEER_STATE_NONE = 0,
     NTP_PEER_STATE_IDLE = 1,
     NTP_PEER_STATE_DNS = 2,

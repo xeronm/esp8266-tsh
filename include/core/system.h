@@ -26,7 +26,8 @@
 #include "system/imdb.h"
 
 #define SYSTEM_IMDB_BLOCK_SIZE	2048
-#define SYSTEM_FDB_BLOCK_SIZE	SPI_FLASH_SEC_SIZE
+#define SYSTEM_FDB_BLOCK_SIZE	SPI_FLASH_SEC_SIZE // minmal write unit
+#define SYSTEM_FDB_FILE_SIZE	64 // 64 blocks = 256kb
 
 void            system_init (void);
 void            system_shutdown (void);

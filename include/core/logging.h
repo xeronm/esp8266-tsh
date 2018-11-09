@@ -27,7 +27,7 @@
 
 #define	MAIN_SERVICE_NAME	"main"
 
-typedef enum PACKED log_severity_s {
+typedef enum log_severity_s {
     LOG_NONE = 0,
     LOG_CRITICAL = 1,
     LOG_ERROR = 2,

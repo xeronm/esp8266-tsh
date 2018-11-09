@@ -26,6 +26,7 @@
 #include "uart.h"
 #endif
 #include "sysinit.h"
+#include "flashmap.h"
 #include "core/logging.h"
 #include "core/system.h"
 
@@ -97,10 +98,59 @@ __strnlen (const char *s, size_t maxlen)
     return _len;
 }
 
+size_t          ICACHE_FLASH_ATTR
+fio_user_read(uint32 addr, uint32 *buffer, uint32 size) 
+{
+    flash_ota_map_t * fwmap = get_flash_ota_map ();
+    if (!fwmap->user1)
+        return 0;
+
+    uint32 addr0 = d_flash_user2_data_addr(fwmap);
+    if (addr0 + size > d_flash_user2_data_addr_end(fwmap))
+        return 0;
+
+    if (spi_flash_read (addr0, buffer, size))
+        return 0;
+    else
+        return size;
+}
+
+size_t          ICACHE_FLASH_ATTR 
+fio_user_write(uint32 addr, uint32 *buffer, uint32 size)
+{
+    flash_ota_map_t * fwmap = get_flash_ota_map ();
+    if (!fwmap->user1)
+        return 0;
+
+    uint32 addr0 = d_flash_user2_data_addr(fwmap);
+    uint16          sec;
+
+    if (addr0 + size > d_flash_user2_data_addr_end(fwmap))
+        return 0;
+
+    for (sec = addr0 / SPI_FLASH_SEC_SIZE; sec <= (addr0 + size) / SPI_FLASH_SEC_SIZE; sec++)
+        if (spi_flash_erase_sector (sec))
+            return 0;
+
+    if (spi_flash_write (addr0, buffer, size))
+        return 0;
+    else
+        return size;
+}
+
+size_t          ICACHE_FLASH_ATTR 
+fio_user_size(void)
+{
+    flash_ota_map_t * fwmap = get_flash_ota_map ();
+    if (!fwmap->user1)
+        return 0;
+
+    return (d_flash_user2_data_addr_end(fwmap) - d_flash_user2_data_addr(fwmap)) / 2; // 2 - for mirroring
+}
 
 void            ICACHE_FLASH_ATTR
 user_init (void)
-{
+{    
 #ifndef DISABLE_CORE
     system_init ();
 #endif

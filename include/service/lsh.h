@@ -39,7 +39,9 @@ typedef char    sh_func_name_t[SH_FUNC_NAME_LENGTH];
 typedef uint8   arg_count_t;
 typedef uint16  bytecode_size_t;
 
-typedef enum PACKED sh_errcode_e {
+#define SH_BYTECODE_SIZE_MAX	0xFFFF
+
+typedef enum sh_errcode_e {
     SH_ERR_SUCCESS = 0,
     SH_INTERNAL_ERROR = 1,
     SH_INVALID_HNDLR = 2,
@@ -62,14 +64,14 @@ typedef enum PACKED sh_errcode_e {
     SH_FUNC_ERROR = 19,
 } sh_errcode_t;
 
-typedef enum PACKED sh_msgtype_e {
+typedef enum sh_msgtype_e {
     SH_MSGTYPE_STMT_ADD = 10,
     SH_MSGTYPE_STMT_REMOVE = 11,
     SH_MSGTYPE_STMT_RUN = 12,
     SH_MSGTYPE_STMT_DUMP = 13,
 } sh_msgtype_t;
 
-typedef enum PACKED sh_avp_code_e {
+typedef enum sh_avp_code_e {
     SH_AVP_STATEMENT = 100,
     SH_AVP_STMT_OBJSIZE = 101,
     SH_AVP_STMT_NAME = 102,
@@ -97,13 +99,14 @@ typedef struct sh_stmt_info_s {
 typedef struct sh_bc_arg_s {
     union sh_bc_arg_u {
 	bytecode_size_t dlength;
+	size_t          vptr;
 	void           *ptr;
 	uint32          value;
     }               arg;
-    _Alignas(uint32) char data[];
+    ALIGN_DATA char data[];
 } sh_bc_arg_t;
 
-typedef enum PACKED sh_bc_arg_type_e {
+typedef enum sh_bc_arg_type_e {
     SH_BC_ARG_NONE,
     SH_BC_ARG_INT,
     SH_BC_ARG_CHAR,
@@ -137,10 +140,10 @@ typedef struct sh_func_entry_s {
     } func;
 } sh_func_entry_t;
 
-sh_errcode_t    sh_func_get (char *func_name, sh_func_entry_t ** entry);
+sh_errcode_t    sh_func_get (const char *func_name, sh_func_entry_t ** entry);
 sh_errcode_t    sh_func_register (sh_func_entry_t * func_entry);
 
-sh_errcode_t    stmt_parse (char * szstr, char * stmt_name, sh_hndlr_t * hstmt);
+sh_errcode_t    stmt_parse (const char * szstr, const char * stmt_name, sh_hndlr_t * hstmt);
 sh_errcode_t    stmt_dump (const sh_hndlr_t hstmt, char *buf, size_t len, bool resolve_glob);
 sh_errcode_t    stmt_info (const sh_hndlr_t hstmt, sh_stmt_info_t * info);
 sh_errcode_t    stmt_eval (const sh_hndlr_t hstmt, sh_eval_ctx_t * ctx);

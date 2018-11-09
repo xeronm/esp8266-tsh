@@ -31,8 +31,10 @@
 
 typedef void   *ih_hndlr_t;
 
-uint8           ih_hash8 (char *buf, size_t len, uint8 init);
-uint16          ih_hash16 (char *buf, size_t len, uint8 init);
+uint8           ih_hash8 (const char *buf, size_t len, uint8 init);
+uint16          ih_hash16 (const char *buf, size_t len, uint8 init);
+
+#define d_ih_get_varlength(vptr) (*((size_t *) ((char *)(vptr) - sizeof (size_t)) ))
 
 typedef enum ih_errcode_e {
     IH_ERR_SUCCESS = 0,
@@ -44,11 +46,35 @@ typedef enum ih_errcode_e {
 
 typedef char   *(*ih_get_entry_func) (char *value);	// not used
 
-ih_errcode_t    ih_init8 (char *buf, size_t length, uint8 bucket_size, uint8 depth, bool key_nullterm,
-			  uint8 value_length, ih_hndlr_t * hndlr);
-ih_errcode_t    ih_hash8_add (ih_hndlr_t hndlr, char *entrykey, size_t len, char **value);
-ih_errcode_t    ih_hash8_search (ih_hndlr_t hndlr, char *entrykey, size_t len, char **value);
-char           *ih_hash8_v2key (ih_hndlr_t hndlr, char *value);
+/*
+ * [public] Create Hash-Map Index with inline stored keys and fixed value length
+ * - buf: buffer for index
+ * - length: buffer length
+ * - bucket_size: hash bucket size
+ * - key_length: Key length stored in Hash-Map (0 - null term, 1 - variable, n - fixed length in bytes)
+ * - value_length: Value length stored in Hash-Map (0 - null term, 1 - variable, n - fixed length in bytes)
+ */
+ih_errcode_t    ih_init8 (char *buf, size_t length, uint8 bucket_size, uint8 key_length, uint8 value_length,
+	  ih_hndlr_t * hndlr);
+
+/*
+ * [public] Add Key-Value to Hash-Map
+ * - hndlr: handler to Hash-Map
+ * - entrykey: entry key
+ * - len: entry key length (0 - when null-terminated string or fixed-length)
+ * - value: results pointer to entry value buffer
+ * - valuelen: entry value length (0 - when null-terminated string or fixed-length)
+ */
+ih_errcode_t    ih_hash8_add (ih_hndlr_t hndlr, const char *entrykey, size_t len, char **value, size_t valuelen);
+ih_errcode_t    ih_hash8_search (ih_hndlr_t hndlr, const char *entrykey, size_t len, char **value);
+
+/*
+ * [public] Get pointer to inline stored key (not aligned)
+ * - hndlr: handler to Hash-Map
+ * - value: pointer to inlined stored value
+ * - return: results pointer to inline stored key
+ */
+const char *    ih_hash8_v2key (ih_hndlr_t hndlr, const char *value);
 
 
 #endif

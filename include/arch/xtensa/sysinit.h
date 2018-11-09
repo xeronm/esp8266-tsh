@@ -34,6 +34,7 @@ typedef uint32  os_time_t;
 
 #define IMDB_SMALL_RAM
 
+#define ALIGN_DATA	_Alignas(uint32)
 #define PACKED		//__packed
 #define LOCAL       	static
 #define INLINED       	inline
@@ -98,6 +99,12 @@ void            __os_conn_remote_addr (ip_conn_t * pconn, ipv4_addr_t * ipaddr);
 #define os_conn_create(conn)			espconn_create((conn))
 #define os_conn_free(conn)			espconn_delete((conn))
 #define os_conn_set_recvcb(conn, recv_cb)	espconn_regist_recvcb((conn), (recv_cb))
+
+
+size_t          fio_user_read(uint32 addr, uint32 *buffer, uint32 size);
+size_t          fio_user_write(uint32 addr, uint32 *buffer, uint32 size);
+size_t          fio_user_size(void);
+
 
 /*
    User Init

@@ -26,9 +26,9 @@
 #include "system/services.h"
 #include "system/comavp.h"
 #ifdef ARCH_XTENSA
-#include "gpio.h"
-#include "service/gpioctl.h"
+#  include "gpio.h"
 #endif
+#include "service/gpioctl.h"
 #include "service/device/dhtxx.h"
 #include "service/lsh.h"
 
@@ -84,8 +84,10 @@ typedef struct dht_data_s {
     uint8           stat_retry_count;
 
     dht_hist_t      stat_hist;
+#ifdef ARCH_XTENSA
     os_timer_t      stat_timer;	// stat timer
     os_timer_t      stat_fail_timer;	// stat query fail timer
+#endif
 } dht_data_t;
 
 LOCAL dht_data_t *sdata = NULL;
@@ -108,6 +110,7 @@ dht_query (dht_t * value)
     //   \____/ ... ready
     //    18ms
     // Host signal
+#ifdef ARCH_XTENSA
     uint8           gpio_pin = GPIO_ID_PIN (sdata->conf.gpio_id);
     GPIO_OUTPUT_SET (gpio_pin, true);
     os_delay_us (DHTxx_HOST_PRE_QUERY_US);
@@ -116,6 +119,7 @@ dht_query (dht_t * value)
     os_delay_us (DHTxx_HOST_LOW_QUERY_US);
 
     GPIO_DIS_OUTPUT (gpio_pin);
+#endif
 
     // slave signal
     uint32          _ts = system_get_time ();
@@ -124,12 +128,16 @@ dht_query (dht_t * value)
     uint8          *bptr = (uint8 *) sample_buf;
     for (i = 0; i < DHTxx_SAMPLE_SIZE*8; i += 1) {
         uint8           offset = i & 7;
+#ifdef ARCH_XTENSA
 	if (GPIO_INPUT_GET (gpio_pin)) {
             *bptr = *bptr | (1 << (7-offset));
         }
+#endif
         if (offset == 7)
             bptr++;
+#ifdef ARCH_XTENSA
 	os_delay_us (DHTxx_SAMPLE_US);
+#endif
     }
     _ts = 10*(system_get_time () - _ts) / i;
 
@@ -273,8 +281,10 @@ dht_hist_timeout (void *args)
 	    sdata->stat_retry_count = 0;
 	    sdata->stat_ema_initcnt = DHTxx_EMA_INIT_COUNT;
 	}
+#ifdef ARCH_XTENSA
 	else
 	    os_timer_arm (&sdata->stat_fail_timer, DHT_MIN_QUERY_TIMEOUT_SEC * MSEC_PER_SEC, false);
+#endif
     }
 
 }
@@ -330,11 +340,12 @@ dht_on_start (imdb_hndlr_t himdb, imdb_hndlr_t hdata, dtlv_ctx_t * conf)
     sdata->hmdb = himdb;
     sdata->hdata = hdata;
 
+#ifdef ARCH_XTENSA
     os_timer_disarm (&sdata->stat_timer);
     os_timer_setfn (&sdata->stat_timer, dht_hist_timeout, NULL);
     os_timer_disarm (&sdata->stat_fail_timer);
     os_timer_setfn (&sdata->stat_fail_timer, dht_hist_timeout, NULL);
-
+#endif
     // register functions
     sh_func_entry_t fn_entries[1] = {
         { DHT_SERVICE_ID, false, false, 0, "dht_get", { fn_dht_get } },
@@ -446,12 +457,13 @@ dht_on_cfgupd (dtlv_ctx_t * conf)
     sdata->stat_ema_initcnt = DHTxx_EMA_INIT_COUNT;
     sdata->stat_last_result = DHT_RESULT_UNAVAILABLE;
 
+#ifdef ARCH_XTENSA
     os_timer_disarm (&sdata->stat_timer);
-
     sdata->gpio_res = gpio_acquire (sdata->conf.gpio_id, true, NULL);
     if (sdata->gpio_res == GPIO_RESULT_SUCCESS) {
 	os_timer_arm (&sdata->stat_timer, sdata->conf.stat_timeout * MSEC_PER_SEC, true);
     }
+#endif
 
     return SVCS_ERR_SUCCESS;
 }

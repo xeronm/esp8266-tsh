@@ -5,7 +5,7 @@
 #include "core/utils.h"
 #include "system/services.h"
 
-typedef enum __packed dht_result_e {
+typedef enum dht_result_e {
     DHT_RESULT_SUCCESS = 0,
     DHT_RESULT_INTERNAL_ERROR,
     DHT_RESULT_UNAVAILABLE,
@@ -16,7 +16,7 @@ typedef enum __packed dht_result_e {
     DHT_RESULT_ERROR_CHKSUM,
 } dht_result_t;
 
-typedef enum __packed dht_type_e {
+typedef enum dht_type_e {
     DHT_DHT11 = 0,
     DHT_AM2302,
 } dht_type_t;
@@ -41,12 +41,12 @@ typedef struct dht_s {
 #define DHT_DEFAULT_STAT_TIMEOUT_SEC	20
 #define DHT_DEFAULT_HIST_INTERVAL	4
 
-typedef enum PACKED dht_msgtype_e {
+typedef enum dht_msgtype_e {
     DHT_MSGTYPE_QUERY = 10,
     DHT_MSGTYPE_PURGE_STAT = 11,
 } dht_msgtype_t;
 
-typedef enum PACKED dht_avp_code_e {
+typedef enum dht_avp_code_e {
     DHT_SENSOR_TYPE = 100,
     DHT_STAT_TIMEOUT = 101,
     DHT_STAT_HIST_INTERVAL = 102,

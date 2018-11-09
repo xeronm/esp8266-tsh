@@ -100,7 +100,7 @@ check_system_upgrade_flag (uint8 flag)
 }
 
 LOCAL void      ICACHE_FLASH_ATTR
-buffer_swap_digest (size_t position, uint8 * buffer, size_t length, size_t digest_pos, uint8 * init_digest)
+buffer_swap_digest (size_t position, uint8 * buffer, size_t length, size_t digest_pos, firmware_digest_t * init_digest)
 {
     // buffer includes start of digest
     size_t          offset = 0;
@@ -137,7 +137,7 @@ upgrade_flush_buffer (void)
     }
 
     size_t          last_pos = sdata->fwbin_curr_addr - sdata->fwbin_start_addr;
-    buffer_swap_digest (last_pos, sdata->buffer, sdata->buffer_pos, sdata->fwinfo.digest_pos, sdata->init_digest);
+    buffer_swap_digest (last_pos, sdata->buffer, sdata->buffer_pos, sdata->fwinfo.digest_pos, &sdata->init_digest);
 
     if (SHA256Input
 	(&sdata->sha256, sdata->buffer,
@@ -222,7 +222,8 @@ fwupdate_init (firmware_info_t * fwinfo, firmware_digest_t * init_digest)
     d_log_wprintf (MAIN_SERVICE_NAME FWUPG_SUB_SERVICE_NAME, "update init version:" FW_VERSTR ", size:%u",
 		   FW_VER2STR (fwinfo), binlen);
 
-    flash_ota_map_t *fwmap = &flash_ota_map[system_get_flash_size_map ()];
+    flash_ota_map_t *fwmap = get_flash_ota_map ();
+
     if (fwinfo->binsize < SPI_FLASH_SEC_SIZE) {
 	d_log_eprintf (MAIN_SERVICE_NAME FWUPG_SUB_SERVICE_NAME, sz_upgrade_error[UPGRADE_INVALID_SIZE], binlen);
 	return UPGRADE_INVALID_SIZE;
@@ -372,7 +373,7 @@ upgrade_err_t   ICACHE_FLASH_ATTR
 fw_verify (firmware_info_t * fwinfo, firmware_digest_t * init_digest)
 {
     uint32          fw_addr = system_get_userbin_addr ();
-    flash_ota_map_t *fwmap = &flash_ota_map[system_get_flash_size_map ()];
+    flash_ota_map_t *fwmap = get_flash_ota_map ();
 
     if ((fw_addr != fwmap->user1) && (fw_addr != fwmap->user2)) {
 	d_log_wprintf (MAIN_SERVICE_NAME FWUPG_SUB_SERVICE_NAME, sz_upgrade_error[UPGRADE_NOT_SUPPORTED], fw_addr);

@@ -190,6 +190,19 @@ syslog_on_message (service_ident_t orig_id, service_msgtype_t msgtype, void *ctx
     return res;
 }
 
+svcs_errcode_t ICACHE_FLASH_ATTR
+syslog_query(imdb_hndlr_t* hcur) {
+    if (!sdata) {
+	d_log_dprintf (SYSLOG_SERVICE_NAME, "not available");
+	return SVCS_NOT_RUN;
+    }
+ 
+    imdb_errcode_t ret = imdb_class_query(sdata->hlogs, true, hcur);
+    d_svcs_check_imdb_error(ret);
+
+    return SVCS_ERR_SUCCESS;
+}
+
 svcs_errcode_t  ICACHE_FLASH_ATTR
 syslog_write (const log_severity_t severity, const char *svc, size_t * length, char **buf)
 {
