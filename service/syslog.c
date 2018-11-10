@@ -38,8 +38,7 @@
 #define SYSLOG_IMDB_CLS_NAME		"syslog$"
 
 typedef struct syslog_data_s {
-    imdb_hndlr_t    hmdb;
-    imdb_hndlr_t    hdata;
+    const svcs_resource_t * svcres;
     imdb_hndlr_t    hlogs;
     uint16          seq_no;
     char            buf[SYSLOG_MESSAGE_MAX_LEN + 1];	// +1 for null-terminated
@@ -52,29 +51,34 @@ syslog_on_cfgupd (dtlv_ctx_t * conf)
 {
     log_severity_t  severity = SYSLOG_DEFAULT_SEVERITY;
 
+    if (conf) {
+        dtlv_seq_decode_begin (conf, SYSLOG_SERVICE_ID);
+        dtlv_seq_decode_uint8 (SYSLOG_AVP_LOG_SEVERITY, (uint8 *) &severity);
+        dtlv_seq_decode_end (conf);
+    }
+
     log_severity_set (severity);
 
     return SVCS_ERR_SUCCESS;
 }
 
 svcs_errcode_t  ICACHE_FLASH_ATTR
-syslog_on_start (imdb_hndlr_t hmdb, imdb_hndlr_t hdata, dtlv_ctx_t * conf)
+syslog_on_start (const svcs_resource_t * svcres, dtlv_ctx_t * conf)
 {
     if (sdata) {
 	return SVCS_SERVICE_ERROR;
     }
 
     syslog_data_t  *tmp_sdata;
-    d_svcs_check_imdb_error (imdb_clsobj_insert (hdata, (void **) &tmp_sdata, sizeof (syslog_data_t))
+    d_svcs_check_imdb_error (imdb_clsobj_insert (svcres->hdata, (void **) &tmp_sdata, sizeof (syslog_data_t))
 	);
     os_memset (tmp_sdata, 0, sizeof (syslog_data_t));
 
-    tmp_sdata->hmdb = hmdb;
-    tmp_sdata->hdata = hdata;
+    tmp_sdata->svcres = svcres;
     imdb_class_def_t cdef =
 	{ SYSLOG_IMDB_CLS_NAME, true, true, false, 0, SYSLOG_STORAGE_PAGES, SYSLOG_STORAGE_PAGE_BLOCKS,
 SYSLOG_STORAGE_PAGE_BLOCKS, 0 };
-    d_svcs_check_imdb_error (imdb_class_create (hmdb, &cdef, &(tmp_sdata->hlogs))
+    d_svcs_check_imdb_error (imdb_class_create (svcres->hmdb, &cdef, &(tmp_sdata->hlogs))
 	);
 
     sdata = tmp_sdata;
@@ -96,7 +100,7 @@ syslog_on_stop ()
     d_svcs_check_imdb_error (imdb_class_destroy (tmp_sdata->hlogs)
 	);
 
-    d_svcs_check_imdb_error (imdb_clsobj_delete (tmp_sdata->hdata, tmp_sdata)
+    d_svcs_check_imdb_error (imdb_clsobj_delete (tmp_sdata->svcres->hdata, tmp_sdata)
 	);
 
     return SVCS_ERR_SUCCESS;

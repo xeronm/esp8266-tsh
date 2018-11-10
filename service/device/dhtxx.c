@@ -68,8 +68,8 @@ typedef struct dht_conf_s {
 } dht_conf_t;
 
 typedef struct dht_data_s {
-    imdb_hndlr_t    hmdb;
-    imdb_hndlr_t    hdata;
+    const svcs_resource_t * svcres;
+
     dht_conf_t      conf;
 
     gpio_result_t   gpio_res;
@@ -328,17 +328,16 @@ fn_dht_get (sh_bc_arg_t * ret_arg, const arg_count_t arg_count, sh_bc_arg_type_t
 }
 
 svcs_errcode_t  ICACHE_FLASH_ATTR
-dht_on_start (imdb_hndlr_t himdb, imdb_hndlr_t hdata, dtlv_ctx_t * conf)
+dht_on_start (const svcs_resource_t * svcres, dtlv_ctx_t * conf)
 {
     if (sdata) {
 	return SVCS_SERVICE_ERROR;
     }
 
-    d_svcs_check_imdb_error (imdb_clsobj_insert (hdata, d_pointer_as (void *, &sdata), sizeof (dht_data_t))
+    d_svcs_check_imdb_error (imdb_clsobj_insert (svcres->hdata, d_pointer_as (void *, &sdata), sizeof (dht_data_t))
 	);
     os_memset (sdata, 0, sizeof (dht_data_t));
-    sdata->hmdb = himdb;
-    sdata->hdata = hdata;
+    sdata->svcres = svcres;
 
 #ifdef ARCH_XTENSA
     os_timer_disarm (&sdata->stat_timer);
@@ -367,7 +366,7 @@ dht_on_stop ()
     if (sdata->gpio_res == GPIO_RESULT_SUCCESS)
 	gpio_release (sdata->conf.gpio_id);
 
-    d_svcs_check_imdb_error (imdb_clsobj_delete (sdata->hdata, sdata));
+    d_svcs_check_imdb_error (imdb_clsobj_delete (sdata->svcres->hdata, sdata));
     sdata = NULL;
 
     return SVCS_ERR_SUCCESS;

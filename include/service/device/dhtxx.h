@@ -71,7 +71,7 @@ dht_result_t    dht_get_hist (dht_hist_t * hist);
 // used by services
 svcs_errcode_t  dht_service_install ();
 svcs_errcode_t  dht_service_uninstall ();
-svcs_errcode_t  dht_on_start (imdb_hndlr_t himdb, imdb_hndlr_t hdata, dtlv_ctx_t * conf);
+svcs_errcode_t  dht_on_start (const svcs_resource_t * svcres, dtlv_ctx_t * conf);
 svcs_errcode_t  dht_on_stop ();
 svcs_errcode_t  dht_on_cfgupd (dtlv_ctx_t * conf);
 

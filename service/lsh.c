@@ -174,8 +174,7 @@ typedef enum sh_operand_pos_s {
 } sh_operand_pos_t;
 
 typedef struct lsh_data_s {
-    imdb_hndlr_t    hmdb;
-    imdb_hndlr_t    hdata;	// service data storage
+    const svcs_resource_t * svcres;
     imdb_hndlr_t    hfunc;	// function storage
     imdb_hndlr_t    hstmt;	// parsed statement storage
     imdb_hndlr_t    hstmt_src;	// statement source storage
@@ -1181,9 +1180,9 @@ stmt_parse (const char *szstr, const char * stmt_name, sh_hndlr_t * hstmt)
     ctx.errcode = SH_ERR_SUCCESS;
 
 #ifdef LSH_BUFFERS_IMDB
-    d_sh_check_imdb_error (imdb_clsobj_insert (sdata->hdata, (void **) &bc_ptr, LSH_STMT_BUFFER_SIZE));
-    d_sh_check_imdb_error (imdb_clsobj_insert (sdata->hdata, (void **) &pbuf_ptr, LSH_STMT_PARSE_BUFFER_SIZE));
-    d_sh_check_imdb_error (imdb_clsobj_insert (sdata->hdata, (void **) &varmap_ptr, LSH_STMT_VARIDX_BUFFER_SIZE));
+    d_sh_check_imdb_error (imdb_clsobj_insert (sdata->svcres->hdata, (void **) &bc_ptr, LSH_STMT_BUFFER_SIZE));
+    d_sh_check_imdb_error (imdb_clsobj_insert (sdata->svcres->hdata, (void **) &pbuf_ptr, LSH_STMT_PARSE_BUFFER_SIZE));
+    d_sh_check_imdb_error (imdb_clsobj_insert (sdata->svcres->hdata, (void **) &varmap_ptr, LSH_STMT_VARIDX_BUFFER_SIZE));
 #else
     sh_parse_buffers_t *buffers = os_malloc (sizeof (sh_parse_buffers_t));
     if (!buffers) {
@@ -2007,29 +2006,28 @@ lsh_service_uninstall (void)
 }
 
 svcs_errcode_t  ICACHE_FLASH_ATTR
-lsh_on_start (imdb_hndlr_t hmdb, imdb_hndlr_t hdata, dtlv_ctx_t * conf)
+lsh_on_start (const svcs_resource_t * svcres, dtlv_ctx_t * conf)
 {
     if (sdata) {
 	return SVCS_SERVICE_ERROR;
     }
 
     lsh_data_t     *tmp_sdata;
-    d_svcs_check_imdb_error (imdb_clsobj_insert (hdata, (void **) &tmp_sdata, sizeof (lsh_data_t))
+    d_svcs_check_imdb_error (imdb_clsobj_insert (svcres->hdata, (void **) &tmp_sdata, sizeof (lsh_data_t))
 	);
     os_memset (tmp_sdata, 0, sizeof (lsh_data_t));
 
-    tmp_sdata->hmdb = hmdb;
-    tmp_sdata->hdata = hdata;
+    tmp_sdata->svcres = svcres;
     imdb_class_def_t cdef =
 	{ LSH_IMDB_CLS_FUNC, false, false, false, 0, LSH_FUNC_STORAGE_PAGES, LSH_FUNC_STORAGE_PAGE_BLOCKS,
 LSH_FUNC_STORAGE_PAGE_BLOCKS, sizeof (sh_func_entry_t) };
-    d_svcs_check_imdb_error (imdb_class_create (hmdb, &cdef, &(tmp_sdata->hfunc))
+    d_svcs_check_imdb_error (imdb_class_create (svcres->hmdb, &cdef, &(tmp_sdata->hfunc))
 	);
 
     imdb_class_def_t cdef2 =
 	{ LSH_IMDB_CLS_STMT, false, true, false, 0, LSH_STMT_STORAGE_PAGES, LSH_STMT_STORAGE_PAGE_BLOCKS,
 LSH_STMT_STORAGE_PAGE_BLOCKS, sizeof (sh_stmt_t) };
-    d_svcs_check_imdb_error (imdb_class_create (hmdb, &cdef2, &(tmp_sdata->hstmt))
+    d_svcs_check_imdb_error (imdb_class_create (svcres->hmdb, &cdef2, &(tmp_sdata->hstmt))
 	);
 
     ih_hndlr_t      varmap;
@@ -2038,12 +2036,13 @@ LSH_STMT_STORAGE_PAGE_BLOCKS, sizeof (sh_stmt_t) };
 	return SH_INTERNAL_ERROR;
     }
 
-
-    imdb_class_def_t cdef3 =
-	{ LSH_IMDB_CLS_STMT_SRC, false, true, false, 0, LSH_STMT_SRC_STORAGE_PAGES, LSH_STMT_SRC_STORAGE_PAGE_BLOCKS,
+    if (svcres->hfdb) {
+        imdb_class_def_t cdef3 =
+	    { LSH_IMDB_CLS_STMT_SRC, false, true, false, 0, LSH_STMT_SRC_STORAGE_PAGES, LSH_STMT_SRC_STORAGE_PAGE_BLOCKS,
 LSH_STMT_STORAGE_PAGE_BLOCKS, sizeof (sh_stmt_t) };
-    d_svcs_check_imdb_error (imdb_class_create (get_fdb (), &cdef3, &(tmp_sdata->hstmt_src))
-	);
+        d_svcs_check_imdb_error (imdb_class_create (svcres->hfdb, &cdef3, &(tmp_sdata->hstmt_src))
+	    );
+    }
 
     sdata = tmp_sdata;
 
@@ -2076,7 +2075,7 @@ lsh_on_stop (void)
     d_svcs_check_imdb_error (imdb_class_destroy (tmp_sdata->hstmt)
 	);
 
-    d_svcs_check_imdb_error (imdb_clsobj_delete (tmp_sdata->hdata, tmp_sdata)
+    d_svcs_check_imdb_error (imdb_clsobj_delete (tmp_sdata->svcres->hdata, tmp_sdata)
 	);
 
     return SVCS_ERR_SUCCESS;

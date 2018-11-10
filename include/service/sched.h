@@ -87,7 +87,7 @@ sched_errcode_t sched_entry_remove (const entry_name_t * entry_name);
 // used by services
 svcs_errcode_t  sched_service_install ();
 svcs_errcode_t  sched_service_uninstall ();
-svcs_errcode_t  sched_on_start (imdb_hndlr_t himdb, imdb_hndlr_t hdata, dtlv_ctx_t * conf);
+svcs_errcode_t  sched_on_start (const svcs_resource_t * svcres, dtlv_ctx_t * conf);
 svcs_errcode_t  sched_on_stop ();
 svcs_errcode_t  sched_on_cfgupd (dtlv_ctx_t * conf);
 

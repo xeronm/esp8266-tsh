@@ -78,8 +78,7 @@ typedef struct svcs_service_s {
 } svcs_service_t;
 
 typedef struct services_data_s {
-    imdb_hndlr_t    hmdb;
-    imdb_hndlr_t    hdata;
+    svcs_resource_t svcres;
     imdb_hndlr_t    hconf;
     imdb_hndlr_t    hsvcs;
 } services_data_t;
@@ -202,20 +201,18 @@ svcctl_svc_start (svcs_service_t * svc)
     dtlv_ctx_t      conf;
     dtlv_ctx_t     *conf_ptr = NULL;
     {
-        os_printf("--- %s\n", svc->info.name);
 	svcs_errcode_t  res = svcctl_svc_conf_get (svc, &conf);
 	if (res == SVCS_ERR_SUCCESS) {
 	    conf_ptr = &conf;
 	}
 	else if (res != SVCS_NOT_EXISTS) {
-            os_printf("--- %s\n", svc->info.name);
 	    d_log_wprintf (SERVICES_SERVICE_NAME, "\"%s\" config res:%u", svc->info.name, res);
 	}
     }
 
     svc->info.state = SVCS_STATE_STARTING;
     //d_log_iprintf (SERVICES_SERVICE_NAME, "\"%s\" starting...", svc->info.name);
-    svc->info.errcode = svc->on_start (sdata->hmdb, sdata->hdata, conf_ptr);
+    svc->info.errcode = svc->on_start ((const svcs_resource_t *) &sdata->svcres, conf_ptr);
     svc->info.state = (svc->info.errcode == SVCS_ERR_SUCCESS) ? SVCS_STATE_RUNNING : SVCS_STATE_FAILED;
     svc->info.state_time = system_get_time ();
     if (svc->info.state == SVCS_STATE_RUNNING) {
@@ -422,7 +419,7 @@ svcctl_on_message (service_ident_t orig_id, service_msgtype_t msgtype, void *ctx
   - result: svcs_errcode_t
 */
 svcs_errcode_t  ICACHE_FLASH_ATTR
-svcctl_start (imdb_hndlr_t hmdb)
+svcctl_start (imdb_hndlr_t hmdb, imdb_hndlr_t hfdb)
 {
     d_log_iprintf (SERVICES_SERVICE_NAME, "starting...");
     if (sdata) {
@@ -442,8 +439,9 @@ SERVICES_DATA_STORAGE_PAGE_BLOCKS, 0 };
 	);
     os_memset (sdata, 0, sizeof (services_data_t));
 
-    sdata->hmdb = hmdb;
-    sdata->hdata = hdata;
+    sdata->svcres.hmdb = hmdb;
+    sdata->svcres.hfdb = hfdb;
+    sdata->svcres.hdata = hdata;
 
     imdb_class_def_t cdef2 =
 	{ SERVICES_IMDB_CLS_SERVICE, false, true, false, 0, SERVICES_STORAGE_PAGES, SERVICES_STORAGE_PAGE_BLOCKS,
@@ -480,7 +478,7 @@ svcctl_stop ()
 
     d_svcs_check_svcs_error (imdb_class_destroy (sdata->hsvcs)
 	);
-    d_svcs_check_svcs_error (imdb_class_destroy (sdata->hdata)
+    d_svcs_check_svcs_error (imdb_class_destroy (sdata->svcres.hdata)
 	);
     sdata = NULL;
 

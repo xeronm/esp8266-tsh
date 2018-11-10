@@ -60,6 +60,12 @@ typedef enum svcs_avp_code_e {
     SVCS_AVP_SERVICE_STATE = 104,
 } svcs_avp_code_t;
 
+typedef struct svcs_resource_s {
+    imdb_hndlr_t    hmdb;
+    imdb_hndlr_t    hfdb;
+    imdb_hndlr_t    hdata;
+} svcs_resource_t;
+
 #define SERVICE_NAME_LEN		16	//
 typedef char    service_name_t[SERVICE_NAME_LEN];
 
@@ -67,7 +73,7 @@ typedef uint16  service_ident_t;
 typedef uint16  service_msgtype_t;
 
 // handlers functions
-typedef         svcs_errcode_t (*svcs_on_start_t) (imdb_hndlr_t himdb, imdb_hndlr_t hdata, dtlv_ctx_t * conf);
+typedef         svcs_errcode_t (*svcs_on_start_t) (const svcs_resource_t * svcres, dtlv_ctx_t * conf);
 typedef         svcs_errcode_t (*svcs_on_stop_t) ();
 typedef         svcs_errcode_t (*svcs_on_cfgupd_t) (dtlv_ctx_t * conf);
 typedef         svcs_errcode_t (*svcs_on_message_t) (service_ident_t orig_id,
@@ -95,15 +101,15 @@ typedef struct svcs_service_def_s {
 } svcs_service_def_t;
 
 typedef struct svcs_service_info_s {
-    service_ident_t service_id;
     service_name_t  name;
+    service_ident_t service_id;
     bool            enabled:1;
     svcs_state_t    state:3;
     svcs_errcode_t  errcode:4;
     os_time_t       state_time;
 } svcs_service_info_t;
 
-svcs_errcode_t  svcctl_start (imdb_hndlr_t hmdb);
+svcs_errcode_t  svcctl_start (imdb_hndlr_t hmdb, imdb_hndlr_t hfdb);
 svcs_errcode_t  svcctl_stop ();
 svcs_errcode_t  svcctl_info (uint8 * info_count, svcs_service_info_t * info_array, uint8 array_len);
 

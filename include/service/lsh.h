@@ -155,7 +155,7 @@ sh_errcode_t    stmt_get2 (sh_stmt_name_t * stmt_name, sh_hndlr_t * hstmt);
 // used by services
 svcs_errcode_t  lsh_service_install (void);
 svcs_errcode_t  lsh_service_uninstall (void);
-svcs_errcode_t  lsh_on_start (imdb_hndlr_t hmdb, imdb_hndlr_t hdata, dtlv_ctx_t * conf);
+svcs_errcode_t  lsh_on_start (const svcs_resource_t * svcres, dtlv_ctx_t * conf);
 svcs_errcode_t  lsh_on_stop (void);
 
 

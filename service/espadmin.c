@@ -53,7 +53,7 @@ firmware_info_t fw_info RODATA = {
 #endif
 
 svcs_errcode_t  ICACHE_FLASH_ATTR
-espadmin_on_start (imdb_hndlr_t hmdb, imdb_hndlr_t hdata, dtlv_ctx_t * conf)
+espadmin_on_start (const svcs_resource_t * svcres, dtlv_ctx_t * conf)
 {
     espadmin_on_cfgupd (conf);
 

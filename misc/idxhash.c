@@ -70,7 +70,7 @@ ih_hash8 (const char *buf, size_t len, uint8 init)
 {
     uint8           res = 0xb1101 * init;
     bool            haslen = len;
-    while ((haslen && len--) || *buf) {
+    while ((haslen) ? (len--) : *buf) {
 	res += (uint8) * buf;
 	res += (res << 6) + (res >> 2);
 	res += (res << 2) + (res >> 6);
@@ -91,7 +91,7 @@ ih_hash16 (const char *buf, size_t len, uint8 init)
 {
     uint16          res = 0xb110101 * init;
     bool            haslen = len;
-    while ((haslen && len--) || *buf) {
+    while ((haslen) ? (len--) : *buf) {
 	res += (uint8) * buf;
 	res += (res << 12) + (res >> 4);
 	res += (res << 4) + (res >> 12);
@@ -162,7 +162,6 @@ ih_entry_cmp (ih_header8_t * hdr, const char *entrykey, size_t len, ih_entry_hea
     return false;
 }
 
-
 /*
  * [public] Add Key-Value to Hash-Map
  * - hndlr: Hash-Map handler
@@ -175,19 +174,14 @@ ih_errcode_t    ICACHE_FLASH_ATTR
 ih_hash8_add (ih_hndlr_t hndlr, const char *entrykey, size_t len, char **value, size_t valuelen)
 {
     ih_header8_t   *hdr = d_hndlr2obj (ih_header8_t, hndlr);
-    if (hdr->key_length <= 1) {
-        if (len == 0) {
-	    if (!hdr->key_length) { // null-terminated
-	        len = os_strlen (entrykey);
-	        if (len == 0)
-		    return IH_NULL_ENTRY;
-	    }
-	    else // variable length
-	    return IH_NULL_ENTRY;
-	}
-    }
-    else  // fixed length
+    if (hdr->key_length == 0) {
+        len = os_strlen (entrykey);
+    } 
+    else if (hdr->key_length > 1) {
         len = hdr->key_length;
+    }
+    if (len == 0)
+        return IH_NULL_ENTRY;
 
     uint8           hash0 = ih_hash8 (entrykey, len, 0) % hdr->bucket_size;
     ih_entry_ptr_t *entry_ptr =
@@ -260,6 +254,16 @@ ih_errcode_t    ICACHE_FLASH_ATTR
 ih_hash8_search (ih_hndlr_t hndlr, const char *entrykey, size_t len, char **value)
 {
     ih_header8_t   *hdr = d_hndlr2obj (ih_header8_t, hndlr);
+
+    if (hdr->key_length == 0) {
+        len = os_strlen (entrykey);
+    } 
+    else if (hdr->key_length > 1) {
+        len = hdr->key_length;
+    }
+    if (len == 0)
+        return IH_NULL_ENTRY;
+
     uint8           hash0 = ih_hash8 (entrykey, len, 0) % hdr->bucket_size;
     ih_entry_ptr_t *entry_ptr =
 	d_pointer_add (ih_entry_ptr_t, hdr, sizeof (ih_header8_t) + hash0 * sizeof (ih_entry_ptr_t));

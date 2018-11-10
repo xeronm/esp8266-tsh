@@ -225,9 +225,9 @@ typedef enum imdb_block_type_s {
     BLOCK_TYPE_CLASS = 2,
 } imdb_block_type_t;
 
-#define SLOT_FLAG_FREE			1U
+#define SLOT_FLAG_FREE		1U
 #define SLOT_FLAG_UNFORMATTED	2U
-#define SLOT_FLAG_DATA			3U
+#define SLOT_FLAG_DATA		3U
 
 #define d_page_block_byidx(page_block, bidx, bsize)	d_pointer_add(imdb_block_t, (page_block), (bidx-1)*(bsize))
 
@@ -426,6 +426,8 @@ imdb_data2_slot_init (imdb_block_t * block, imdb_slot_free_t * slot_free)
 INLINED void   *ICACHE_FLASH_ATTR
 imdb_data4_slot_init (imdb_block_t * block, imdb_slot_free_t * slot_free, obj_size_t slot_bsize)
 {
+    slot_bsize = slot_free->length; // use length from free_slot, may be greater than slot_bsize
+
     imdb_slot_data4_t *data4 = (imdb_slot_data4_t *) slot_free;
     os_memset (data4, 0, sizeof (imdb_slot_data4_t));
     data4->flags = SLOT_FLAG_DATA;
@@ -454,22 +456,25 @@ imdb_block_slot_free_next (imdb_block_t * block, block_size_t * slot_offset)
 }
 
 /*
-[private] Get offset of last free slot in block
+[private] Get offset of last slot in block
   - dbclass: 
   - block:
-  - [out] last_offset: result last FreeSlot offset
+  - [out] last_offset: result last data slot end offset
 */
 INLINED void    ICACHE_FLASH_ATTR
-imdb_block_slot_free_last (imdb_class_t * dbclass, imdb_block_t * block, block_size_t * last_offset)
+imdb_block_slot_data_last (imdb_class_t * dbclass, imdb_block_t * block, block_size_t * last_offset)
 {
     block_size_t    boffset = d_block_upper_data_blimit (dbclass->imdb, block);
 
     if (d_block_slot_has_footer (dbclass)) {
 	imdb_slot_footer_t *slot_footer;
 	slot_footer = d_pointer_add (imdb_slot_footer_t, block, d_bptr_size (boffset) - sizeof (imdb_slot_footer_t));
-	d_assert (slot_footer->flags == SLOT_FLAG_FREE, "footer=%p, flags=%u", slot_footer, slot_footer->flags);
-	d_assert (boffset > slot_footer->length, "offset=%u, len=%u", boffset, slot_footer->length);
-	*last_offset = boffset - slot_footer->length;
+	if (slot_footer->flags == SLOT_FLAG_FREE) {
+	    d_assert (boffset > slot_footer->length, "offset=%u, len=%u", boffset, slot_footer->length);
+	    *last_offset = boffset - slot_footer->length;
+        }
+        else 
+            *last_offset = boffset;
     }
     else {
 	d_assert (!dbclass->cdef.opt_variable, "variable size");
@@ -623,6 +628,8 @@ imdb_block_slot_init (imdb_class_t * dbclass, imdb_block_page_t * page_block, im
 	slot_footer->length = slot_free->length;
     }
 
+    d_log_dprintf (IMDB_SERVICE_NAME, "slot_init: slot=%p, len=%u", slot_free, slot_free->length);
+
     imdb_fl_insert_slot (block, slot_free);
 }
 
@@ -663,7 +670,7 @@ imdb_page_block_recycle (imdb_class_t * dbclass, imdb_block_page_t * page_block,
     d_assert (block_targ->crc16 == 0xFFFF, "crc=%u", block_targ->crc16);
 #endif
 
-    d_log_dprintf (IMDB_SERVICE_NAME, "recycle: class page=%p block#%d=%p, size=%u)", page_targ, bidx, block_targ,
+    d_log_dprintf (IMDB_SERVICE_NAME, "recycle: class page=%p block#%d=%p, size=%u", page_targ, bidx, block_targ,
 		   bsize);
     d_stat_block_recycle (dbclass->imdb);
     block->block_fl_next = 0;
@@ -699,11 +706,12 @@ imdb_slot_free_extract (imdb_class_t * dbclass,
 
     imdb_slot_free_t *slot_free_next = NULL;
 
-    if (slot_free->length >= slot_bsize + extra_bsize) {
+    if (slot_free->length >= slot_bsize + extra_bsize + dbclass->obj_bsize_min) {
 	d_stat_slot_split (dbclass->imdb);
 	slot_free_next = d_pointer_add (imdb_slot_free_t, slot_free, d_bptr_size (slot_bsize));
 	slot_free_next->flags = SLOT_FLAG_FREE;
 	slot_free_next->length = slot_free->length - slot_bsize;
+	slot_free_next->next_offset = slot_free->next_offset;
 
 	d_log_dprintf (IMDB_SERVICE_NAME, "slot_extract: split free slot=%p, len=%u", slot_free_next,
 		       slot_free_next->length);
@@ -715,15 +723,17 @@ imdb_slot_free_extract (imdb_class_t * dbclass,
 	    slot_footer->skip_count = 0;	// reset skip count
 	}
 
+        slot_free->length = slot_bsize;
+
 	// free slot have enougth space after emit data_slot
-	if (slot_free_next->length >= dbclass->obj_bsize_min + extra_bsize) {
+	/*if (slot_free_next->length >= dbclass->obj_bsize_min + extra_bsize) {
 	    slot_free_next->next_offset = slot_free->next_offset;
 	}
 	else {
 	    slot_free_next = d_block_next_slot_free (find_ctx->block, slot_free);
 	    d_log_dprintf (IMDB_SERVICE_NAME, "slot_extract: next free slot=%p, len=%u", slot_free_next,
 			   (slot_free_next) ? slot_free_next->length : 0);
-	}
+	}*/
     }
     else {
 	slot_free_next = d_block_next_slot_free (find_ctx->block, slot_free);
@@ -1108,7 +1118,6 @@ imdb_class_instance_alloc (imdb_block_class_t * class_block, void **ptr, size_t 
     imdb_slot_free_extract (dbclass, &find_ctx, slot_bsize, extra_bsize);
     d_log_dprintf (IMDB_SERVICE_NAME, "alloc: data slot=%p, rid=%u:%u:%u", find_ctx.slot_free, 0,
 		   find_ctx.block->block_index, d_pointer_diff (find_ctx.slot_free, find_ctx.block));
-
     switch (dbclass->ds_type) {
     case DATA_SLOT_TYPE_1:
 	*ptr = find_ctx.slot_free;
@@ -1170,10 +1179,26 @@ imdb_init (imdb_def_t * imdb_def, imdb_hndlr_t hcurmdb, imdb_hndlr_t * himdb)
     if (imdb_def->opt_media) {
         // read header
         imdb_file_t hdr_file;
-        fio_user_read(0, (uint32 *) &hdr_file, sizeof(imdb_file_t));
-        uint16 crc = hdr_file.crc16;
-        hdr_file.crc16 = 0;
-        if (crc16 (d_pointer_as (unsigned char, &hdr_file), sizeof(imdb_file_t)) != crc) {
+        size_t hres = fio_user_read(0, (uint32 *) &hdr_file, sizeof(imdb_file_t));
+        if (hres != sizeof(imdb_file_t)) {
+            hres = 0; 
+            d_log_wprintf (IMDB_SERVICE_NAME, "file header read error");
+        } 
+        else {
+            uint16 crc = hdr_file.crc16;
+            hdr_file.crc16 = 0;
+            if (crc16 (d_pointer_as (unsigned char, &hdr_file), sizeof(imdb_file_t)) != crc) {
+                hres = 0; 
+                d_log_wprintf (IMDB_SERVICE_NAME, "file header crc error");
+            }
+            else {
+                d_log_wprintf (IMDB_SERVICE_NAME, "read data file [SCN:%u,size:%ublk]", hdr_file.scn, hdr_file.file_size);
+                imdb->class_first.fptr = (hdr_file.file_hwm) ? 1 : 0;
+                imdb->class_last.fptr = hdr_file.class_last.fptr;
+            }
+        }
+        // create new
+        if (! hres) {
             hdr_file.version = IMDB_FILE_HEADER_VERSION;
             hdr_file.block_size = imdb_def->block_size;
             hdr_file.class_last.fptr = 0;
@@ -1181,13 +1206,9 @@ imdb_init (imdb_def_t * imdb_def, imdb_hndlr_t hcurmdb, imdb_hndlr_t * himdb)
             hdr_file.file_hwm = 0;
             hdr_file.scn = 1;
             hdr_file.crc16 = crc16( d_pointer_as (unsigned char, &hdr_file), sizeof(imdb_file_t));
-            d_log_wprintf (IMDB_SERVICE_NAME, "file header crc error, new: %ublk", hdr_file.file_size);
-            fio_user_write(0, (uint32 *) &hdr_file, sizeof(imdb_file_t));
-        }
-        else {
-            d_log_wprintf (IMDB_SERVICE_NAME, "read data file [SCN:%u,size:%ublk]", hdr_file.scn, hdr_file.file_size);
-            imdb->class_first.fptr = (hdr_file.file_hwm) ? 1 : 0;
-            imdb->class_last.fptr = hdr_file.class_last.fptr;
+            d_log_wprintf (IMDB_SERVICE_NAME, "create new file: %ublk", hdr_file.file_size);
+            if (fio_user_write(0, (uint32 *) &hdr_file, sizeof(imdb_file_t)) != sizeof(imdb_file_t))
+                d_log_eprintf (IMDB_SERVICE_NAME, "file header write error");
         }
         // create buffer cache
         imdb->buffer_cache = os_malloc(imdb_def->buffer_size * imdb_def->block_size);
@@ -1681,7 +1702,7 @@ imdb_class_cur_fetch (imdb_class_t * dbclass, imdb_cursor_t * cur, uint16 count,
 			// because recycle whole block
 			return IMDB_CURSOR_NO_DATA_FOUND;
 		    }
-		    imdb_block_slot_free_last (dbclass, block, &offset);
+		    imdb_block_slot_data_last (dbclass, block, &offset);
 		}
 		offset_limit = d_block_lower_data_blimit (block);
 		while (offset > offset_limit) {
@@ -1699,7 +1720,6 @@ imdb_class_cur_fetch (imdb_class_t * dbclass, imdb_cursor_t * cur, uint16 count,
 		}
 		cur->rowid_last.block_id--;
 		cur->rowid_last.slot_offset = offset = 0;
-		//if (last_block) { return IMDB_CURSOR_NO_DATA_FOUND; }
 	    }
 	    cur->page_last = cur->page_last->page.page_prev;
 	    if (!cur->page_last) {

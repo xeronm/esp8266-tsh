@@ -139,7 +139,7 @@ system_init (void)
     imdb_def_t      db_def2 = { SYSTEM_FDB_BLOCK_SIZE, BLOCK_CRC_WRITE, true, 1, SYSTEM_FDB_FILE_SIZE };
     imdb_init (&db_def2, hmdb, &hfdb);
 
-    svcctl_start (hmdb);
+    svcctl_start (hmdb, hfdb);
     // installing services
     int             i;
     for (i = 0; i < REG_SERVICE_MAX; i++) {

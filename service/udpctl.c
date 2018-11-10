@@ -82,7 +82,7 @@ typedef struct udpctl_conf_s {
 } udpctl_conf_t;
 
 typedef struct udpctl_data_s {
-    imdb_hndlr_t    hdata;
+    const svcs_resource_t * svcres;
     uint8           client_count;
     ip_conn_t       conn;
 #ifdef ARCH_XTENSA
@@ -597,15 +597,15 @@ udpctl_setup (void)
 }
 
 svcs_errcode_t  ICACHE_FLASH_ATTR
-udpctl_on_start (imdb_hndlr_t himdb, imdb_hndlr_t hdata, dtlv_ctx_t * conf)
+udpctl_on_start (const svcs_resource_t * svcres, dtlv_ctx_t * conf)
 {
     if (sdata)
 	return SVCS_SERVICE_ERROR;
 
-    d_svcs_check_imdb_error (imdb_clsobj_insert (hdata, d_pointer_as (void *, &sdata), sizeof (udpctl_data_t))
+    d_svcs_check_imdb_error (imdb_clsobj_insert (svcres->hdata, d_pointer_as (void *, &sdata), sizeof (udpctl_data_t))
 	);
     os_memset (sdata, 0, sizeof (udpctl_data_t));
-    sdata->hdata = hdata;
+    sdata->svcres = svcres;
 
     udpctl_on_cfgupd (conf);
 
@@ -622,7 +622,7 @@ udpctl_on_stop ()
     if (os_conn_free (&sdata->conn))
 	d_log_eprintf (UDPCTL_SERVICE_NAME, "conn free error");
 #endif
-    d_svcs_check_imdb_error (imdb_clsobj_delete (sdata->hdata, sdata));
+    d_svcs_check_imdb_error (imdb_clsobj_delete (sdata->svcres->hdata, sdata));
 
     sdata = NULL;
 
@@ -692,6 +692,12 @@ udpctl_on_cfgupd (dtlv_ctx_t * conf)
 #else
     sdata->conf.secret_len = system_get_default_secret (sdata->conf.secret, sizeof (sdata->conf.secret));
 #endif
+
+    if (conf) {
+        dtlv_seq_decode_begin (conf, UDPCTL_SERVICE_ID);
+        dtlv_seq_decode_octets(UDPCTL_AVP_SECRET, sdata->conf.secret, sizeof (sdata->conf.secret), sdata->conf.secret_len);
+        dtlv_seq_decode_end (conf);
+    }
 
     udpctl_setup ();
 

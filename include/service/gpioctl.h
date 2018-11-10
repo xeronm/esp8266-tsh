@@ -94,7 +94,7 @@ gpio_result_t   gpio_release (uint8 gpio_id);
 
 svcs_errcode_t  gpio_service_install (void);
 svcs_errcode_t  gpio_service_uninstall (void);
-svcs_errcode_t  gpio_on_start (imdb_hndlr_t hmdb, imdb_hndlr_t hdata, dtlv_ctx_t * conf);
+svcs_errcode_t  gpio_on_start (const svcs_resource_t * svcres, dtlv_ctx_t * conf);
 svcs_errcode_t  gpio_on_stop (void);
 svcs_errcode_t  gpio_on_message (service_ident_t orig_id, service_msgtype_t msgtype, void *ctxdata, dtlv_ctx_t * msg_in,
 				 dtlv_ctx_t * msg_out);

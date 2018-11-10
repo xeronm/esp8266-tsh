@@ -20,6 +20,7 @@
  *
  */
 
+#include <string.h>
 #include "sysinit.h"
 #include "core/utils.h"
 #include "core/logging.h"
@@ -40,8 +41,7 @@
 #define SCHED_MAX_TIMEOUT_SEC		3600
 
 typedef struct sched_data_s {
-    imdb_hndlr_t    hmdb;
-    imdb_hndlr_t    hdata;	// service data storage
+    const svcs_resource_t * svcres;
     imdb_hndlr_t    hentry;	// entry storage
     // Fixme: should make separate index segment in imdb
 #ifdef ARCH_XTENSA
@@ -699,22 +699,21 @@ sched_service_uninstall (void)
 }
 
 svcs_errcode_t  ICACHE_FLASH_ATTR
-sched_on_start (imdb_hndlr_t hmdb, imdb_hndlr_t hdata, dtlv_ctx_t * conf)
+sched_on_start (const svcs_resource_t * svcres, dtlv_ctx_t * conf)
 {
     if (sdata)
 	return SVCS_SERVICE_ERROR;
 
     sched_data_t    *tmp_sdata;
-    d_svcs_check_imdb_error (imdb_clsobj_insert (hdata, (void **) &tmp_sdata, sizeof (sched_data_t))
+    d_svcs_check_imdb_error (imdb_clsobj_insert (svcres->hdata, (void **) &tmp_sdata, sizeof (sched_data_t))
 	);
     os_memset (tmp_sdata, 0, sizeof (sched_data_t));
 
-    tmp_sdata->hmdb = hmdb;
-    tmp_sdata->hdata = hdata;
+    tmp_sdata->svcres = svcres;
     imdb_class_def_t cdef =
 	{ SCHED_IMDB_CLS_ENTRY, false, true, false, 0, SCHED_ENTRY_STORAGE_PAGES, SCHED_ENTRY_STORAGE_PAGE_BLOCKS,
           SCHED_ENTRY_STORAGE_PAGE_BLOCKS, sizeof (sched_entry_t) };
-    d_svcs_check_imdb_error (imdb_class_create (hmdb, &cdef, &(tmp_sdata->hentry))
+    d_svcs_check_imdb_error (imdb_class_create (svcres->hmdb, &cdef, &(tmp_sdata->hentry))
 	);
 
     sdata = tmp_sdata;
@@ -738,7 +737,7 @@ sched_on_stop (void)
     d_svcs_check_imdb_error (imdb_class_destroy (tmp_sdata->hentry)
 	);
 
-    d_svcs_check_imdb_error (imdb_clsobj_delete (tmp_sdata->hdata, tmp_sdata)
+    d_svcs_check_imdb_error (imdb_clsobj_delete (tmp_sdata->svcres->hdata, tmp_sdata)
 	);
 
     return SVCS_ERR_SUCCESS;

@@ -32,7 +32,7 @@
 #include "service/lsh.h"
 
 typedef struct gpio_data_s {
-    imdb_hndlr_t    hdata;
+    const svcs_resource_t * svcres;
 
     gpio_use_t      gpio[GPIO_PIN_COUNT];
 } gpio_data_t;
@@ -286,15 +286,15 @@ fn_gpio_setup (sh_bc_arg_t * ret_arg, const arg_count_t arg_count, sh_bc_arg_typ
 }
 
 svcs_errcode_t  ICACHE_FLASH_ATTR
-gpio_on_start (imdb_hndlr_t hmdb, imdb_hndlr_t hdata, dtlv_ctx_t * conf)
+gpio_on_start (const svcs_resource_t * svcres, dtlv_ctx_t * conf)
 {
     if (sdata)
 	return SVCS_SERVICE_ERROR;
 
-    d_svcs_check_imdb_error (imdb_clsobj_insert (hdata, d_pointer_as (void *, &sdata), sizeof (gpio_data_t))
+    d_svcs_check_imdb_error (imdb_clsobj_insert (svcres->hdata, d_pointer_as (void *, &sdata), sizeof (gpio_data_t))
 	);
     os_memset (sdata, 0, sizeof (gpio_data_t));
-    sdata->hdata = hdata;
+    sdata->svcres = svcres;
 
     // register functions
     sh_func_entry_t fn_entries[3] = {
@@ -316,7 +316,7 @@ gpio_on_stop ()
     if (!sdata)
 	return SVCS_NOT_RUN;
 
-    d_svcs_check_imdb_error (imdb_clsobj_delete (sdata->hdata, sdata));
+    d_svcs_check_imdb_error (imdb_clsobj_delete (sdata->svcres->hdata, sdata));
 
     sdata = NULL;
 

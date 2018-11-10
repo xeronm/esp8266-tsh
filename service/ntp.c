@@ -85,7 +85,7 @@ typedef struct ntp_peer_s {
 } ntp_peer_t;
 
 typedef struct ntp_data_s {
-    imdb_hndlr_t    hdata;
+    const svcs_resource_t * svcres;
 
     ip_conn_t       ntpconn;
     ip_conn_t       dnsconn;
@@ -444,15 +444,15 @@ ntp_recv_cb (void *arg, char *pusrdata, unsigned short length)
     ipv4_addr_t     remote_ipaddr;
 #ifdef ARCH_XTENSA
     os_memcpy (remote_ipaddr.bytes, con_info->remote_ip, sizeof (ipv4_addr_t));
-#endif
-    d_log_dprintf (NTP_SERVICE_NAME, "recv len=%d from " IPSTR ":%d->%d", length, IP2STR (remote_ipaddr),
+    d_log_dprintf (NTP_SERVICE_NAME, "recv len=%d from " IPSTR ":%d->%d", length, IP2STR (&remote_ipaddr),
 		   sdata->udp.remote_port, sdata->udp.local_port);
+#endif
 
     if (!pusrdata)
 	return;
 
     if (sdata->tx_state != NTP_TX_STATE_PENDING) {
-	d_log_dprintf (NTP_SERVICE_NAME, "invalid state: %u", ntp_data->tx_state);
+	d_log_dprintf (NTP_SERVICE_NAME, "invalid state: %u", sdata->tx_state);
 	return;
     }
 
@@ -691,15 +691,15 @@ ntp_setup (void)
 }
 
 svcs_errcode_t  ICACHE_FLASH_ATTR
-ntp_on_start (imdb_hndlr_t himdb, imdb_hndlr_t hdata, dtlv_ctx_t * conf)
+ntp_on_start (const svcs_resource_t * svcres, dtlv_ctx_t * conf)
 {
     if (sdata)
 	return SVCS_SERVICE_ERROR;
 
-    d_svcs_check_imdb_error (imdb_clsobj_insert (hdata, d_pointer_as (void *, &sdata), sizeof (ntp_data_t))
+    d_svcs_check_imdb_error (imdb_clsobj_insert (svcres->hdata, d_pointer_as (void *, &sdata), sizeof (ntp_data_t))
 	);
     os_memset (sdata, 0, sizeof (ntp_data_t));
-    sdata->hdata = hdata;
+    sdata->svcres = svcres;
 
     sdata->tx_state = NTP_TX_STATE_NONE;
 
@@ -728,7 +728,7 @@ ntp_on_stop ()
     if (os_conn_free (&sdata->ntpconn)) //|| os_conn_free (&sdata->dnsconn))
 	d_log_eprintf (NTP_SERVICE_NAME, "conn free error");
 #endif
-    d_svcs_check_imdb_error (imdb_clsobj_delete (sdata->hdata, sdata));
+    d_svcs_check_imdb_error (imdb_clsobj_delete (sdata->svcres->hdata, sdata));
     sdata = NULL;
 
     return SVCS_ERR_SUCCESS;
