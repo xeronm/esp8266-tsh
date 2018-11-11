@@ -165,18 +165,25 @@ COMPILE.cxx = $(CXX) $(CXXFLAGS) $(CPPFLAGS) -c
 LINK.c      = $(CC)  $(CFLAGS)   $(LDFLAGS)
 LINK.cxx    = $(CXX) $(CXXFLAGS) $(CPPFLAGS) $(LDFLAGS)
 
-.PHONY: all objs clean cleanall show buildpath project image release reldate
+.PHONY: build all objs clean cleanall show buildpath project image release releasedate buildnumber
 
 # Delete the default suffixes
 .SUFFIXES:
 
-release: reldate clean all
+release: clean releasedate buildnumber all
 
-reldate:
+build: clean buildnumber all
+
+releasedate:
 	@echo "*** Make Release ***" && \
           release_date=$$(date '+%s') && sed -i -e "s/\(^#\\s*define\\s*APP_VERSION_RELEASE_DATE\\s*\)\([0-9]*\)/\\1$$release_date/" ./include/core/config.h && \
 	  echo "Release date: $$release_date"
 
+buildnumber:
+	@echo Incrementing build number && \
+	  build=$$(awk '/^#\s*define\s*BUILD_NUMBER/ {match($$0, "BUILD_NUMBER\\s*([0-9]*)", r); print r[1]+1}' ./include/core/config.h) && \
+	  [ "$$build" != "" ] && sed -i -e "s/\(^#\\s*define\\s*BUILD_NUMBER\\s*\)\([0-9]*\)/\\1$$build/" ./include/core/config.h && \
+	  echo "Next build: $$build"
 
 all: buildpath project image
 
@@ -244,10 +251,6 @@ endif
 # Rules for generating the executable.
 #-------------------------------------
 project: $(APPS)
-	@echo Incrementing build number && \
-	  build=$$(awk '/^#\s*define\s*BUILD_NUMBER/ {match($$0, "BUILD_NUMBER\\s*([0-9]*)", r); print r[1]+1}' ./include/core/config.h) && \
-	  [ "$$build" != "" ] && sed -i -e "s/\(^#\\s*define\\s*BUILD_NUMBER\\s*\)\([0-9]*\)/\\1$$build/" ./include/core/config.h && \
-	  echo "Next build: $$build"
 
 $(APPS): %:$(OBJS)
 ifeq ($(LD_APP_SUFFIX),1)
