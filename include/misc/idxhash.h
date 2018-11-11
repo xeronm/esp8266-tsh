@@ -24,6 +24,21 @@
  * TODO: Add remove support
  */
 
+/*
+Buffer format:
+
+	+-------------+---------------+-----+-----------------+
+	| Root Bucket | Overflow Area | ... | Siblings Bucket |
+	+-------------+---------------+-----+-----------------+
+
+        TODO: Siblings Bucket not realized
+
+Inline key and value Entry format:
+	+-------------+-----------+-------------+
+	| Next Entry  |   Value   |  Entry-Key  |
+	+-------------+-----------+-------------+
+*/
+
 #ifndef __IDXHASH_H__
 #define __IDXHASH_H__	1
 
@@ -34,7 +49,23 @@ typedef void   *ih_hndlr_t;
 uint8           ih_hash8 (const char *buf, size_t len, uint8 init);
 uint16          ih_hash16 (const char *buf, size_t len, uint8 init);
 
-#define d_ih_get_varlength(vptr) (*((size_t *) ((char *)(vptr) - sizeof (size_t)) ))
+typedef size_t  ih_entry_ptr_t;
+
+typedef struct ih_header8_s {
+    uint8           bucket_size;	// in values
+    uint8           key_length;	        // Key length stored in Hash-Map (0 - null term, 1 - variable, n - fixed length in bytes)
+    uint8           value_length;	// Value length stored in Hash-Map (0 - null term, 1 - variable, n - fixed length in bytes)
+    ih_entry_ptr_t  overflow_hwm;
+    ih_entry_ptr_t  overflow_pos;
+    ih_entry_ptr_t  free_slot;		// pointer to free list
+} ih_header8_t;
+
+#define d_hash8_fixedmap_size(keylen, vallen, bcount, icount) \
+	(sizeof (ih_header8_t) + \
+	 (bcount) * sizeof (ih_entry_ptr_t) + \
+	 (d_align (sizeof (ih_entry_ptr_t) + (keylen) + (vallen))) * (icount) ) * 4 / 3
+
+#define d_ih_get_varlength(vptr)	(*((size_t *) ((char *)(vptr) - sizeof (size_t)) ))
 
 typedef enum ih_errcode_e {
     IH_ERR_SUCCESS = 0,
@@ -67,6 +98,7 @@ ih_errcode_t    ih_init8 (char *buf, size_t length, uint8 bucket_size, uint8 key
  */
 ih_errcode_t    ih_hash8_add (ih_hndlr_t hndlr, const char *entrykey, size_t len, char **value, size_t valuelen);
 ih_errcode_t    ih_hash8_search (ih_hndlr_t hndlr, const char *entrykey, size_t len, char **value);
+ih_errcode_t    ih_hash8_remove (ih_hndlr_t hndlr, const char *entrykey, size_t len);
 
 /*
  * [public] Get pointer to inline stored key (not aligned)

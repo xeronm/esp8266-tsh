@@ -21,7 +21,6 @@
  */
 
 /*
-
 Buffer format:
 
 	+-------------+---------------+-----+-----------------+
@@ -34,30 +33,35 @@ Inline key and value Entry format:
 	+-------------+-----------+-------------+
 	| Next Entry  |   Value   |  Entry-Key  |
 	+-------------+-----------+-------------+
-
 */
 
 #include "sysinit.h"
 #include "misc/idxhash.h"
 #include "core/utils.h"
 
-typedef size_t  ih_entry_ptr_t;
-
-typedef struct ih_header8_s {
-    uint8           bucket_size;	// in values
-    uint8           key_length;	        // Key length stored in Hash-Map (0 - null term, 1 - variable, n - fixed length in bytes)
-    uint8           value_length;	// Value length stored in Hash-Map (0 - null term, 1 - variable, n - fixed length in bytes)
-    uint16          bucket_count;	// allocated bucket count
-    size_t          overflow_hwm;
-    size_t          overflow_pos;
-} ih_header8_t;
-
 #define d_obj2hndlr(obj)		(ih_hndlr_t) (obj)
 #define d_hndlr2obj(type, hndlr)	(type *) (hndlr)	// TODO: сделать проверку на тип
+
+#define d_fixed_bucket_size(buckets)		(sizeof (ih_header8_t) + (buckets) * sizeof (ih_entry_ptr_t))
+
+#define d_overflow_entry_len(hdr, entry, len) \
+	(len) = sizeof (ih_entry_header_t); \
+	(len) += ((hdr)->value_length > 1) ? (hdr)->value_length : \
+		     (((hdr)->value_length) ? sizeof (size_t) + *d_pointer_add (size_t, (entry), (len)): 1 + os_strlen(d_pointer_add (char, (entry), (len)))); \
+	(len) += ((hdr)->key_length > 1) ? (hdr)->key_length : \
+		     (((hdr)->key_length) ? sizeof (size_t) + *d_pointer_add (size_t, (entry), (len)): 1 + os_strlen(d_pointer_add (char, (entry), (len)))); \
+	(len) = d_align ((len));
 
 typedef struct ih_entry_header_s {
     ih_entry_ptr_t  next_entry;
 } ih_entry_header_t;
+
+typedef struct ih_free_slot_s {
+    ih_entry_ptr_t  next_slot;
+    ih_entry_ptr_t  length;
+} ih_free_slot_t;
+
+#define IH_FREE_SLOT	((ih_entry_ptr_t) ~0)
 
 /*
 [public] calculate 8bit hash
@@ -101,6 +105,64 @@ ih_hash16 (const char *buf, size_t len, uint8 init)
     return res;
 }
 
+ih_errcode_t    ICACHE_FLASH_ATTR
+ih_compact8 (ih_hndlr_t hndlr, size_t * size_free)
+{
+    *size_free = 0;
+    ih_header8_t   *hdr = d_hndlr2obj (ih_header8_t, hndlr);
+    if (!hdr->free_slot)
+        return IH_ERR_SUCCESS;
+
+    // 1st pass - reindex
+    uint8 i;
+    for (i = 0; i < hdr->bucket_size; i++) {
+        ih_entry_ptr_t *entry_ptr =
+	    d_pointer_add (ih_entry_ptr_t, hdr, sizeof (ih_header8_t) + i * sizeof (ih_entry_ptr_t));
+        ih_entry_header_t *entry = NULL;
+        if (*entry_ptr) {
+	    entry = d_pointer_add (ih_entry_header_t, hdr, *entry_ptr);
+	    while (true) {
+                ih_entry_ptr_t     next_ptr = entry->next_entry;
+                entry->next_entry = i;
+	        if (!next_ptr)
+		    break;
+	        entry = d_pointer_add (ih_entry_header_t, hdr, next_ptr);
+	    }
+            *entry_ptr = 0;
+	}
+    }
+
+    ih_entry_ptr_t offset = 0;
+    // 2st pass - restore chains and compact
+    ih_entry_ptr_t entry_ptr = d_fixed_bucket_size (hdr->bucket_size);
+    while (entry_ptr < hdr->overflow_pos) {
+        ih_entry_header_t *entry = d_pointer_add (ih_entry_header_t, hdr, entry_ptr);
+	if (entry->next_entry == IH_FREE_SLOT) {
+            ih_free_slot_t * free_slot = d_pointer_as (ih_free_slot_t, entry);
+            offset += free_slot->length;
+            entry_ptr += free_slot->length;
+	}
+        else {
+            ih_entry_ptr_t *entry_ptr2 =
+	        d_pointer_add (ih_entry_ptr_t, hdr, sizeof (ih_header8_t) + entry->next_entry * sizeof (ih_entry_ptr_t));
+
+            size_t len;
+            d_overflow_entry_len(hdr, entry, len);
+
+            entry->next_entry = *entry_ptr2;
+            *entry_ptr2 = entry_ptr - offset;
+            if (offset)
+                os_memcpy((char *)entry - offset, entry, len);
+
+            entry_ptr += len;
+	}
+    }
+
+    hdr->overflow_pos -= offset;
+    *size_free = offset;
+
+    return IH_ERR_SUCCESS;
+}
 
 /*
  * [public] Create Hash-Map Index with inline stored keys and fixed value length
@@ -114,13 +176,14 @@ ih_errcode_t    ICACHE_FLASH_ATTR
 ih_init8 (char *buf, size_t length, uint8 bucket_size, uint8 key_length, uint8 value_length,
 	  ih_hndlr_t * hndlr)
 {
-    size_t          fixed_size = sizeof (ih_header8_t) + bucket_size * sizeof (ih_entry_ptr_t);
+    size_t          fixed_size = d_fixed_bucket_size (bucket_size);
     if (length < fixed_size) {
 	return IH_BUFFER_OVERFLOW;
     }
 
     ih_header8_t   *hdr = d_pointer_as (ih_header8_t, buf);
     os_memset (hdr, 0, fixed_size);
+    hdr->free_slot = 0;
     hdr->bucket_size = bucket_size;
     hdr->overflow_hwm = length;
     hdr->overflow_pos = fixed_size;
@@ -132,9 +195,9 @@ ih_init8 (char *buf, size_t length, uint8 bucket_size, uint8 key_length, uint8 v
 }
 
 LOCAL bool      ICACHE_FLASH_ATTR
-ih_entry_cmp (ih_header8_t * hdr, const char *entrykey, size_t len, ih_entry_header_t * entry2)
+ih_entry_cmp (ih_header8_t * hdr, const char *entrykey, size_t len, ih_entry_header_t * entry)
 {
-    char           *ptr = d_pointer_add (char, entry2, sizeof (ih_entry_header_t));
+    char           *ptr = d_pointer_add (char, entry, sizeof (ih_entry_header_t));
 
     if (!hdr->value_length) {
         ptr += os_strlen(ptr) + 1;
@@ -183,27 +246,7 @@ ih_hash8_add (ih_hndlr_t hndlr, const char *entrykey, size_t len, char **value, 
     if (len == 0)
         return IH_NULL_ENTRY;
 
-    uint8           hash0 = ih_hash8 (entrykey, len, 0) % hdr->bucket_size;
-    ih_entry_ptr_t *entry_ptr =
-	d_pointer_add (ih_entry_ptr_t, hdr, sizeof (ih_header8_t) + hash0 * sizeof (ih_entry_ptr_t));
-    ih_entry_header_t *entry2 = NULL;
-
-    if (*entry_ptr) {
-	entry2 = d_pointer_add (ih_entry_header_t, hdr, *entry_ptr);
-	while (true) {
-	    if (ih_entry_cmp (hdr, entrykey, len, entry2)) {
-		return IH_ENTRY_EXISTS;
-	    }
-	    if (!entry2->next_entry)
-		break;
-	    entry2 = d_pointer_add (ih_entry_header_t, hdr, entry2->next_entry);
-	}
-	entry_ptr = &entry2->next_entry;
-    }
-    else {
-	*entry_ptr = hdr->overflow_pos;
-    }
-
+    // optimistic algorythm, first check space and comapct, then check existance 
     size_t value_len = (hdr->value_length > 1) ? hdr->value_length : 
                            ((hdr->value_length) ? sizeof (size_t) : 1) + valuelen;
     size_t entry_len = sizeof (ih_entry_header_t) + value_len;
@@ -211,14 +254,35 @@ ih_hash8_add (ih_hndlr_t hndlr, const char *entrykey, size_t len, char **value, 
                        ((hdr->key_length) ? sizeof (size_t) : 1) + len;
 
     if (hdr->overflow_hwm - hdr->overflow_pos < entry_len) {
-	return IH_BUFFER_OVERFLOW;
+        size_t size_free;
+        ih_compact8 (hndlr, &size_free);
+        if (size_free < entry_len)
+	    return IH_BUFFER_OVERFLOW;
     }
 
-    entry2 = d_pointer_add (ih_entry_header_t, hdr, hdr->overflow_pos);
-    entry2->next_entry = 0;
+    uint8           hash0 = ih_hash8 (entrykey, len, 0) % hdr->bucket_size;
+    ih_entry_ptr_t *entry_ptr =
+	d_pointer_add (ih_entry_ptr_t, hdr, sizeof (ih_header8_t) + hash0 * sizeof (ih_entry_ptr_t));
+    ih_entry_header_t *entry = NULL;
+
+    if (*entry_ptr) {
+	entry = d_pointer_add (ih_entry_header_t, hdr, *entry_ptr);
+	while (true) {
+	    if (ih_entry_cmp (hdr, entrykey, len, entry)) {
+		return IH_ENTRY_EXISTS;
+	    }
+	    if (!entry->next_entry)
+		break;
+	    entry = d_pointer_add (ih_entry_header_t, hdr, entry->next_entry);
+	}
+	entry_ptr = &entry->next_entry;
+    }
+
+    entry = d_pointer_add (ih_entry_header_t, hdr, hdr->overflow_pos);
+    entry->next_entry = 0;
     *entry_ptr = hdr->overflow_pos;
 
-    char           *ptr = d_pointer_add (char, entry2, sizeof (ih_entry_header_t));
+    char           *ptr = d_pointer_add (char, entry, sizeof (ih_entry_header_t));
     if (hdr->value_length == 1) {
         *((size_t *) ptr) = valuelen;
         *value = ptr + sizeof (size_t);
@@ -245,7 +309,7 @@ ih_hash8_add (ih_hndlr_t hndlr, const char *entrykey, size_t len, char **value, 
 	ptr += hdr->key_length;
     }
 
-    hdr->overflow_pos += d_align (d_pointer_diff (ptr, entry2));
+    hdr->overflow_pos += d_align (d_pointer_diff (ptr, entry));
 
     return IH_ERR_SUCCESS;
 }
@@ -267,19 +331,68 @@ ih_hash8_search (ih_hndlr_t hndlr, const char *entrykey, size_t len, char **valu
     uint8           hash0 = ih_hash8 (entrykey, len, 0) % hdr->bucket_size;
     ih_entry_ptr_t *entry_ptr =
 	d_pointer_add (ih_entry_ptr_t, hdr, sizeof (ih_header8_t) + hash0 * sizeof (ih_entry_ptr_t));
-    ih_entry_header_t *entry2 = NULL;
+    ih_entry_header_t *entry = NULL;
 
     if (*entry_ptr) {
-	entry2 = d_pointer_add (ih_entry_header_t, hdr, *entry_ptr);
+	entry = d_pointer_add (ih_entry_header_t, hdr, *entry_ptr);
 	while (true) {
-	    if (ih_entry_cmp (hdr, entrykey, len, entry2)) {
-		//os_memcpy(value, d_pointer_add(char, entry2, sizeof(ih_entry_header_t)), hdr->value_length);
-		*value = d_pointer_add (char, entry2, sizeof (ih_entry_header_t));
+	    if (ih_entry_cmp (hdr, entrykey, len, entry)) {
+		//os_memcpy(value, d_pointer_add(char, entry, sizeof(ih_entry_header_t)), hdr->value_length);
+		*value = d_pointer_add (char, entry, sizeof (ih_entry_header_t));
 		return IH_ERR_SUCCESS;
 	    }
-	    if (!entry2->next_entry)
+	    if (!entry->next_entry)
 		break;
-	    entry2 = d_pointer_add (ih_entry_header_t, hdr, entry2->next_entry);
+	    entry = d_pointer_add (ih_entry_header_t, hdr, entry->next_entry);
+	}
+    }
+
+    return IH_ENTRY_NOTFOUND;
+}
+
+ih_errcode_t    ICACHE_FLASH_ATTR
+ih_hash8_remove (ih_hndlr_t hndlr, const char *entrykey, size_t len) 
+{
+    ih_header8_t   *hdr = d_hndlr2obj (ih_header8_t, hndlr);
+
+    if (hdr->key_length == 0) {
+        len = os_strlen (entrykey);
+    } 
+    else if (hdr->key_length > 1) {
+        len = hdr->key_length;
+    }
+    if (len == 0)
+        return IH_NULL_ENTRY;
+
+    uint8           hash0 = ih_hash8 (entrykey, len, 0) % hdr->bucket_size;
+    ih_entry_ptr_t *entry_ptr =
+	d_pointer_add (ih_entry_ptr_t, hdr, sizeof (ih_header8_t) + hash0 * sizeof (ih_entry_ptr_t));
+    ih_entry_header_t *entry = NULL;
+
+    if (*entry_ptr) {
+        ih_entry_header_t *entry_prev = NULL;
+	entry = d_pointer_add (ih_entry_header_t, hdr, *entry_ptr);
+	while (true) {
+	    if (ih_entry_cmp (hdr, entrykey, len, entry)) {
+	        if (entry_prev)
+                    entry_prev->next_entry = entry->next_entry;
+                else
+                    *entry_ptr = entry->next_entry;
+
+                size_t len;
+                d_overflow_entry_len(hdr, entry, len);
+
+		ih_free_slot_t * free_slot = d_pointer_as (ih_free_slot_t, entry);
+		free_slot->length = len;
+                free_slot->next_slot = IH_FREE_SLOT;
+                hdr->free_slot = 1;
+
+		return IH_ERR_SUCCESS;
+	    }
+	    if (!entry->next_entry)
+		break;
+            entry_prev = entry;
+	    entry = d_pointer_add (ih_entry_header_t, hdr, entry->next_entry);
 	}
     }
 

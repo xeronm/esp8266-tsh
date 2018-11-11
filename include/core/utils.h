@@ -87,6 +87,10 @@
 #define d_align_32(x) \
 	(((x) + 0b11) & (uint32)(~0b11))
 
+// 8 bytes allign
+#define d_align_64(x) \
+	(((x) + 0b111) & (uint64)(~0b111))
+
 #define d_align d_align_32
 
 // math operations

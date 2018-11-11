@@ -23,6 +23,7 @@
 #include "sysinit.h"
 #include "core/utils.h"
 #include "core/logging.h"
+#include "misc/idxhash.h"
 #include "system/imdb.h"
 #include "crypto/crc.h"
 
@@ -69,8 +70,6 @@ typedef struct imdb_bc_block_s {
     uint32          use_count;
 } imdb_bc_block_t;
 
-#define d_buffer_cache_map_size()	
-
 typedef struct imdb_s {
     imdb_def_t      db_def;
     obj_size_t      obj_bsize_max;
@@ -78,8 +77,15 @@ typedef struct imdb_s {
     class_ptr_t     class_first;
     class_ptr_t     class_last;
     imdb_hndlr_t    hcurs;
-    uint8          *buffer_cache;
 } imdb_t;
+
+typedef struct imdb_bc_s {
+    imdb_t	    base;
+    ih_hndlr_t      hbcmap;
+    uint8          *buffer_cache;
+    size_t	    bcmap_size;
+    uint8	    bcmap[];
+} imdb_bc_t;
 
 typedef struct imdb_file_s {
     uint16          version;
@@ -1146,8 +1152,27 @@ imdb_errcode_t  ICACHE_FLASH_ATTR
 imdb_init (imdb_def_t * imdb_def, imdb_hndlr_t hcurmdb, imdb_hndlr_t * himdb)
 {
     imdb_t         *imdb;
-    st_zalloc (imdb, imdb_t);
-    d_stat_alloc (imdb, sizeof (imdb_t));
+
+    if (imdb_def->opt_media) {
+        uint8              bucket_size = MAX (MIN (256, imdb_def->buffer_size << 2), 8);
+	size_t             bcmap_size = d_hash8_fixedmap_size(sizeof (size_t), sizeof (void *), bucket_size, imdb_def->buffer_size);
+        imdb_bc_t         *imdb_bc;
+        imdb_bc = os_malloc (sizeof (imdb_bc_t) + bcmap_size);
+        os_memset (imdb_bc, 0, sizeof (imdb_bc_t));
+        imdb_bc->bcmap_size = bcmap_size;
+        // hash-map block_id->bc_addr
+        ih_init8 (imdb_bc->bcmap, bcmap_size, bucket_size, sizeof (size_t), sizeof (void *), &imdb_bc->hbcmap);
+        // create buffer cache
+        imdb_bc->buffer_cache = os_malloc(imdb_def->buffer_size * imdb_def->block_size);
+        d_log_wprintf (IMDB_SERVICE_NAME, "buffers:%p, len:%u, maplen:%u", imdb_bc->buffer_cache, imdb_def->buffer_size * imdb_def->block_size, bcmap_size);
+
+        imdb = &imdb_bc->base;
+        d_stat_alloc (imdb, sizeof (imdb_bc_t) + bcmap_size);
+    }	
+    else {
+        st_zalloc (imdb, imdb_t);
+        d_stat_alloc (imdb, sizeof (imdb_t));
+    }
 
     if (!imdb_def->block_size) {
 	imdb_def->block_size = IMDB_BLOCK_SIZE_DEFAULT;
@@ -1210,8 +1235,6 @@ imdb_init (imdb_def_t * imdb_def, imdb_hndlr_t hcurmdb, imdb_hndlr_t * himdb)
             if (fio_user_write(0, (uint32 *) &hdr_file, sizeof(imdb_file_t)) != sizeof(imdb_file_t))
                 d_log_eprintf (IMDB_SERVICE_NAME, "file header write error");
         }
-        // create buffer cache
-        imdb->buffer_cache = os_malloc(imdb_def->buffer_size * imdb_def->block_size);
     }
 
     return IMDB_ERR_SUCCESS;
@@ -1229,14 +1252,20 @@ imdb_done (imdb_hndlr_t hmdb)
 
     imdb_t         *imdb = d_hndlr2obj (imdb_t, hmdb);
 
-    imdb_block_class_t *class_block = imdb->class_first.mptr;
-    while (class_block) {
-	imdb_hndlr_t    hclass = d_obj2hndlr (class_block);
-	class_block = class_block->dbclass.class_next;
-	imdb_class_destroy (hclass);
+    if (imdb->db_def.opt_media) {
+        imdb_bc_t      *imdb_bc = d_pointer_as (imdb_bc_t, imdb);
+        os_free(imdb_bc->buffer_cache);
+        d_stat_free (imdb, sizeof (imdb_bc_t) + imdb_bc->bcmap_size);
     }
-
-    d_stat_free (imdb, sizeof (imdb_t));
+    else {
+        imdb_block_class_t *class_block = imdb->class_first.mptr;
+        while (class_block) {
+	    imdb_hndlr_t    hclass = d_obj2hndlr (class_block);
+	    class_block = class_block->dbclass.class_next;
+	    imdb_class_destroy (hclass);
+        }
+        d_stat_free (imdb, sizeof (imdb_t));
+    }
 
     d_assert (imdb->stat.mem_alloc == imdb->stat.mem_free, "alloc=%u, free=%u", imdb->stat.mem_alloc,
 	      imdb->stat.mem_free);
