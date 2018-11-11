@@ -180,10 +180,10 @@ releasedate:
 	  echo "Release date: $$release_date"
 
 buildnumber:
-	@echo Incrementing build number && \
+	@echo "*** Incrementing build number ***" && \
 	  build=$$(awk '/^#\s*define\s*BUILD_NUMBER/ {match($$0, "BUILD_NUMBER\\s*([0-9]*)", r); print r[1]+1}' ./include/core/config.h) && \
 	  [ "$$build" != "" ] && sed -i -e "s/\(^#\\s*define\\s*BUILD_NUMBER\\s*\)\([0-9]*\)/\\1$$build/" ./include/core/config.h && \
-	  echo "Next build: $$build"
+	  echo "Build Number: $$build"
 
 all: buildpath project image
 
