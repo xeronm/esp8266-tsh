@@ -711,8 +711,7 @@ sched_on_start (const svcs_resource_t * svcres, dtlv_ctx_t * conf)
 
     tmp_sdata->svcres = svcres;
     imdb_class_def_t cdef =
-	{ SCHED_IMDB_CLS_ENTRY, false, true, false, 0, SCHED_ENTRY_STORAGE_PAGES, SCHED_ENTRY_STORAGE_PAGE_BLOCKS,
-          SCHED_ENTRY_STORAGE_PAGE_BLOCKS, sizeof (sched_entry_t) };
+	{ SCHED_IMDB_CLS_ENTRY, false, true, false, 0, SCHED_ENTRY_STORAGE_PAGES, SCHED_ENTRY_STORAGE_PAGE_BLOCKS, sizeof (sched_entry_t) };
     d_svcs_check_imdb_error (imdb_class_create (svcres->hmdb, &cdef, &(tmp_sdata->hentry))
 	);
 

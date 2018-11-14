@@ -428,8 +428,7 @@ svcctl_start (imdb_hndlr_t hmdb, imdb_hndlr_t hfdb)
     }
 
     imdb_class_def_t cdef =
-	{ SERVICES_IMDB_CLS_DATA, false, true, false, 0, SERVICES_DATA_STORAGE_PAGES, SERVICES_DATA_STORAGE_PAGE_BLOCKS,
-SERVICES_DATA_STORAGE_PAGE_BLOCKS, 0 };
+	{ SERVICES_IMDB_CLS_DATA, false, true, false, 0, SERVICES_DATA_STORAGE_PAGES, SERVICES_DATA_STORAGE_PAGE_BLOCKS, 0 };
 
     imdb_hndlr_t    hdata;
     d_svcs_check_svcs_error (imdb_class_create (hmdb, &cdef, &hdata)
@@ -444,8 +443,7 @@ SERVICES_DATA_STORAGE_PAGE_BLOCKS, 0 };
     sdata->svcres.hdata = hdata;
 
     imdb_class_def_t cdef2 =
-	{ SERVICES_IMDB_CLS_SERVICE, false, true, false, 0, SERVICES_STORAGE_PAGES, SERVICES_STORAGE_PAGE_BLOCKS,
-SERVICES_STORAGE_PAGE_BLOCKS, sizeof (svcs_service_t) };
+	{ SERVICES_IMDB_CLS_SERVICE, false, true, false, 0, SERVICES_STORAGE_PAGES, SERVICES_STORAGE_PAGE_BLOCKS, sizeof (svcs_service_t) };
     d_svcs_check_svcs_error (imdb_class_create (hmdb, &cdef2, &sdata->hsvcs)
 	);
 

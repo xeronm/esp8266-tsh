@@ -41,6 +41,10 @@ typedef enum imdb_errcode_e {
     IMDB_CURSOR_NO_DATA_FOUND = 9,
     IMDB_CURSOR_BREAK = 10,
     IMDB_CURSOR_FORALL_FUNC = 11,
+    IMDB_FILE_READ_ERROR = 12,
+    IMDB_FILE_WRITE_ERROR = 13,
+    IMDB_FILE_CRC_ERROR = 14,
+    IMDB_FILE_LOCK_ERROR = 15,
 } imdb_errcode_t;
 
 typedef enum imdb_access_path_s {
@@ -108,7 +112,7 @@ typedef struct imdb_def_s {
     block_size_t    block_size;
     imdb_block_crc_t block_crc: 7;
     bool            opt_media: 1;
-    uint32          buffer_size; // TODO: At this moment support only 1 block
+    uint32          buffer_size; //
     uint32          file_size; // file size in blocks
     imdb_hndlr_t    hcur; // handler to cursor
 } imdb_def_t;
@@ -148,7 +152,7 @@ typedef struct imdb_class_def_s {
     bool            opt_tx_control:1;
     uint8           pct_free:5;
     class_pages_t   pages_max;
-    page_blocks_t   init_blocks;
+    //page_blocks_t   init_blocks;
     page_blocks_t   page_blocks;
     obj_size_t      obj_size;	// fixed part size
 } imdb_class_def_t;
@@ -181,13 +185,13 @@ typedef struct imdb_class_info_s {
 } imdb_class_info_t;
 
 typedef struct imdb_rowid_s {
-    class_pages_t   page_id;	// page index
+    size_t   	    page_id;	// page index
     page_blocks_t   block_id;	// block index in page
     uint8           reserved:2;	// reserved
     uint16          slot_offset:14;	// slot offset in block
 } imdb_rowid_t;
 
-imdb_errcode_t  imdb_init (imdb_def_t * imdb_def, imdb_hndlr_t hcurmdb, imdb_hndlr_t * himdb);
+imdb_errcode_t  imdb_init (imdb_def_t * imdb_def, imdb_hndlr_t * himdb);
 imdb_errcode_t  imdb_done (imdb_hndlr_t hmdb);
 imdb_errcode_t  imdb_info (imdb_hndlr_t hmdb, imdb_info_t * imdb_info, imdb_class_info_t info_array[], uint8 array_len);
 
@@ -212,5 +216,11 @@ imdb_errcode_t  forall_count (void *ptr, void *data);
 
 
 #define d_imdb_check_hndlr(hndlr) 	if (!(hndlr)) { return IMDB_INVALID_HNDLR; }
+
+#define d_imdb_check_error(ret) \
+	{ \
+		imdb_errcode_t r = (ret); \
+		if (r != IMDB_ERR_SUCCESS) return r; \
+	}
 
 #endif /* _IMDB_H_ */

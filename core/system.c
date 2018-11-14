@@ -134,10 +134,10 @@ system_init (void)
 #ifndef DISABLE_SYSTEM
     d_log_iprintf (STARTUP_SERVICE_NAME, "imdb block_size:%u, fdb block_size:%u", SYSTEM_IMDB_BLOCK_SIZE, SYSTEM_FDB_BLOCK_SIZE);
     imdb_def_t      db_def = { SYSTEM_IMDB_BLOCK_SIZE, BLOCK_CRC_NONE, false, 0, 0 };
-    imdb_init (&db_def, 0, &hmdb);
+    imdb_init (&db_def, &hmdb);
 
     imdb_def_t      db_def2 = { SYSTEM_FDB_BLOCK_SIZE, BLOCK_CRC_WRITE, true, 1, SYSTEM_FDB_FILE_SIZE };
-    imdb_init (&db_def2, hmdb, &hfdb);
+    imdb_init (&db_def2, &hfdb);
 
     svcctl_start (hmdb, hfdb);
     // installing services

@@ -33,7 +33,7 @@
 #include "service/syslog.h"
 
 #define SYSLOG_STORAGE_PAGES		1
-#define SYSLOG_STORAGE_PAGE_BLOCKS	4
+#define SYSLOG_STORAGE_PAGE_BLOCKS	3
 #define SYSLOG_MESSAGE_MAX_LEN		380
 #define SYSLOG_IMDB_CLS_NAME		"syslog$"
 
@@ -76,8 +76,7 @@ syslog_on_start (const svcs_resource_t * svcres, dtlv_ctx_t * conf)
 
     tmp_sdata->svcres = svcres;
     imdb_class_def_t cdef =
-	{ SYSLOG_IMDB_CLS_NAME, true, true, false, 0, SYSLOG_STORAGE_PAGES, SYSLOG_STORAGE_PAGE_BLOCKS,
-SYSLOG_STORAGE_PAGE_BLOCKS, 0 };
+	{ SYSLOG_IMDB_CLS_NAME, true, true, false, 0, SYSLOG_STORAGE_PAGES, SYSLOG_STORAGE_PAGE_BLOCKS, 0 };
     d_svcs_check_imdb_error (imdb_class_create (svcres->hmdb, &cdef, &(tmp_sdata->hlogs))
 	);
 
