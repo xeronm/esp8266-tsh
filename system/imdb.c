@@ -785,26 +785,33 @@ LOCAL imdb_block_t *ICACHE_FLASH_ATTR imdb_page_block_alloc (imdb_class_t * dbcl
   - block: target block
 */
 LOCAL imdb_block_t *ICACHE_FLASH_ATTR
-imdb_page_block_recycle (imdb_class_t * dbclass, imdb_block_page_t * page_block, imdb_block_t * block)
+imdb_page_block_recycle (imdb_class_t * dbclass, imdb_block_page_t ** page_block, imdb_block_t * block)
 {
     d_assert (dbclass->page_fl_first.mptr == NULL, "page_fl_first=%p", dbclass->page_fl_first.mptr);
 
     block_size_t    bsize = dbclass->imdb->db_def.block_size;
     imdb_block_t   *block_targ = NULL;
-    imdb_block_page_t *page_targ = page_block;
+    imdb_block_page_t *page_targ = *page_block;
 
     page_blocks_t   bidx;
-    // try to recycle block in this page
-    if (block->block_index < dbclass->cdef.page_blocks) {
-	bidx = block->block_index + 1;
-	block_targ = d_page_block_byidx (page_targ, bidx, bsize);
-    }
-    else {
+    block_ptr_t     block_ptr;
+    
+    if (block->block_index == dbclass->cdef.page_blocks) {
 	// try to recycle next page
-	page_targ = page_block->page.page_next.mptr ? page_block->page.page_next.mptr : dbclass->page_first.mptr;
+        d_release_memory_block (page_targ);
+	page_targ = d_pointer_as (imdb_block_page_t, d_read_memory_block (dbclass->imdb, page_targ->page.page_next.raw ? page_targ->page.page_next : dbclass->page_first));
+        if (!page_targ)
+            return NULL;
+
+        *page_block = page_targ;
 	bidx = 1;
-	block_targ = d_page_block_byidx (page_targ, bidx, bsize);
     }
+    else // try to recycle block in this page
+	bidx = block->block_index + 1;
+
+    d_release_memory_block (block);
+    block_ptr.raw = d_page_blockid_byidx (page_targ, bidx, bsize);
+    block_targ = d_read_memory_block (dbclass->imdb, block_ptr);
 
 #ifdef IMDB_BLOCK_CRC
     uint16          crc16 = crc8 (block_targ, bsize);
@@ -840,7 +847,7 @@ imdb_page_block_recycle (imdb_class_t * dbclass, imdb_block_page_t * page_block,
   - slot_bsize: search user data size in block units
   - extra_bsize: extra (header) size in block units need for split
 */
-LOCAL void      ICACHE_FLASH_ATTR
+LOCAL imdb_errcode_t ICACHE_FLASH_ATTR
 imdb_slot_free_extract (imdb_class_t * dbclass,
 			imdb_free_slot_find_ctx_t * find_ctx, obj_size_t slot_bsize, obj_size_t extra_bsize)
 {
@@ -892,40 +899,46 @@ imdb_slot_free_extract (imdb_class_t * dbclass,
     }
     else {
 	// delete block from Block Free List, try to allocate next block
-	imdb_block_page_t *page_block = find_ctx->page_block.mptr;
 	find_ctx->block->free_offset = 0;
 	if (!find_ctx->block_fl_prev.mptr) {
 	    if (!find_ctx->block->block_fl_next) {
-		page_block->page.block_fl_first = 0;
-		if (page_block->page.alloc_hwm < dbclass->cdef.page_blocks) {
+		find_ctx->page_block->page.block_fl_first = 0;
+		if (find_ctx->page_block->page.alloc_hwm < dbclass->cdef.page_blocks) {
 		    // allocate next block in this page
-		    imdb_page_block_alloc (dbclass, page_block);
+		    if (!imdb_page_block_alloc (dbclass, find_ctx->page_block))
+                        return IMDB_INTERNAL_ERROR;
 		}
 	    }
 	    else {
-		page_block->page.block_fl_first = find_ctx->block->block_fl_next;
+		find_ctx->page_block->page.block_fl_first = find_ctx->block->block_fl_next;
 	    }
 	}
 	else {
 	    find_ctx->block_fl_prev.mptr->block_fl_next = find_ctx->block->block_fl_next;
 	}
 
-	if (!page_block->page.block_fl_first) {
+	if (!find_ctx->page_block->page.block_fl_first) {
 	    // delete page from Page Free List
 	    if (find_ctx->page_block_fl_prev.raw) {
-		find_ctx->page_block_fl_prev.mptr->page.page_fl_next.raw = page_block->page.page_fl_next.raw;
+                imdb_block_page_t *page = d_pointer_as (imdb_block_page_t, d_read_memory_block (dbclass->imdb, find_ctx->page_block_fl_prev));
+                if (!page)
+                    return IMDB_INTERNAL_ERROR;
+
+		page->page.page_fl_next.raw = find_ctx->page_block->page.page_fl_next.raw;
 	    }
 	    else {
-		dbclass->page_fl_first.raw = page_block->page.page_fl_next.raw;
+		dbclass->page_fl_first.raw = find_ctx->page_block->page.page_fl_next.raw;
 		if (!dbclass->page_fl_first.raw && dbclass->cdef.opt_recycle) {
 		    // recycle next block
-		    imdb_page_block_recycle (dbclass, find_ctx->page_block.mptr, find_ctx->block);
+		    if (!imdb_page_block_recycle (dbclass, &find_ctx->page_block, find_ctx->block))
+                        return IMDB_INTERNAL_ERROR;
 		}
 	    }
 	}
     }
 
     slot_free->flags = SLOT_FLAG_DATA;
+    return IMDB_ERR_SUCCESS;
 }
 
 LOCAL imdb_block_page_t *imdb_page_alloc (imdb_class_t * dbclass);
@@ -943,18 +956,23 @@ imdb_slot_free_find (imdb_class_t * dbclass, obj_size_t slot_bsize, imdb_free_sl
     uint32          skipscan = 0;
     if (dbclass->page_fl_first.raw) {
 	block_size_t    bsize = dbclass->imdb->db_def.block_size;
-
-	find_ctx->page_block.raw = dbclass->page_fl_first.raw;
+        page_ptr_t      page_ptr;
+        page_ptr.raw = dbclass->page_fl_first.raw;
 	// find suitable page
-	while (find_ctx->page_block.raw) {
-            imdb_block_page_t * page = d_pointer_as (imdb_block_page_t, d_read_memory_block (dbclass->imdb, find_ctx->page_block));
-	    page_blocks_t   bidx = page->page.block_fl_first;
+	while (page_ptr.raw) {
+            find_ctx->page_block = d_pointer_as (imdb_block_page_t, d_read_memory_block (dbclass->imdb, page_ptr));
+            if (!find_ctx->page_block)
+                return IMDB_INTERNAL_ERROR;
+
+	    page_blocks_t   bidx = find_ctx->page_block->page.block_fl_first;
 	    find_ctx->block_fl_prev.raw = BLOCK_PTR_RAW_NONE;
 	    // find suitable block
 	    while (bidx) {
                 block_ptr_t        block_ptr;
-                block_ptr.raw = d_page_blockid_byidx (page, bidx, bsize);
+                block_ptr.raw = d_page_blockid_byidx (find_ctx->page_block, bidx, bsize);
                 find_ctx->block = d_read_memory_block (dbclass->imdb, block_ptr);
+                if (!find_ctx->block)
+                    return IMDB_INTERNAL_ERROR;
 
 		find_ctx->slot_free = d_block_slot_free (find_ctx->block);
 		find_ctx->slot_free_prev = NULL;
@@ -977,25 +995,29 @@ imdb_slot_free_find (imdb_class_t * dbclass, obj_size_t slot_bsize, imdb_free_sl
 		bidx = find_ctx->block->block_fl_next;
 
                 d_release_memory_block (find_ctx->block);
+                find_ctx->block = NULL;
 	    }
 	    find_ctx->slot_free_prev = NULL;
 
 	    // allocate new block in page
-	    if (page->page.alloc_hwm < dbclass->cdef.page_blocks) {
-		find_ctx->block = imdb_page_block_alloc (dbclass, page);
+	    if (find_ctx->page_block->page.alloc_hwm < dbclass->cdef.page_blocks) {
+		find_ctx->block = imdb_page_block_alloc (dbclass, find_ctx->page_block);
+                if (!find_ctx->block)
+                    return IMDB_INTERNAL_ERROR;
 		find_ctx->slot_free = d_block_slot_free (find_ctx->block);
 		goto slot_found;
 	    }
 
-	    find_ctx->page_block_fl_prev.raw = find_ctx->page_block.raw;
-	    find_ctx->page_block.raw = page->page.page_fl_next.raw;
+	    find_ctx->page_block_fl_prev.raw = page_ptr.raw;
+	    page_ptr.raw = find_ctx->page_block->page.page_fl_next.raw;
 
-            d_release_memory_block (page);
+            d_release_memory_block (find_ctx->page_block);
+            find_ctx->page_block = NULL;
 	}
 	find_ctx->page_block_fl_prev.raw = BLOCK_PTR_RAW_NONE;
     }
 
-    if (!find_ctx->page_block.raw) {
+    if (!find_ctx->page_block) {
 	if (dbclass->page_count < dbclass->cdef.pages_max) {
 	    // allocate new page
 	    imdb_block_page_t * new_page = imdb_page_alloc (dbclass);
@@ -1004,7 +1026,7 @@ imdb_slot_free_find (imdb_class_t * dbclass, obj_size_t slot_bsize, imdb_free_sl
                 return IMDB_NOMEM;
             }
 
-            find_ctx->page_block.raw = new_page->page.page_id.raw;
+            find_ctx->page_block = new_page;
 	    find_ctx->block = d_pointer_as (imdb_block_t, new_page);
 	    find_ctx->slot_free = d_block_slot_free (find_ctx->block);
 	}
@@ -1013,7 +1035,7 @@ imdb_slot_free_find (imdb_class_t * dbclass, obj_size_t slot_bsize, imdb_free_sl
 	}
     }
 
-  slot_found:
+slot_found:
     d_assert (slot_bsize <= find_ctx->slot_free->length, "size=%u, len=%u", slot_bsize, find_ctx->slot_free->length);
     d_stat_slot_data (dbclass->imdb, skipscan);
     return IMDB_ERR_SUCCESS;
@@ -1029,49 +1051,54 @@ LOCAL imdb_errcode_t ICACHE_FLASH_ATTR
 imdb_slot_free_get_or_recycle (imdb_class_t * dbclass, obj_size_t slot_bsize, imdb_free_slot_find_ctx_t * find_ctx)
 {
     d_assert (dbclass->page_fl_first.raw, "page_fl_first=%p", dbclass->page_fl_first.raw);
-    find_ctx->page_block = dbclass->page_fl_first;
+    find_ctx->page_block = d_pointer_as (imdb_block_page_t, d_read_memory_block (dbclass->imdb, dbclass->page_fl_first));
 
-    page_blocks_t   bidx = find_ctx->page_block.mptr->page.block_fl_first;
+    page_blocks_t   bidx = find_ctx->page_block->page.block_fl_first;
     d_assert (bidx > 0, "bidx=%u", bidx);
-    block_size_t    bsize = dbclass->imdb->db_def.block_size;
-    find_ctx->block.mptr = d_page_block_byidx (find_ctx->page_block.mptr, bidx, bsize);
 
-    find_ctx->slot_free = d_block_slot_free (find_ctx->block.mptr);
+    block_size_t    bsize = dbclass->imdb->db_def.block_size;
+    block_ptr_t     block_ptr;
+    block_ptr.raw = d_page_blockid_byidx (find_ctx->page_block, bidx, bsize);
+    find_ctx->block = d_read_memory_block (dbclass->imdb, block_ptr);
+
+    find_ctx->slot_free = d_block_slot_free (find_ctx->block);
     d_assert (find_ctx->slot_free, "slot=%p", find_ctx->slot_free);
     d_assert (find_ctx->slot_free->flags == SLOT_FLAG_FREE, "flags=%u", find_ctx->slot_free->flags);
     if (slot_bsize <= find_ctx->slot_free->length) {
 	return IMDB_ERR_SUCCESS;
     }
 
-    find_ctx->block.mptr->free_offset = 0;
-    find_ctx->page_block.mptr->page.block_fl_first = 0;
+    find_ctx->block->free_offset = 0;
+    find_ctx->page_block->page.block_fl_first = 0;
 
     if (dbclass->page_count < dbclass->cdef.pages_max) {
 	// allocate new page
-	dbclass->page_fl_first.mptr = imdb_page_alloc (dbclass);
-        if (!dbclass->page_fl_first.mptr) {
+	imdb_block_page_t *new_page = imdb_page_alloc (dbclass);
+        if (!new_page) {
             d_log_eprintf (IMDB_SERVICE_NAME, sz_imdb_error[IMDB_NOMEM]);
             return IMDB_NOMEM;
         }
 
-	find_ctx->page_block.mptr = dbclass->page_fl_first.mptr;
-	find_ctx->block.mptr = d_page_block_byidx (find_ctx->page_block.mptr, find_ctx->page_block.mptr->page.block_fl_first, bsize);
+        //dbclass->page_fl_first.raw = new_page->page.page_id.raw;
+        find_ctx->page_block = new_page;
+	find_ctx->block = d_pointer_as (imdb_block_t, new_page);
     }
     else {
-	if (find_ctx->page_block.mptr->page.alloc_hwm < dbclass->cdef.page_blocks) {
+	if (find_ctx->page_block->page.alloc_hwm < dbclass->cdef.page_blocks) {
 	    // allocate next block in this page
-	    d_assert (find_ctx->page_block.mptr->page.alloc_hwm == find_ctx->block.mptr->block_index, "hwm=%u, bidx=%u",
-		      find_ctx->page_block.mptr->page.alloc_hwm, find_ctx->block.mptr->block_index);
-	    find_ctx->block.mptr = imdb_page_block_alloc (dbclass, find_ctx->page_block.mptr);
+	    d_assert (find_ctx->page_block->page.alloc_hwm == find_ctx->block->block_index, "hwm=%u, bidx=%u",
+		      find_ctx->page_block->page.alloc_hwm, find_ctx->block->block_index);
+	    find_ctx->block = imdb_page_block_alloc (dbclass, find_ctx->page_block);
+            if (!find_ctx->block)
+                return IMDB_INTERNAL_ERROR;
 	}
 	else {
 	    // recycle next block;
 	    dbclass->page_fl_first.raw = BLOCK_PTR_RAW_NONE;
-	    find_ctx->block.mptr = imdb_page_block_recycle (dbclass, find_ctx->page_block.mptr, find_ctx->block.mptr);
+	    find_ctx->block = imdb_page_block_recycle (dbclass, &find_ctx->page_block, find_ctx->block);
 	}
-	find_ctx->page_block.mptr = dbclass->page_fl_first.mptr;
     }
-    find_ctx->slot_free = d_block_slot_free (find_ctx->block.mptr);
+    find_ctx->slot_free = d_block_slot_free (find_ctx->block);
 
     return IMDB_ERR_SUCCESS;
 }
@@ -1130,12 +1157,24 @@ imdb_page_block_alloc (imdb_class_t * dbclass, imdb_block_page_t * page_block)
 
     block_size_t    bsize = dbclass->imdb->db_def.block_size;
     page_blocks_t   bidx = ++page->alloc_hwm;
-    d_stat_block_init (dbclass->imdb);
     d_assert (bidx > 0, "bidx=%u", bidx);
-    imdb_block_t   *block = d_page_block_byidx (page_block, bidx, bsize);
-    d_log_dprintf (IMDB_SERVICE_NAME, "block_alloc: format page=%p block#%d=%p, size=%u", page_block, bidx, block,
-		   bsize);
 
+    imdb_block_t   *block;
+    if (dbclass->imdb->db_def.opt_media) {
+        size_t rawid = d_page_blockid_byidx(page_block, bidx, bsize);
+        block = fdb_cache_get((imdb_bc_t*)dbclass->imdb, rawid, true, DATA_LOCK_EXCLUSIVE);
+        d_log_dprintf (IMDB_SERVICE_NAME, "block_alloc: format page=%p block#%d id=%p, block=%p, size=%u", page_block, bidx, rawid, block,
+		   bsize);
+        if (!block)
+            return block;
+    }
+    else {
+        block = d_page_block_byidx (page_block, bidx, bsize);
+        d_log_dprintf (IMDB_SERVICE_NAME, "block_alloc: format page=%p block#%d block=%p, size=%u", page_block, bidx, block,
+		   bsize);
+    }
+
+    d_stat_block_init (dbclass->imdb);
 #ifdef IMDB_ZERO_MEM
     os_memset (block, 0, bsize);
 #else
@@ -1306,27 +1345,32 @@ imdb_class_instance_alloc (imdb_block_class_t * class_block, void **ptr, size_t 
     }
     else {
 	d_imdb_check_error (imdb_slot_free_find (dbclass, slot_bsize, &find_ctx));
-    }
+    }	
+
     d_log_dprintf (IMDB_SERVICE_NAME, "alloc: free slot found - page=%p, block=%p, slot=%p, len=%u",
-		   find_ctx.page_block.mptr, find_ctx.block.mptr, find_ctx.slot_free, find_ctx.slot_free->length);
+		   find_ctx.page_block, find_ctx.block, find_ctx.slot_free, find_ctx.slot_free->length);
 
     imdb_slot_free_extract (dbclass, &find_ctx, slot_bsize, extra_bsize);
-    d_log_dprintf (IMDB_SERVICE_NAME, "alloc: data slot=%p, rid=%p:%u:%u", find_ctx.slot_free, find_ctx.page_block.mptr->page.page_id.raw,
-		   find_ctx.block.mptr->block_index, d_pointer_diff (find_ctx.slot_free, find_ctx.block.mptr));
+    d_log_dprintf (IMDB_SERVICE_NAME, "alloc: data slot=%p, rid=%p:%u:%u", find_ctx.slot_free, find_ctx.page_block->page.page_id.raw,
+		   find_ctx.block->block_index, d_pointer_diff (find_ctx.slot_free, find_ctx.block));
+    d_release_memory_block (find_ctx.page_block);
+
     switch (dbclass->ds_type) {
     case DATA_SLOT_TYPE_1:
 	*ptr = find_ctx.slot_free;
 	break;
     case DATA_SLOT_TYPE_2:
-	*ptr = imdb_data2_slot_init (find_ctx.block.mptr, find_ctx.slot_free);
+	*ptr = imdb_data2_slot_init (find_ctx.block, find_ctx.slot_free);
 	break;
     case DATA_SLOT_TYPE_3:
     case DATA_SLOT_TYPE_4:
-	*ptr = imdb_data4_slot_init (find_ctx.block.mptr, find_ctx.slot_free, slot_bsize);
+	*ptr = imdb_data4_slot_init (find_ctx.block, find_ctx.slot_free, slot_bsize);
 	break;
     default:
 	d_assert (false, "ds_type=%u", dbclass->ds_type);
     }
+
+    d_release_memory_block (find_ctx.block);
 
     return IMDB_ERR_SUCCESS;
 }
