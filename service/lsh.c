@@ -223,7 +223,7 @@ sh_func_get (const char *func_name, sh_func_entry_t ** entry)
     os_memset (&find_ctx, 0, sizeof (sh_func_find_ctx_t));
     find_ctx.func_name = func_name;
 
-    d_sh_check_imdb_error (imdb_class_forall (sdata->hfunc, (void *) &find_ctx, sh_forall_func_find));
+    d_sh_check_imdb_error (imdb_class_forall (sdata->svcres->hmdb, sdata->hfunc, (void *) &find_ctx, sh_forall_func_find));
 
     *entry = find_ctx.entry;
     return (*entry) ? SH_ERR_SUCCESS : SH_FUNC_NOT_EXISTS;
@@ -250,7 +250,7 @@ sh_func_register (sh_func_entry_t * func_entry)
     else if (res != SH_FUNC_NOT_EXISTS)
         return SH_INTERNAL_ERROR;
 
-    d_sh_check_imdb_error (imdb_clsobj_insert (sdata->hfunc, (void **) &entry, 0)
+    d_sh_check_imdb_error (imdb_clsobj_insert (sdata->svcres->hmdb, sdata->hfunc, (void **) &entry, 0)
 	);
 
     //os_memset(entry, 0, sizeof(sh_func_entry_t));
@@ -1180,9 +1180,9 @@ stmt_parse (const char *szstr, const char * stmt_name, sh_hndlr_t * hstmt)
     ctx.errcode = SH_ERR_SUCCESS;
 
 #ifdef LSH_BUFFERS_IMDB
-    d_sh_check_imdb_error (imdb_clsobj_insert (sdata->svcres->hdata, (void **) &bc_ptr, LSH_STMT_BUFFER_SIZE));
-    d_sh_check_imdb_error (imdb_clsobj_insert (sdata->svcres->hdata, (void **) &pbuf_ptr, LSH_STMT_PARSE_BUFFER_SIZE));
-    d_sh_check_imdb_error (imdb_clsobj_insert (sdata->svcres->hdata, (void **) &varmap_ptr, LSH_STMT_VARIDX_BUFFER_SIZE));
+    d_sh_check_imdb_error (imdb_clsobj_insert (sdata->svcres->hmdb, sdata->svcres->hdata, (void **) &bc_ptr, LSH_STMT_BUFFER_SIZE));
+    d_sh_check_imdb_error (imdb_clsobj_insert (sdata->svcres->hmdb, sdata->svcres->hdata, (void **) &pbuf_ptr, LSH_STMT_PARSE_BUFFER_SIZE));
+    d_sh_check_imdb_error (imdb_clsobj_insert (sdata->svcres->hmdb, sdata->svcres->hdata, (void **) &varmap_ptr, LSH_STMT_VARIDX_BUFFER_SIZE));
 #else
     sh_parse_buffers_t *buffers = os_malloc (sizeof (sh_parse_buffers_t));
     if (!buffers) {
@@ -1208,7 +1208,7 @@ stmt_parse (const char *szstr, const char * stmt_name, sh_hndlr_t * hstmt)
     imdb_errcode_t  imdb_res = IMDB_ERR_SUCCESS;
     if (res == SH_ERR_SUCCESS) {
 	bytecode_size_t len = bc_ptr - ctx.bc_buf;
-	imdb_res = imdb_clsobj_insert (sdata->hstmt, (void **) &stmt, sizeof (sh_stmt_t) + len);
+	imdb_res = imdb_clsobj_insert (sdata->svcres->hmdb, sdata->hstmt, (void **) &stmt, sizeof (sh_stmt_t) + len);
 	if (imdb_res == IMDB_ERR_SUCCESS) {
 	    os_memset (&stmt->info, 0, sizeof (sh_stmt_info_t));
 
@@ -1225,9 +1225,9 @@ stmt_parse (const char *szstr, const char * stmt_name, sh_hndlr_t * hstmt)
     }
 
 #ifdef LSH_BUFFERS_IMDB
-    d_sh_check_imdb_error (imdb_clsobj_delete (sdata->hdata, varmap_ptr));
-    d_sh_check_imdb_error (imdb_clsobj_delete (sdata->hdata, ctx.bc_buf));
-    d_sh_check_imdb_error (imdb_clsobj_delete (sdata->hdata, ctx.parse_buf));
+    d_sh_check_imdb_error (imdb_clsobj_delete (sdata->svcres->hmdb, sdata->hdata, varmap_ptr));
+    d_sh_check_imdb_error (imdb_clsobj_delete (sdata->svcres->hmdb, sdata->hdata, ctx.bc_buf));
+    d_sh_check_imdb_error (imdb_clsobj_delete (sdata->svcres->hmdb, sdata->hdata, ctx.parse_buf));
 #else
     os_free (buffers);
 #endif
@@ -1245,7 +1245,7 @@ stmt_free (const sh_hndlr_t hstmt)
 
     d_sh_check_hndlr (hstmt);
     sh_stmt_t      *stmt = d_hndlr2obj (sh_stmt_t, hstmt);
-    d_sh_check_imdb_error (imdb_clsobj_delete (sdata->hstmt, (void *) stmt));
+    d_sh_check_imdb_error (imdb_clsobj_delete (sdata->svcres->hmdb, sdata->hstmt, (void *) stmt));
     return SH_ERR_SUCCESS;
 }
 
@@ -1754,7 +1754,7 @@ stmt_get (char * stmt_name, sh_hndlr_t * hstmt)
     os_memset (&find_ctx, 0, sizeof (sh_find_ctx_t));
     find_ctx.stmt_name = stmt_name;
 
-    d_sh_check_imdb_error (imdb_class_forall (sdata->hstmt, (void *) &find_ctx, sh_forall_find));
+    d_sh_check_imdb_error (imdb_class_forall (sdata->svcres->hmdb, sdata->hstmt, (void *) &find_ctx, sh_forall_find));
 
     *hstmt = d_obj2hndlr (find_ctx.stmt);
     return (*hstmt) ? SH_ERR_SUCCESS : SH_STMT_NOT_EXISTS;
@@ -1913,7 +1913,7 @@ sh_on_msg_info (dtlv_ctx_t * msg_out)
 
     d_svcs_check_dtlv_error ( dtlv_avp_encode_list (msg_out, 0, SH_AVP_STATEMENT, DTLV_TYPE_OBJECT, &gavp));
     imdb_hndlr_t    hcur;
-    d_svcs_check_imdb_error (imdb_class_query (sdata->hstmt, PATH_NONE, &hcur));
+    d_svcs_check_imdb_error (imdb_class_query (sdata->svcres->hmdb, sdata->hstmt, PATH_NONE, &hcur));
 
     void           *entries[10];
     uint16          rowcount;
@@ -1939,7 +1939,7 @@ sh_on_msg_info (dtlv_ctx_t * msg_out)
 
 
     d_svcs_check_dtlv_error (dtlv_avp_encode_list (msg_out, 0, SH_AVP_FUNCTION_NAME, DTLV_TYPE_CHAR, &gavp));
-    d_svcs_check_imdb_error (imdb_class_query (sdata->hfunc, PATH_NONE, &hcur));
+    d_svcs_check_imdb_error (imdb_class_query (sdata->svcres->hmdb, sdata->hfunc, PATH_NONE, &hcur));
 
     d_svcs_check_imdb_error (imdb_class_fetch (hcur, 10, &rowcount, entries));
     fcont = true;
@@ -2013,7 +2013,7 @@ lsh_on_start (const svcs_resource_t * svcres, dtlv_ctx_t * conf)
     }
 
     lsh_data_t     *tmp_sdata;
-    d_svcs_check_imdb_error (imdb_clsobj_insert (svcres->hdata, (void **) &tmp_sdata, sizeof (lsh_data_t))
+    d_svcs_check_imdb_error (imdb_clsobj_insert (sdata->svcres->hmdb, svcres->hdata, (void **) &tmp_sdata, sizeof (lsh_data_t))
 	);
     os_memset (tmp_sdata, 0, sizeof (lsh_data_t));
 
@@ -2066,13 +2066,13 @@ lsh_on_stop (void)
 
     lsh_data_t     *tmp_sdata = sdata;
     sdata = NULL;
-    d_svcs_check_imdb_error (imdb_class_destroy (tmp_sdata->hfunc)
+    d_svcs_check_imdb_error (imdb_class_destroy (tmp_sdata->svcres->hmdb, tmp_sdata->hfunc)
 	);
 
-    d_svcs_check_imdb_error (imdb_class_destroy (tmp_sdata->hstmt)
+    d_svcs_check_imdb_error (imdb_class_destroy (tmp_sdata->svcres->hmdb, tmp_sdata->hstmt)
 	);
 
-    d_svcs_check_imdb_error (imdb_clsobj_delete (tmp_sdata->svcres->hdata, tmp_sdata)
+    d_svcs_check_imdb_error (imdb_clsobj_delete (tmp_sdata->svcres->hmdb, tmp_sdata->svcres->hdata, tmp_sdata)
 	);
 
     return SVCS_ERR_SUCCESS;

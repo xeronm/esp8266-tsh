@@ -118,7 +118,7 @@ svcctl_find_conf (service_ident_t service_id, svcs_service_conf_t ** conf)
     find_conf_ctx.service_id = service_id;
     find_conf_ctx.conf = NULL;
 
-    d_svcs_check_imdb_error (imdb_class_forall (sdata->hconf, &find_conf_ctx, svcctl_forall_find_conf)
+    d_svcs_check_imdb_error (imdb_class_forall (sdata->svcres.hfdb, sdata->hconf, &find_conf_ctx, svcctl_forall_find_conf)
 	);
 
     *conf = find_conf_ctx.conf;
@@ -133,7 +133,7 @@ svcctl_svc_conf_get (svcs_service_t * svc, dtlv_ctx_t * conf)
 	);
 
     size_t          length;
-    d_svcs_check_imdb_error (imdb_clsobj_length (sdata->hconf, conf_data, &length)
+    d_svcs_check_imdb_error (imdb_clsobj_length (sdata->svcres.hfdb, sdata->hconf, conf_data, &length)
 	);
 
     length -= sizeof (svcs_service_conf_t);
@@ -150,7 +150,7 @@ svcctl_svc_conf_set (svcs_service_t * svc, dtlv_ctx_t * conf)
     d_svcs_check_imdb_error (svcctl_find_conf (svc->info.service_id, &conf_data)
 	);
     // TODO: Not Finished
-    //imdb_errcode_t res = imdb_clsobj_length(sdata->hconf, conf_data, &length);
+    //imdb_errcode_t res = imdb_clsobj_length(sdata->svcres.hfdb, sdata->hconf, conf_data, &length);
     return SVCS_ERR_SUCCESS;
 }
 
@@ -261,7 +261,7 @@ svcctl_find (service_ident_t service_id, const char *name, svcs_service_t ** svc
     find_ctx.name = name;
     find_ctx.svc = NULL;
 
-    d_svcs_check_imdb_error (imdb_class_forall (sdata->hsvcs, &find_ctx, svcctl_forall_find)
+    d_svcs_check_imdb_error (imdb_class_forall (sdata->svcres.hmdb, sdata->hsvcs, &find_ctx, svcctl_forall_find)
 	);
 
     *svc = find_ctx.svc;
@@ -434,7 +434,7 @@ svcctl_start (imdb_hndlr_t hmdb, imdb_hndlr_t hfdb)
     d_svcs_check_svcs_error (imdb_class_create (hmdb, &cdef, &hdata)
 	);
 
-    d_svcs_check_svcs_error (imdb_clsobj_insert (hdata, (void **) &sdata, sizeof (services_data_t))
+    d_svcs_check_svcs_error (imdb_clsobj_insert (sdata->svcres.hmdb, hdata, (void **) &sdata, sizeof (services_data_t))
 	);
     os_memset (sdata, 0, sizeof (services_data_t));
 
@@ -450,7 +450,7 @@ svcctl_start (imdb_hndlr_t hmdb, imdb_hndlr_t hfdb)
 //    imdb_class_def_t cdef3 =
 //	{ SERVICES_IMDB_CLS_CONFIG, false, true, false, 0, SERVICES_CONFIG_STORAGE_PAGES,
 //SERVICES_CONFIG_STORAGE_PAGE_BLOCKS, SERVICES_CONFIG_STORAGE_PAGE_BLOCKS, sizeof (svcs_service_conf_t) };
-//    d_svcs_check_svcs_error (imdb_class_create (hmdb, &cdef3, &sdata->hconf)
+//    d_svcs_check_svcs_error (imdb_class_create (hfdb, &cdef3, &sdata->hconf)
 //	);
 
     d_log_wprintf (SERVICES_SERVICE_NAME, "started");
@@ -471,12 +471,12 @@ svcctl_stop ()
     }
 
     // stop all services in dependency order
-    d_svcs_check_imdb_error (imdb_class_forall (sdata->hsvcs, NULL, svcctl_forall_stop)
+    d_svcs_check_imdb_error (imdb_class_forall (sdata->svcres.hmdb, sdata->hsvcs, NULL, svcctl_forall_stop)
 	);
 
-    d_svcs_check_svcs_error (imdb_class_destroy (sdata->hsvcs)
+    d_svcs_check_svcs_error (imdb_class_destroy (sdata->svcres.hmdb, sdata->hsvcs)
 	);
-    d_svcs_check_svcs_error (imdb_class_destroy (sdata->svcres.hdata)
+    d_svcs_check_svcs_error (imdb_class_destroy (sdata->svcres.hmdb, sdata->svcres.hdata)
 	);
     sdata = NULL;
 
@@ -515,7 +515,7 @@ svcctl_info (uint8 * count, svcs_service_info_t * info_array, uint8 array_len)
     info_ctx.info_array = info_array;
     info_ctx.count = 0;
 
-    d_svcs_check_imdb_error (imdb_class_forall (sdata->hsvcs, (void *) &info_ctx, svcctl_forall_get_info)
+    d_svcs_check_imdb_error (imdb_class_forall (sdata->svcres.hmdb, sdata->hsvcs, (void *) &info_ctx, svcctl_forall_get_info)
 	);
     *(count) = info_ctx.count;
 
@@ -554,7 +554,7 @@ svcctl_service_install (service_ident_t service_id, const char *name, svcs_servi
 	return SVCS_ALREADY_EXISTS;
     }
 
-    d_svcs_check_imdb_error (imdb_clsobj_insert (sdata->hsvcs, (void **) &svc, sizeof (svcs_service_t) + sdef->varsize)
+    d_svcs_check_imdb_error (imdb_clsobj_insert (sdata->svcres.hmdb, sdata->hsvcs, (void **) &svc, sizeof (svcs_service_t) + sdef->varsize)
 	);
 
     os_memset (svc, 0, sizeof (svcs_service_t) + sdef->varsize);
@@ -599,7 +599,7 @@ svcctl_service_uninstall (const char *name)
 	d_svcs_check_svcs_error (ret);
     }
 
-    d_svcs_check_imdb_error (imdb_clsobj_delete (sdata->hsvcs, svc)
+    d_svcs_check_imdb_error (imdb_clsobj_delete (sdata->svcres.hmdb, sdata->hsvcs, svc)
 	);
 
     d_log_iprintf (SERVICES_SERVICE_NAME, "\"%s\" has been uninstalled", name);
@@ -679,7 +679,7 @@ svcctl_service_message (service_ident_t orig_id,
 	ctx.msg_in = msg_in;
 	ctx.msg_out = msg_out;
 
-	return imdb_class_forall (sdata->hsvcs, &ctx, svcctl_forall_message);
+	return imdb_class_forall (sdata->svcres.hmdb, sdata->hsvcs, &ctx, svcctl_forall_message);
     }
 
     svcs_service_t *svc = NULL;

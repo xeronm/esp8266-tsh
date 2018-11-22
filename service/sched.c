@@ -384,7 +384,7 @@ sched_setall_next_time (bool frenew)
     ctx.entry = NULL;
     ctx.curr_ctime = lt_ctime ();
 
-    d_sched_check_imdb_error (imdb_class_forall (sdata->hentry, (void *) &ctx, sched_forall_next_time));
+    d_sched_check_imdb_error (imdb_class_forall (sdata->svcres->hmdb, sdata->hentry, (void *) &ctx, sched_forall_next_time));
 
     next_timer_set(ctx.entry);
 
@@ -438,7 +438,7 @@ sched_entry_get (const char * entry_name, const sched_entry_t ** entry)
     os_memset (&find_ctx, 0, sizeof (sched_find_ctx_t));
     find_ctx.entry_name = entry_name;
 
-    d_sched_check_imdb_error (imdb_class_forall (sdata->hentry, (void *) &find_ctx, sched_forall_find));
+    d_sched_check_imdb_error (imdb_class_forall (sdata->svcres->hmdb, sdata->hentry, (void *) &find_ctx, sched_forall_find));
 
     *entry = find_ctx.entry;
     return (*entry) ? SCHED_ERR_SUCCESS : SCHED_ENTRY_NOTEXISTS;
@@ -471,7 +471,7 @@ sched_entry_add (const entry_name_t * entry_name, const char * sztsentry, const 
 
     length += vd_len;
 
-    d_sched_check_imdb_error (imdb_clsobj_insert (sdata->hentry, (void **) &entry, length));
+    d_sched_check_imdb_error (imdb_clsobj_insert (sdata->svcres->hmdb, sdata->hentry, (void **) &entry, length));
     os_memset (entry, 0, length);
 
     os_memcpy (&entry->ts, &ts_entry, sizeof (tsentry_t));
@@ -516,7 +516,7 @@ sched_entry_remove (const entry_name_t * entry_name)
     }
 
     d_log_iprintf (SCHED_SERVICE_NAME, "remove \"%s\"", entry_name);
-    d_sched_check_imdb_error (imdb_clsobj_delete (sdata->hentry, entry)
+    d_sched_check_imdb_error (imdb_clsobj_delete (sdata->svcres->hmdb, sdata->hentry, entry)
 	);
 
     sched_setall_next_time (false);
@@ -552,7 +552,7 @@ sched_on_msg_info (dtlv_ctx_t * msg_out)
 
     imdb_hndlr_t    hcur;
 
-    d_svcs_check_imdb_error (imdb_class_query (sdata->hentry, PATH_NONE, &hcur));
+    d_svcs_check_imdb_error (imdb_class_query (sdata->svcres->hmdb, sdata->hentry, PATH_NONE, &hcur));
 
     sched_entry_t  *entries[10];
     uint16          rowcount;
@@ -705,7 +705,7 @@ sched_on_start (const svcs_resource_t * svcres, dtlv_ctx_t * conf)
 	return SVCS_SERVICE_ERROR;
 
     sched_data_t    *tmp_sdata;
-    d_svcs_check_imdb_error (imdb_clsobj_insert (svcres->hdata, (void **) &tmp_sdata, sizeof (sched_data_t))
+    d_svcs_check_imdb_error (imdb_clsobj_insert (svcres->hmdb, svcres->hdata, (void **) &tmp_sdata, sizeof (sched_data_t))
 	);
     os_memset (tmp_sdata, 0, sizeof (sched_data_t));
 
@@ -733,10 +733,10 @@ sched_on_stop (void)
 
     sched_data_t     *tmp_sdata = sdata;
     sdata = NULL;
-    d_svcs_check_imdb_error (imdb_class_destroy (tmp_sdata->hentry)
+    d_svcs_check_imdb_error (imdb_class_destroy (tmp_sdata->svcres->hmdb, tmp_sdata->hentry)
 	);
 
-    d_svcs_check_imdb_error (imdb_clsobj_delete (tmp_sdata->svcres->hdata, tmp_sdata)
+    d_svcs_check_imdb_error (imdb_clsobj_delete (tmp_sdata->svcres->hmdb, tmp_sdata->svcres->hdata, tmp_sdata)
 	);
 
     return SVCS_ERR_SUCCESS;

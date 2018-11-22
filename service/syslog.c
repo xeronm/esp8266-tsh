@@ -70,7 +70,7 @@ syslog_on_start (const svcs_resource_t * svcres, dtlv_ctx_t * conf)
     }
 
     syslog_data_t  *tmp_sdata;
-    d_svcs_check_imdb_error (imdb_clsobj_insert (svcres->hdata, (void **) &tmp_sdata, sizeof (syslog_data_t))
+    d_svcs_check_imdb_error (imdb_clsobj_insert (svcres->hmdb, svcres->hdata, (void **) &tmp_sdata, sizeof (syslog_data_t))
 	);
     os_memset (tmp_sdata, 0, sizeof (syslog_data_t));
 
@@ -96,10 +96,10 @@ syslog_on_stop ()
 
     syslog_data_t  *tmp_sdata = sdata;
     sdata = NULL;
-    d_svcs_check_imdb_error (imdb_class_destroy (tmp_sdata->hlogs)
+    d_svcs_check_imdb_error (imdb_class_destroy (tmp_sdata->svcres->hmdb, tmp_sdata->hlogs)
 	);
 
-    d_svcs_check_imdb_error (imdb_clsobj_delete (tmp_sdata->svcres->hdata, tmp_sdata)
+    d_svcs_check_imdb_error (imdb_clsobj_delete (tmp_sdata->svcres->hmdb, tmp_sdata->svcres->hdata, tmp_sdata)
 	);
 
     return SVCS_ERR_SUCCESS;
@@ -134,7 +134,7 @@ syslog_on_msg_query (dtlv_ctx_t * msg_in, dtlv_ctx_t * msg_out)
 
     imdb_hndlr_t    hcur;
 
-    d_svcs_check_imdb_error (imdb_class_query (sdata->hlogs, PATH_RECYCLE_SCAN_REW, &hcur));
+    d_svcs_check_imdb_error (imdb_class_query (sdata->svcres->hmdb, sdata->hlogs, PATH_RECYCLE_SCAN_REW, &hcur));
 
     void           *recs[LOG_FETCH_SIZE];
     uint16          rowcount;
@@ -200,7 +200,7 @@ syslog_query(imdb_hndlr_t* hcur) {
 	return SVCS_NOT_RUN;
     }
  
-    imdb_errcode_t ret = imdb_class_query(sdata->hlogs, true, hcur);
+    imdb_errcode_t ret = imdb_class_query(sdata->svcres->hmdb, sdata->hlogs, true, hcur);
     d_svcs_check_imdb_error(ret);
 
     return SVCS_ERR_SUCCESS;
@@ -222,7 +222,7 @@ syslog_write (const log_severity_t severity, const char *svc, size_t * length, c
 
     sdata->seq_no++;
     syslog_logrec_t *rec;
-    d_svcs_check_imdb_error (imdb_clsobj_insert (sdata->hlogs, (void **) &rec, *length + sizeof (syslog_logrec_t))
+    d_svcs_check_imdb_error (imdb_clsobj_insert (sdata->svcres->hmdb, sdata->hlogs, (void **) &rec, *length + sizeof (syslog_logrec_t))
 	);
 
     rec->rec_ctime = lt_ctime ();

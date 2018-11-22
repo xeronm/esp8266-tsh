@@ -21,6 +21,7 @@
  */
 
 #include <stdio.h>
+#include <errno.h>
 #include "sysinit.h"
 
 //static time_t _start_time = 0;
@@ -55,7 +56,7 @@ system_rtc_clock_cali_proc(void)
 size_t          ICACHE_FLASH_ATTR
 fio_user_read(uint32 addr, uint32 *buffer, uint32 size) 
 {
-    FILE * fp = fopen ("./flash_userdata.bin", "r");
+    FILE * fp = fopen ("./flash_userdata.bin", "rb");
     if (!fp || fseek (fp, addr, SEEK_SET))
         return 0;
     size_t res = fread (buffer, 1, size, fp);
@@ -67,7 +68,10 @@ fio_user_read(uint32 addr, uint32 *buffer, uint32 size)
 size_t          ICACHE_FLASH_ATTR 
 fio_user_write(uint32 addr, uint32 *buffer, uint32 size)
 {
-    FILE * fp = fopen ("./flash_userdata.bin", "w+");
+    FILE * fp = fopen ("./flash_userdata.bin", "rb+");
+    if ((!fp) && (errno == ENOENT))
+        fp = fopen ("./flash_userdata.bin", "wb+");
+
     if (!fp || fseek (fp, addr, SEEK_SET))
         return 0;
     size_t res = fwrite (buffer, 1, size, fp);

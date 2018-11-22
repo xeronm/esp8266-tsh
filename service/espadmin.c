@@ -244,7 +244,7 @@ espadmin_on_msg_imdb (dtlv_ctx_t * msg_out)
 	    d_svcs_check_dtlv_error (dtlv_avp_encode_grouping (msg_out, 0, ESPADMIN_AVP_IMDB_CLASS, &gavp_in2));
 
 	    uint32          objcount = 0;
-	    imdb_class_forall (info_array[i].hclass, (void *) &objcount, forall_count);
+	    imdb_class_forall (get_hmdb (), info_array[i].hclass, (void *) &objcount, forall_count);
 
             total_blocks += info_array[i].blocks;
             total_free += info_array[i].slots_free_size + info_array[i].blocks_free * _imdb_info.db_def.block_size;

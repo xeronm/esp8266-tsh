@@ -602,7 +602,7 @@ udpctl_on_start (const svcs_resource_t * svcres, dtlv_ctx_t * conf)
     if (sdata)
 	return SVCS_SERVICE_ERROR;
 
-    d_svcs_check_imdb_error (imdb_clsobj_insert (svcres->hdata, d_pointer_as (void *, &sdata), sizeof (udpctl_data_t))
+    d_svcs_check_imdb_error (imdb_clsobj_insert (svcres->hmdb, svcres->hdata, d_pointer_as (void *, &sdata), sizeof (udpctl_data_t))
 	);
     os_memset (sdata, 0, sizeof (udpctl_data_t));
     sdata->svcres = svcres;
@@ -622,7 +622,7 @@ udpctl_on_stop ()
     if (os_conn_free (&sdata->conn))
 	d_log_eprintf (UDPCTL_SERVICE_NAME, "conn free error");
 #endif
-    d_svcs_check_imdb_error (imdb_clsobj_delete (sdata->svcres->hdata, sdata));
+    d_svcs_check_imdb_error (imdb_clsobj_delete (sdata->svcres->hmdb, sdata->svcres->hdata, sdata));
 
     sdata = NULL;
 

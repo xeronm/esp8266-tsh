@@ -44,14 +44,6 @@ Inline key and value Entry format:
 
 #define d_fixed_bucket_size(buckets)		(sizeof (ih_header8_t) + (buckets) * sizeof (ih_entry_ptr_t))
 
-#define d_overflow_entry_len(hdr, entry, len) \
-	(len) = sizeof (ih_entry_header_t); \
-	(len) += ((hdr)->value_length > 1) ? (hdr)->value_length : \
-		     (((hdr)->value_length) ? sizeof (size_t) + *d_pointer_add (size_t, (entry), (len)): 1 + os_strlen(d_pointer_add (char, (entry), (len)))); \
-	(len) += ((hdr)->key_length > 1) ? (hdr)->key_length : \
-		     (((hdr)->key_length) ? sizeof (size_t) + *d_pointer_add (size_t, (entry), (len)): 1 + os_strlen(d_pointer_add (char, (entry), (len)))); \
-	(len) = d_align ((len));
-
 typedef struct ih_entry_header_s {
     ih_entry_ptr_t  next_entry;
 } ih_entry_header_t;
@@ -60,6 +52,59 @@ typedef struct ih_free_slot_s {
     ih_entry_ptr_t  next_slot;
     ih_entry_ptr_t  length;
 } ih_free_slot_t;
+
+
+INLINED ih_size_t ICACHE_FLASH_ATTR
+internal_skip_value2(ih_size_t vlen, const char **ptr) {
+    if (vlen > 1)
+        *ptr += vlen;
+    else {
+        ih_size_t len;
+        if (vlen)
+            len = (ih_size_t) **ptr;
+        else
+            len = (ih_size_t) os_strlen (*ptr);
+        *ptr += len + 1;
+    }
+}
+
+INLINED ih_size_t ICACHE_FLASH_ATTR
+internal_skip_value(ih_size_t vlen, const char **ptr, const char **valptr) {
+    ih_size_t len;
+
+    if (vlen > 1) {
+        len = vlen;
+        *valptr = *ptr;
+        *ptr += vlen;
+    }
+    else {
+        if (vlen) {
+            len = (ih_size_t) **ptr;
+            (*ptr)++;
+            *valptr = *ptr;
+            *ptr += len;
+        }
+        else {
+            len = (ih_size_t) os_strlen (*ptr);
+            *valptr = *ptr;
+            *ptr += len + 1;
+        }
+    }
+
+    return len;
+}
+
+INLINED size_t ICACHE_FLASH_ATTR
+internal_skip_entry(ih_header8_t *hdr, ih_entry_header_t **entry) {
+    const char *ptr = d_pointer_add (char, *entry, sizeof (ih_entry_header_t));
+    internal_skip_value2(hdr->value_length, &ptr); // value
+    internal_skip_value2(hdr->key_length, &ptr); // key
+
+    size_t len = d_align (d_pointer_diff (ptr, *entry));
+    *entry = d_pointer_add (ih_entry_header_t, *entry, len );
+
+    return len;
+}
 
 #define IH_FREE_SLOT	((ih_entry_ptr_t) ~0)
 
@@ -106,6 +151,35 @@ ih_hash16 (const char *buf, size_t len, uint8 init)
 }
 
 ih_errcode_t    ICACHE_FLASH_ATTR
+ih_hash8_forall (const ih_hndlr_t hndlr, const ih_forall_func cb_func, void * data)
+{
+    ih_header8_t   *hdr = d_hndlr2obj (ih_header8_t, hndlr);
+
+    ih_entry_ptr_t entry_ptr = d_fixed_bucket_size (hdr->bucket_size);
+    while (entry_ptr < hdr->overflow_pos) {
+        ih_entry_header_t *entry = d_pointer_add (ih_entry_header_t, hdr, entry_ptr);
+	if (entry->next_entry == IH_FREE_SLOT) {
+            ih_free_slot_t * free_slot = d_pointer_as (ih_free_slot_t, entry);
+            entry_ptr += free_slot->length;
+	}
+        else {
+            const char *ptr = d_pointer_add (char, entry, sizeof (ih_entry_header_t));
+
+            const char *valptr;
+            size_t vallen = internal_skip_value(hdr->value_length, &ptr, &valptr);
+
+            const char *keyptr;
+            size_t keylen = internal_skip_value(hdr->key_length, &ptr, &keyptr);
+
+            cb_func (keyptr, keylen, valptr, vallen, data);
+
+            size_t len = d_align (d_pointer_diff (ptr, entry));
+            entry_ptr += len;
+	}
+    }
+}
+
+ih_errcode_t    ICACHE_FLASH_ATTR
 ih_compact8 (ih_hndlr_t hndlr, size_t * size_free)
 {
     *size_free = 0;
@@ -134,11 +208,12 @@ ih_compact8 (ih_hndlr_t hndlr, size_t * size_free)
 
     ih_entry_ptr_t offset = 0;
     // 2st pass - restore chains and compact
-    ih_entry_ptr_t entry_ptr = d_fixed_bucket_size (hdr->bucket_size);
-    while (entry_ptr < hdr->overflow_pos) {
-        ih_entry_header_t *entry = d_pointer_add (ih_entry_header_t, hdr, entry_ptr);
+    char *entry_ptr = d_pointer_add (char, hdr, d_fixed_bucket_size (hdr->bucket_size));
+    char * max_ptr = d_pointer_add (char, hdr, hdr->overflow_hwm);
+    while (entry_ptr < max_ptr) {
+        ih_entry_header_t * entry = d_pointer_as (ih_entry_header_t, entry_ptr);
 	if (entry->next_entry == IH_FREE_SLOT) {
-            ih_free_slot_t * free_slot = d_pointer_as (ih_free_slot_t, entry);
+            ih_free_slot_t * free_slot = d_pointer_as (ih_free_slot_t, entry_ptr);
             offset += free_slot->length;
             entry_ptr += free_slot->length;
 	}
@@ -146,18 +221,17 @@ ih_compact8 (ih_hndlr_t hndlr, size_t * size_free)
             ih_entry_ptr_t *entry_ptr2 =
 	        d_pointer_add (ih_entry_ptr_t, hdr, sizeof (ih_header8_t) + entry->next_entry * sizeof (ih_entry_ptr_t));
 
-            size_t len;
-            d_overflow_entry_len(hdr, entry, len);
-
             entry->next_entry = *entry_ptr2;
-            *entry_ptr2 = entry_ptr - offset;
-            if (offset)
-                os_memcpy((char *)entry - offset, entry, len);
+            *entry_ptr2 = d_pointer_diff(entry_ptr, hdr) - offset;
 
+            size_t len = internal_skip_entry(hdr, &entry);
+            if (offset)
+                os_memcpy(entry_ptr - offset, entry_ptr, len);
             entry_ptr += len;
 	}
     }
 
+    hdr->free_slot = 0;
     hdr->overflow_pos -= offset;
     *size_free = offset;
 
@@ -195,31 +269,23 @@ ih_init8 (char *buf, size_t length, uint8 bucket_size, uint8 key_length, uint8 v
 }
 
 LOCAL bool      ICACHE_FLASH_ATTR
-ih_entry_cmp (ih_header8_t * hdr, const char *entrykey, size_t len, ih_entry_header_t * entry)
+ih_entry_cmp (ih_header8_t * hdr, const char *entrykey, ih_size_t keylen, ih_entry_header_t * entry)
 {
-    char           *ptr = d_pointer_add (char, entry, sizeof (ih_entry_header_t));
+    const char     *ptr = d_pointer_add (char, entry, sizeof (ih_entry_header_t));
 
-    if (!hdr->value_length) {
-        ptr += os_strlen(ptr) + 1;
-    } else if (hdr->value_length == 1) {
-        ptr += sizeof (size_t) + *((size_t *) ptr);
-    }
-    else {
-        ptr += hdr->value_length;
-    }
+    internal_skip_value2 (hdr->value_length, &ptr); // value
 
     if (! hdr->key_length) {
-	return ((len == 0) ? os_strcmp (entrykey, ptr) : os_strncmp (entrykey, ptr, len)) == 0;
+	return os_strcmp (entrykey, ptr) == 0;
     }
     else if (hdr->key_length == 1) {
-	size_t          len2;
-	os_memcpy (&len2, ptr, sizeof (size_t));
-	if (len == len2) {
-	    return (os_memcmp (entrykey, ptr + sizeof (size_t), len) == 0);
+	ih_size_t len2 = (ih_size_t) *ptr;
+	if (keylen == len2) {
+	    return (os_memcmp (entrykey, ptr + sizeof (size_t), keylen) == 0);
 	}
     }
     else {
-	return (os_memcmp (entrykey, ptr, MIN(len, hdr->key_length)) == 0);
+	return (os_memcmp (entrykey, ptr, hdr->key_length) == 0);
     }
 
     return false;
@@ -234,7 +300,7 @@ ih_entry_cmp (ih_header8_t * hdr, const char *entrykey, size_t len, ih_entry_hea
  * - valuelen: entry value length
  */
 ih_errcode_t    ICACHE_FLASH_ATTR
-ih_hash8_add (ih_hndlr_t hndlr, const char *entrykey, size_t len, char **value, size_t valuelen)
+ih_hash8_add (ih_hndlr_t hndlr, const char *entrykey, ih_size_t len, char **value, ih_size_t valuelen)
 {
     ih_header8_t   *hdr = d_hndlr2obj (ih_header8_t, hndlr);
     if (hdr->key_length == 0) {
@@ -315,7 +381,7 @@ ih_hash8_add (ih_hndlr_t hndlr, const char *entrykey, size_t len, char **value, 
 }
 
 ih_errcode_t    ICACHE_FLASH_ATTR
-ih_hash8_search (ih_hndlr_t hndlr, const char *entrykey, size_t len, char **value)
+ih_hash8_search (ih_hndlr_t hndlr, const char *entrykey, ih_size_t len, char **value)
 {
     ih_header8_t   *hdr = d_hndlr2obj (ih_header8_t, hndlr);
 
@@ -351,7 +417,7 @@ ih_hash8_search (ih_hndlr_t hndlr, const char *entrykey, size_t len, char **valu
 }
 
 ih_errcode_t    ICACHE_FLASH_ATTR
-ih_hash8_remove (ih_hndlr_t hndlr, const char *entrykey, size_t len) 
+ih_hash8_remove (ih_hndlr_t hndlr, const char *entrykey, ih_size_t len) 
 {
     ih_header8_t   *hdr = d_hndlr2obj (ih_header8_t, hndlr);
 
@@ -379,11 +445,8 @@ ih_hash8_remove (ih_hndlr_t hndlr, const char *entrykey, size_t len)
                 else
                     *entry_ptr = entry->next_entry;
 
-                size_t len;
-                d_overflow_entry_len(hdr, entry, len);
-
 		ih_free_slot_t * free_slot = d_pointer_as (ih_free_slot_t, entry);
-		free_slot->length = len;
+		free_slot->length = internal_skip_entry(hdr, &entry);
                 free_slot->next_slot = IH_FREE_SLOT;
                 hdr->free_slot = 1;
 
