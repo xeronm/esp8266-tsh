@@ -52,6 +52,16 @@ system_rtc_clock_cali_proc(void)
     return 0;
 }
 
+size_t          ICACHE_FLASH_ATTR 
+fio_user_format(uint32 size)
+{
+    FILE * fp = fopen ("./flash_userdata.bin", "w+");
+    if (!fp)
+        return 0;
+
+    fclose (fp);
+    return size;
+}
 
 size_t          ICACHE_FLASH_ATTR
 fio_user_read(uint32 addr, uint32 *buffer, uint32 size) 

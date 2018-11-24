@@ -2013,7 +2013,7 @@ lsh_on_start (const svcs_resource_t * svcres, dtlv_ctx_t * conf)
     }
 
     lsh_data_t     *tmp_sdata;
-    d_svcs_check_imdb_error (imdb_clsobj_insert (sdata->svcres->hmdb, svcres->hdata, (void **) &tmp_sdata, sizeof (lsh_data_t))
+    d_svcs_check_imdb_error (imdb_clsobj_insert (svcres->hmdb, svcres->hdata, (void **) &tmp_sdata, sizeof (lsh_data_t))
 	);
     os_memset (tmp_sdata, 0, sizeof (lsh_data_t));
 

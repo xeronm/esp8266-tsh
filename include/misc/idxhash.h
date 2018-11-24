@@ -68,7 +68,7 @@ typedef struct ih_header8_s {
 #define d_hash8_fixedmap_size(keylen, vallen, bcount, icount) \
 	(sizeof (ih_header8_t) + \
 	 (bcount) * sizeof (ih_entry_ptr_t) + \
-	 (d_align (sizeof (ih_entry_ptr_t) + (keylen) + (vallen))) * (icount) ) * 4 / 3
+	 (d_align (sizeof (ih_entry_ptr_t) + (keylen) + (vallen))) * (MAX(icount* 4 / 3, 8)) )
 
 #define d_ih_get_varlength(vptr)	(*((size_t *) ((char *)(vptr) - sizeof (size_t)) ))
 

@@ -177,6 +177,8 @@ ih_hash8_forall (const ih_hndlr_t hndlr, const ih_forall_func cb_func, void * da
             entry_ptr += len;
 	}
     }
+
+    return IH_ERR_SUCCESS;
 }
 
 ih_errcode_t    ICACHE_FLASH_ATTR
@@ -192,9 +194,8 @@ ih_compact8 (ih_hndlr_t hndlr, size_t * size_free)
     for (i = 0; i < hdr->bucket_size; i++) {
         ih_entry_ptr_t *entry_ptr =
 	    d_pointer_add (ih_entry_ptr_t, hdr, sizeof (ih_header8_t) + i * sizeof (ih_entry_ptr_t));
-        ih_entry_header_t *entry = NULL;
         if (*entry_ptr) {
-	    entry = d_pointer_add (ih_entry_header_t, hdr, *entry_ptr);
+	    ih_entry_header_t *entry = d_pointer_add (ih_entry_header_t, hdr, *entry_ptr);
 	    while (true) {
                 ih_entry_ptr_t     next_ptr = entry->next_entry;
                 entry->next_entry = i;
@@ -209,7 +210,7 @@ ih_compact8 (ih_hndlr_t hndlr, size_t * size_free)
     ih_entry_ptr_t offset = 0;
     // 2st pass - restore chains and compact
     char *entry_ptr = d_pointer_add (char, hdr, d_fixed_bucket_size (hdr->bucket_size));
-    char * max_ptr = d_pointer_add (char, hdr, hdr->overflow_hwm);
+    char *max_ptr = d_pointer_add (char, hdr, hdr->overflow_pos);
     while (entry_ptr < max_ptr) {
         ih_entry_header_t * entry = d_pointer_as (ih_entry_header_t, entry_ptr);
 	if (entry->next_entry == IH_FREE_SLOT) {
@@ -225,8 +226,10 @@ ih_compact8 (ih_hndlr_t hndlr, size_t * size_free)
             *entry_ptr2 = d_pointer_diff(entry_ptr, hdr) - offset;
 
             size_t len = internal_skip_entry(hdr, &entry);
-            if (offset)
+            if (offset) {
                 os_memcpy(entry_ptr - offset, entry_ptr, len);
+                entry = d_pointer_as (ih_entry_header_t, entry_ptr - offset);
+            }
             entry_ptr += len;
 	}
     }

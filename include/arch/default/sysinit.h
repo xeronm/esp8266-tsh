@@ -72,6 +72,7 @@ os_time_t       system_get_time (void);
 
 uint32          system_rtc_clock_cali_proc(void);
 
+size_t          fio_user_format(uint32 size);
 size_t          fio_user_read(uint32 addr, uint32 *buffer, uint32 size);
 size_t          fio_user_write(uint32 addr, uint32 *buffer, uint32 size);
 size_t          fio_user_size(void);

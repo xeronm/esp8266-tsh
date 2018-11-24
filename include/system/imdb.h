@@ -69,9 +69,11 @@ typedef uint16  block_size_t;	// aligned by IMDB_BLOCK_UNIT_ALIGN
 #ifdef IMDB_SMALL_RAM
 typedef uint8   page_blocks_t;	// 
 typedef uint8   class_pages_t;	// 
+typedef uint16  stat_count_t;
 #else
 typedef uint16  page_blocks_t;	// 
 typedef uint32  class_pages_t;	// 
+typedef uint32  stat_count_t;
 #endif
 
 typedef char    class_name_t[IMDB_CLASS_NAME_LEN];
@@ -92,16 +94,20 @@ typedef char    class_name_t[IMDB_CLASS_NAME_LEN];
 typedef struct imdb_stat_s {
     size_t          mem_alloc;
     size_t          mem_free;
-    uint32          page_alloc;
-    uint32          page_free;
-    uint32          block_alloc;
-    uint32          block_init;
-    uint32          block_recycle;
-    uint32          slot_free;
-    uint32          slot_data;
-    uint32          slot_split;
-    uint32          slot_coalesce;
-    uint32          slot_skipscan;
+    stat_count_t    header_read;
+    stat_count_t    header_write;
+    stat_count_t    block_read;
+    stat_count_t    block_write;
+    stat_count_t    page_alloc;
+    stat_count_t    page_free;
+    stat_count_t    block_alloc;
+    stat_count_t    block_init;
+    stat_count_t    block_recycle;
+    stat_count_t    slot_free;
+    stat_count_t    slot_data;
+    stat_count_t    slot_split;
+    stat_count_t    slot_coalesce;
+    stat_count_t    slot_skipscan;
 } imdb_stat_t;
 
 /*
@@ -196,7 +202,9 @@ typedef struct imdb_rowid_s {
 imdb_errcode_t  imdb_init (imdb_def_t * imdb_def, imdb_hndlr_t * himdb);
 imdb_errcode_t  imdb_done (imdb_hndlr_t hmdb);
 imdb_errcode_t  imdb_info (imdb_hndlr_t hmdb, imdb_info_t * imdb_info, imdb_class_info_t info_array[], uint8 array_len);
+imdb_errcode_t  imdb_flush (imdb_hndlr_t hmdb);
 
+imdb_errcode_t  imdb_class_find (imdb_hndlr_t hmdb, const char *name, imdb_hndlr_t * hclass);
 imdb_errcode_t  imdb_class_create (imdb_hndlr_t hmdb, imdb_class_def_t * class_def, imdb_hndlr_t * hclass);
 imdb_errcode_t  imdb_class_destroy (imdb_hndlr_t hmdb, imdb_hndlr_t hclass);
 imdb_errcode_t  imdb_class_info (imdb_hndlr_t hmdb, imdb_hndlr_t hclass, imdb_class_info_t * class_info);

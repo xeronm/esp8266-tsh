@@ -434,7 +434,7 @@ svcctl_start (imdb_hndlr_t hmdb, imdb_hndlr_t hfdb)
     d_svcs_check_svcs_error (imdb_class_create (hmdb, &cdef, &hdata)
 	);
 
-    d_svcs_check_svcs_error (imdb_clsobj_insert (sdata->svcres.hmdb, hdata, (void **) &sdata, sizeof (services_data_t))
+    d_svcs_check_svcs_error (imdb_clsobj_insert (hmdb, hdata, (void **) &sdata, sizeof (services_data_t))
 	);
     os_memset (sdata, 0, sizeof (services_data_t));
 
