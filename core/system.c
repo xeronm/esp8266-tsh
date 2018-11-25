@@ -76,6 +76,14 @@ LOCAL reg_service_t const reg_services[REG_SERVICE_MAX] RODATA = {
 #endif
 };
 
+LOCAL imdb_def_t fdb_def RODATA = { 
+	SYSTEM_FDB_BLOCK_SIZE, 
+	BLOCK_CRC_NONE, 
+	true, 
+	SYSTEM_FDB_CACHE_BLOCKS, 
+	SYSTEM_FDB_FILE_SIZE 
+};
+
 LOCAL void      ICACHE_FLASH_ATTR
 time_overflow_timeout (void *args)
 {
@@ -132,12 +140,11 @@ system_init (void)
 #endif
 
 #ifndef DISABLE_SYSTEM
-    d_log_iprintf (STARTUP_SERVICE_NAME, "imdb block_size:%u, fdb block_size:%u", SYSTEM_IMDB_BLOCK_SIZE, SYSTEM_FDB_BLOCK_SIZE);
+    d_log_iprintf (STARTUP_SERVICE_NAME, "block_size imdb:%u,fdb:%u", SYSTEM_IMDB_BLOCK_SIZE, SYSTEM_FDB_BLOCK_SIZE);
     imdb_def_t      db_def = { SYSTEM_IMDB_BLOCK_SIZE, BLOCK_CRC_NONE, false, 0, 0 };
     imdb_init (&db_def, &hmdb);
 
-    imdb_def_t      db_def2 = { SYSTEM_FDB_BLOCK_SIZE, BLOCK_CRC_NONE, true, 1, SYSTEM_FDB_FILE_SIZE };
-    imdb_init (&db_def2, &hfdb);
+    imdb_init (&fdb_def, &hfdb);
 
     svcctl_start (hmdb, hfdb);
     // installing services
@@ -156,6 +163,9 @@ system_init (void)
     d_log_wprintf (STARTUP_SERVICE_NAME, "done, fmem:%d", system_get_free_heap_size ());
 
     svcctl_service_message (0, 0, NULL, SVCS_MSGTYPE_SYSTEM_START, NULL, NULL);
+
+    // flush all changed blocks
+    imdb_flush (hfdb);
 }
 
 void            ICACHE_FLASH_ATTR
@@ -167,6 +177,7 @@ system_shutdown (void)
     svcctl_stop ();
 
     imdb_done (hmdb);
+    imdb_done (hfdb);
 #endif
 #ifdef ARCH_XTENSA
     wifi_station_disconnect ();

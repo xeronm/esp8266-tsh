@@ -30,6 +30,8 @@
 #include "core/logging.h"
 #include "core/system.h"
 
+#define FIO_USER_DATA_ADDR_NONE		((uint32) ~0)
+
 void            ICACHE_FLASH_ATTR
 __os_conn_remote_port (ip_conn_t * pconn, ip_port_t * port)
 {
@@ -105,7 +107,7 @@ fio_user_read(uint32 addr, uint32 *buffer, uint32 size)
     if (!fwmap->user1)
         return 0;
 
-    uint32 addr0 = d_flash_user2_data_addr(fwmap);
+    uint32 addr0 = d_flash_user2_data_addr(fwmap) + addr;
     if (addr0 + size > d_flash_user2_data_addr_end(fwmap))
         return 0;
 
@@ -122,20 +124,37 @@ fio_user_write(uint32 addr, uint32 *buffer, uint32 size)
     if (!fwmap->user1)
         return 0;
 
-    uint32 addr0 = d_flash_user2_data_addr(fwmap);
-    uint16          sec;
+    uint32          addr0 = d_flash_user2_data_addr(fwmap) + addr;
+    uint16          sec = addr0 / SPI_FLASH_SEC_SIZE;
+    uint32          addr1 = addr0 + size;
 
     if (addr0 + size > d_flash_user2_data_addr_end(fwmap))
         return 0;
 
-    for (sec = addr0 / SPI_FLASH_SEC_SIZE; sec <= (addr0 + size) / SPI_FLASH_SEC_SIZE; sec++)
-        if (spi_flash_erase_sector (sec))
-            return 0;
-
-    if (spi_flash_write (addr0, buffer, size))
+    if (sec != ((addr1 - 1) / SPI_FLASH_SEC_SIZE)) {
+        // not aligned write, more than one sector
         return 0;
-    else
-        return size;
+    }
+
+    if (size < SPI_FLASH_SEC_SIZE) {
+        uint8           tmp_buffer[SPI_FLASH_SEC_SIZE];
+        uint32          addr_s0 = sec * SPI_FLASH_SEC_SIZE;
+        uint32          addr_s1 = addr_s0 + SPI_FLASH_SEC_SIZE;
+
+        if (spi_flash_read (addr_s0, tmp_buffer, SPI_FLASH_SEC_SIZE) ||
+            spi_flash_erase_sector (sec) ||
+            (addr_s0 < addr0 ? spi_flash_write(addr_s0, tmp_buffer, addr0 - addr_s0) : false) ||
+            spi_flash_write(addr0, buffer, size) ||
+            (addr1 < addr_s1 ? spi_flash_write(addr0 + size, tmp_buffer + (addr1 - addr_s0), addr_s1 - addr1) : false)
+           )
+            return 0;
+    }
+    else {
+        if (spi_flash_erase_sector (sec) || spi_flash_write(addr0, buffer, size))
+            return 0;
+    }
+
+    return size;
 }
 
 size_t          ICACHE_FLASH_ATTR 
@@ -146,6 +165,20 @@ fio_user_size(void)
         return 0;
 
     return (d_flash_user2_data_addr_end(fwmap) - d_flash_user2_data_addr(fwmap)) / 2; // 2 - for mirroring
+}
+
+size_t          ICACHE_FLASH_ATTR 
+fio_user_format(uint32 size) {
+    flash_ota_map_t * fwmap = get_flash_ota_map ();
+    if (!fwmap->user1)
+        return 0;
+
+    uint32          addr0 = d_flash_user2_data_addr (fwmap);
+    uint32 data = 0;
+    if (spi_flash_erase_sector (addr0 / SPI_FLASH_SEC_SIZE) || spi_flash_write(addr0, &data, sizeof(uint32)) )
+        return 0;
+
+    return size;
 }
 
 void            ICACHE_FLASH_ATTR

@@ -54,7 +54,7 @@ typedef struct ih_free_slot_s {
 } ih_free_slot_t;
 
 
-INLINED ih_size_t ICACHE_FLASH_ATTR
+INLINED void ICACHE_FLASH_ATTR
 internal_skip_value2(ih_size_t vlen, const char **ptr) {
     if (vlen > 1)
         *ptr += vlen;

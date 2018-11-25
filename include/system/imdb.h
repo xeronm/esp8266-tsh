@@ -1,16 +1,29 @@
-/******************************************************************************
- * Copyright (c) 2015 by Denis Muratov <xeronm@gmail.com>. All rights reserved
+/* 
+ * ESP8266 In-Memory Database
+ * Copyright (c) 2018 Denis Muratov <xeronm@gmail.com>.
+ * https://dtec.pro/gitbucket/git/esp8266/esp8266-tsh.git
  *
- * FileName: imdb.h
+ * This file is part of ESP8266 Things Shell.
  *
- * Description: Light weight time-conversion utility
+ * ESP8266 Things Shell is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *
- * API
+ * ESP8266 Things Shell is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- * Modification history:
- *     2016/06/01, v1.0 create this file.
- *     2017/11/07, v1.1 added: recycle storage, query.
- *******************************************************************************/
+ * You should have received a copy of the GNU General Public License
+ * along with ESP8266 Things Shell.  If not, see <https://www.gnu.org/licenses/>.
+ *
+ */
+
+
+/*
+ * TODO: Should make hash-map storage and replace some heap storage, for example: functions, configurations, etc.
+ */
 
 #ifndef _IMDB_H_
 #define _IMDB_H_ 1
@@ -222,8 +235,20 @@ typedef         imdb_errcode_t (*imdb_forall_func) (void *ptr, void *data);
 imdb_errcode_t  imdb_class_forall (imdb_hndlr_t hmdb, imdb_hndlr_t hclass, void *data, imdb_forall_func forall_func);
 
 // forall helpers
-imdb_errcode_t  forall_count (void *ptr, void *data);
+imdb_errcode_t  imdb_forall_count (void *ptr, void *data);
 
+
+typedef struct imdb_file_s {
+    uint16          version;
+    uint16          crc16;
+    uint32          scn;
+    block_size_t    block_size;
+    size_t          class_last;
+    size_t          file_size;
+    size_t          file_hwm;
+} imdb_file_t;
+
+imdb_errcode_t fdb_header_read (imdb_file_t * hdr_file);
 
 #define d_imdb_check_hndlr(hndlr) 	if (!(hndlr)) { return IMDB_INVALID_HNDLR; }
 

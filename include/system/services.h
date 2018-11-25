@@ -1,15 +1,25 @@
-/* Copyright (c) 2018 by Denis Muratov <xeronm@gmail.com>. All rights reserved
+/* 
+ * ESP8266 Services Catalog and Control
+ * Copyright (c) 2018 Denis Muratov <xeronm@gmail.com>.
+ * https://dtec.pro/gitbucket/git/esp8266/esp8266-tsh.git
+ *
+ * This file is part of ESP8266 Things Shell.
+ *
+ * ESP8266 Things Shell is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * ESP8266 Things Shell is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with ESP8266 Things Shell.  If not, see <https://www.gnu.org/licenses/>.
+ *
+ */
 
-   FileName: services.h
-   Source: https://dtec.pro/gitbucket/git/esp8266/esp8266_lsh.git
-
-   Description: Services catalog and control
-     Provides: 
-	- common API for services
-	- Storage for Configuration Data
-	- Handling messagings between services
-
-*/
 
 #ifndef SERVICES_H_
 #define SERVICES_H_ 1
@@ -46,6 +56,7 @@ typedef enum svcs_msgtype_e {
     SVCS_MSGTYPE_CONTROL = 2,
     SVCS_MSGTYPE_CONFIG_GET = 3,
     SVCS_MSGTYPE_CONFIG_SET = 4,
+    // Multicast Messages
     SVCS_MSGTYPE_NETWORK = 5,
     SVCS_MSGTYPE_NETWORK_LOSS = 6,
     SVCS_MSGTYPE_ADJTIME = 7,

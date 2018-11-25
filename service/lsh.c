@@ -65,10 +65,10 @@
 #define LSH_FUNC_STORAGE_PAGE_BLOCKS		1
 
 #define LSH_STMT_STORAGE_PAGES			2
-#define LSH_STMT_STORAGE_PAGE_BLOCKS		4
+#define LSH_STMT_STORAGE_PAGE_BLOCKS		2
 
-#define LSH_STMT_SRC_STORAGE_PAGES		8
-#define LSH_STMT_SRC_STORAGE_PAGE_BLOCKS	1
+#define LSH_STMT_SRC_STORAGE_PAGES		4
+#define LSH_STMT_SRC_STORAGE_PAGE_BLOCKS	2
 
 #define LSH_TOKENIDX_BUFFER_SIZE		512
 #define LSH_OPER_ARG_COUNT_MAX			14
@@ -2035,10 +2035,13 @@ lsh_on_start (const svcs_resource_t * svcres, dtlv_ctx_t * conf)
     }
 
     if (svcres->hfdb) {
-        imdb_class_def_t cdef3 =
-	    { LSH_IMDB_CLS_STMT_SRC, false, true, false, 0, LSH_STMT_SRC_STORAGE_PAGES, LSH_STMT_STORAGE_PAGE_BLOCKS, sizeof (sh_stmt_t) };
-        d_svcs_check_imdb_error (imdb_class_create (svcres->hfdb, &cdef3, &(tmp_sdata->hstmt_src))
-	    );
+        imdb_class_find (svcres->hfdb, LSH_IMDB_CLS_STMT_SRC, &(tmp_sdata->hstmt_src));
+        if (!tmp_sdata->hstmt_src) {
+            imdb_class_def_t cdef3 =
+	        { LSH_IMDB_CLS_STMT_SRC, false, true, false, 0, LSH_STMT_SRC_STORAGE_PAGES, LSH_STMT_STORAGE_PAGE_BLOCKS, sizeof (sh_stmt_t) };
+            d_svcs_check_imdb_error (imdb_class_create (svcres->hfdb, &cdef3, &(tmp_sdata->hstmt_src))
+	        );
+	}
     }
 
     sdata = tmp_sdata;

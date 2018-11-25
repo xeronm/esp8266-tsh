@@ -48,6 +48,7 @@ firmware_info_t fw_info RODATA = {
     APP_VERSION_RELEASE_DATE,
     0xFFFFFFFF,
     0xFFFFFFFF,
+    0xFFFFFFFF,
     APP_INIT_DIGEST
 };
 #endif
@@ -92,8 +93,9 @@ espadmin_on_msg_firmware (dtlv_ctx_t * msg_out)
 			     dtlv_avp_encode_uint32 (msg_out, ESPADMIN_AVP_FW_ADDR, system_get_userbin_addr ()) ||
 			     dtlv_avp_encode_uint8 (msg_out, ESPADMIN_AVP_FW_SIZE_MAP, system_get_flash_size_map ()) ||
 			     dtlv_avp_encode_uint32 (msg_out, ESPADMIN_AVP_FW_BIN_SIZE, fw_info.binsize) ||
+			     dtlv_avp_encode_uint32 (msg_out, ESPADMIN_AVP_FW_BIN_DATE, fw_info.bindate) ||
 			     dtlv_avp_encode_uint32 (msg_out, ESPADMIN_AVP_FW_USER_DATA_ADDR, d_flash_user2_data_addr (fwmap)) ||
-			     dtlv_avp_encode_uint32 (msg_out, ESPADMIN_AVP_FW_USER_DATA_SIZE, fio_user_size ()) ||
+			     dtlv_avp_encode_uint32 (msg_out, ESPADMIN_AVP_FW_USER_DATA_SIZE, d_flash_user2_data_addr_end(fwmap) - d_flash_user2_data_addr(fwmap)) ||
 			     dtlv_avp_encode_uint32 (msg_out, ESPADMIN_AVP_FW_RELEASE_DATE, fw_info.release_date) ||
 			     dtlv_avp_encode_octets (msg_out, ESPADMIN_AVP_FW_DIGEST, sizeof (fw_info.digest),
 						     (char *) fw_info.digest)
@@ -217,22 +219,19 @@ espadmin_on_msg_wireless (dtlv_ctx_t * msg_out)
     return SVCS_ERR_SUCCESS;
 }
 
-LOCAL svcs_errcode_t ICACHE_FLASH_ATTR
-espadmin_on_msg_imdb (dtlv_ctx_t * msg_out)
-{
-    dtlv_avp_t     *gavp;
-    // IMDB
-    d_svcs_check_dtlv_error (dtlv_avp_encode_grouping (msg_out, 0, ESPADMIN_AVP_IMDB, &gavp));
 
+LOCAL svcs_errcode_t ICACHE_FLASH_ATTR
+espadmin_info_xdb (dtlv_ctx_t * msg_out, imdb_hndlr_t hmdb)
+{
     imdb_info_t     _imdb_info;
     imdb_class_info_t info_array[IMDB_INFO_ARRAY_SIZE];
-    imdb_errcode_t  imdb_res = imdb_info (get_hmdb (), &_imdb_info, info_array, IMDB_INFO_ARRAY_SIZE);
+    imdb_errcode_t  imdb_res = imdb_info (hmdb, &_imdb_info, info_array, IMDB_INFO_ARRAY_SIZE);
 
     if (imdb_res == IMDB_ERR_SUCCESS) {
 	dtlv_avp_t     *gavp_in;
 
-	d_svcs_check_dtlv_error (dtlv_avp_encode_uint16
-				 (msg_out, ESPADMIN_AVP_IMDB_BLOCK_SIZE, _imdb_info.db_def.block_size)
+	d_svcs_check_dtlv_error (dtlv_avp_encode_uint16 (msg_out, ESPADMIN_AVP_IMDB_BLOCK_SIZE, _imdb_info.db_def.block_size)
+                                 || dtlv_avp_encode_uint32 (msg_out, ESPADMIN_AVP_IMDB_MEM_USED, _imdb_info.stat.mem_alloc - _imdb_info.stat.mem_free )
 				 || dtlv_avp_encode_list (msg_out, 0, ESPADMIN_AVP_IMDB_CLASS, DTLV_TYPE_OBJECT,
 							  &gavp_in));
 	int             i;
@@ -244,7 +243,7 @@ espadmin_on_msg_imdb (dtlv_ctx_t * msg_out)
 	    d_svcs_check_dtlv_error (dtlv_avp_encode_grouping (msg_out, 0, ESPADMIN_AVP_IMDB_CLASS, &gavp_in2));
 
 	    uint32          objcount = 0;
-	    imdb_class_forall (get_hmdb (), info_array[i].hclass, (void *) &objcount, forall_count);
+	    imdb_class_forall (hmdb, info_array[i].hclass, (void *) &objcount, imdb_forall_count);
 
             total_blocks += info_array[i].blocks;
             total_free += info_array[i].slots_free_size + info_array[i].blocks_free * _imdb_info.db_def.block_size;
@@ -269,6 +268,45 @@ espadmin_on_msg_imdb (dtlv_ctx_t * msg_out)
                                  || dtlv_avp_encode_uint16 (msg_out, ESPADMIN_AVP_IMDB_BLOCK_COUNT, total_blocks)
                                  || dtlv_avp_encode_uint32 (msg_out, ESPADMIN_AVP_IMDB_FREE_SIZE, total_free));
     }
+
+    return SVCS_ERR_SUCCESS;
+}
+
+LOCAL svcs_errcode_t ICACHE_FLASH_ATTR
+espadmin_on_msg_imdb (dtlv_ctx_t * msg_out)
+{
+    dtlv_avp_t     *gavp;
+    // IMDB
+    d_svcs_check_dtlv_error (dtlv_avp_encode_grouping (msg_out, 0, ESPADMIN_AVP_IMDB, &gavp));
+
+    espadmin_info_xdb (msg_out, get_hmdb ());
+
+    d_svcs_check_dtlv_error (dtlv_avp_encode_group_done (msg_out, gavp));
+
+    return SVCS_ERR_SUCCESS;
+}
+
+LOCAL svcs_errcode_t ICACHE_FLASH_ATTR
+espadmin_on_msg_fdb (dtlv_ctx_t * msg_out)
+{
+    dtlv_avp_t     *gavp;
+    dtlv_avp_t     *gavp_in;
+    // FDB
+    d_svcs_check_dtlv_error (dtlv_avp_encode_grouping (msg_out, 0, ESPADMIN_AVP_FDB, &gavp) ||
+                             dtlv_avp_encode_grouping (msg_out, 0, ESPADMIN_AVP_FDB_INFO, &gavp_in));
+
+    imdb_file_t hdr_file;
+    if (fdb_header_read (&hdr_file) == IMDB_ERR_SUCCESS) {
+        flash_ota_map_t * fwmap = get_flash_ota_map ();
+	d_svcs_check_dtlv_error (dtlv_avp_encode_uint32 (msg_out, ESPADMIN_AVP_FDB_DATA_ADDR, d_flash_user2_data_addr(fwmap))
+                                 || dtlv_avp_encode_uint32 (msg_out, ESPADMIN_AVP_FDB_DATA_SIZE, fio_user_size ())
+                                 || dtlv_avp_encode_uint32 (msg_out, ESPADMIN_AVP_FDB_FILE_SIZE, hdr_file.file_size * hdr_file.block_size)
+                                 || dtlv_avp_encode_uint32 (msg_out, ESPADMIN_AVP_FDB_FILE_HWM, hdr_file.file_hwm * hdr_file.block_size)
+                                );
+    }
+    d_svcs_check_dtlv_error (dtlv_avp_encode_group_done (msg_out, gavp_in));
+
+    espadmin_info_xdb (msg_out, get_fdb ());
 
     d_svcs_check_dtlv_error (dtlv_avp_encode_group_done (msg_out, gavp));
 
@@ -303,6 +341,9 @@ espadmin_on_msg_info (dtlv_ctx_t * msg_in, dtlv_ctx_t * msg_out)
 		break;
 	    case ESPADMIN_AVP_IMDB:
 		res = espadmin_on_msg_imdb (msg_out);
+		break;
+	    case ESPADMIN_AVP_FDB:
+		res = espadmin_on_msg_fdb (msg_out);
 		break;
 	    default:
 		continue;
@@ -398,6 +439,8 @@ LOCAL void      ICACHE_FLASH_ATTR
 system_restart_timeout (void *args)
 {
     system_shutdown ();
+    if (args)
+        fio_user_format (1);
     system_restart ();
 }
 #endif
@@ -440,6 +483,17 @@ espadmin_on_message (service_ident_t orig_id, service_msgtype_t msgtype, void *c
 				   fw_verify (&fw_info, (firmware_digest_t *) APP_INIT_DIGEST));
 	}
 	break;
+    case ESPADMIN_MSGTYPE_FDB_TRUNC:
+        {
+            os_timer_t     *timer;
+            st_zalloc(timer, os_timer_t);
+
+            os_timer_disarm (timer);
+            os_timer_setfn (timer, system_restart_timeout, (void*)true);
+            os_timer_arm (timer, 10, false);
+            d_log_wprintf (ESPADMIN_SERVICE_NAME, "restart timeout:%d msec", 10);
+        }
+        break;
 #endif
     default:
 	res = SVCS_MSGTYPE_INVALID;

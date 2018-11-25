@@ -10,6 +10,7 @@ import struct
 import subprocess
 import re
 from collections import OrderedDict
+import time
 
 # Length of checksum footer
 ESP_CHECKSUM_SIZE = 1
@@ -59,6 +60,8 @@ def generateBin(source, target):
 
 
 def main():
+    bin_date = int(time.time())
+
     if len(sys.argv) != 3:
         print("Error: Invalid arguments\nUsage: digest.py <elf_file> <bin_file>")
         exit()
@@ -97,8 +100,8 @@ def main():
             exit()
         digest_pos = fwinfo_pos + fwinfo_size - 32
 
-        h.update(data[:digest_pos - 8])
-        h.update(struct.pack('<LL', digest_pos, bin_size))
+        h.update(data[:digest_pos - 12])
+        h.update(struct.pack('<LLL', digest_pos, bin_size, bin_date))
         h.update(data[digest_pos:])
 
     digest = h.digest()
@@ -106,8 +109,8 @@ def main():
     print('Signin digest: %s' % binascii.hexlify(digest))
 
     with open(elf_file_name, 'r+') as f:
-        f.seek(fwinfo_start + fwinfo_size - 32 - 8, 0)
-        f.write(struct.pack('<LL', digest_pos, bin_size))
+        f.seek(fwinfo_start + fwinfo_size - 44, 0)
+        f.write(struct.pack('<LLL', digest_pos, bin_size, bin_date))
         f.write(digest)
         f.close()
 
@@ -123,10 +126,11 @@ def main():
                ('digest'        , binascii.hexlify(digest) ),
                ('digest_pos'    , digest_pos ),
                ('fw_addr'       , '0x%06x' % info['irom0_addr'] ),
-               ('fw_info'       , binascii.hexlify(fwinfo[:-40] + struct.pack('<LL', digest_pos, bin_size) + digest) ),
+               ('fw_info'       , binascii.hexlify(fwinfo[:-44] + struct.pack('<LLL', digest_pos, bin_size, bin_date) + digest) ),
                ('fw_info_start' , fwinfo_pos ),
                ('fw_info_size'  , fwinfo_size ),
-               ('bin_size'      , bin_size) ])
+               ('bin_size'      , bin_size),
+               ('bin_date'      , bin_date)])
                , indent=4, separators=(',', ': '))
 
         with open(elf_file_name + '.info.json', 'w') as f2:

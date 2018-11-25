@@ -148,6 +148,12 @@ dtlv_errcode_t  dtlv_ctx_reset_encode (dtlv_ctx_t * ctx);
 		    os_memcpy (trg, davp.avp->data, MIN ((outlen), (buflen))); \
 		    break;
 
+#define dtlv_seq_decode_group(code, trg, outlen) \
+		case code: \
+		    (outlen) = d_avp_data_length(davp.havpd.length); \
+		    trg = davp.avp->data; \
+		    break;
+
 #define dtlv_seq_decode_uint16(code, trg) \
 		case code: \
 		    dtlv_avp_get_uint16 (&davp, trg); \

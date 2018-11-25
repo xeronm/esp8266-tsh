@@ -59,8 +59,9 @@ typedef struct firmware_info_s {
     uint32          build;
     uint16          flash_comp;	// bit-mask of flash_size_map compartibility
     uint32          release_date;
-    uint32          digest_pos;
-    uint32          binsize;	// binary size
+    uint32          digest_pos; // written by digest.py: digest position in binary file
+    uint32          binsize;	// written by digest.py: binary size
+    uint32          bindate;    // written by digest.py: bin make POSIX Timestamp
     firmware_digest_t digest;
 } firmware_info_t;
 

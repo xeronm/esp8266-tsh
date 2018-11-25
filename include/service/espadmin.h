@@ -44,6 +44,7 @@ typedef enum espadmin_msgtype_e {
     ESPADMIN_MSGTYPE_RESTART = 12,
     ESPADMIN_MSGTYPE_FW_VERIFY = 13,
     ESPADMIN_MSGTYPE_FW_OTA_DONE = 14,
+    ESPADMIN_MSGTYPE_FDB_TRUNC = 15,
 } espadmin_msgtype_t;
 
 typedef enum espadmin_avp_code_e {
@@ -53,6 +54,7 @@ typedef enum espadmin_avp_code_e {
     ESPADMIN_AVP_IMDB = 105,
     ESPADMIN_AVP_WIFI_STATION = 106,
     ESPADMIN_AVP_WIFI_SOFTAP = 107,
+    ESPADMIN_AVP_FDB = 108,
     // System
     ESPADMIN_AVP_SYS_SDKVERSION = 111,
     ESPADMIN_AVP_SYS_UPTIME = 112,
@@ -87,6 +89,7 @@ typedef enum espadmin_avp_code_e {
     ESPADMIN_AVP_IMDB_BLOCK_COUNT = 140,
     ESPADMIN_AVP_IMDB_FREE_SLOTS = 141,
     ESPADMIN_AVP_IMDB_FREE_SIZE = 142,
+    ESPADMIN_AVP_IMDB_MEM_USED = 143,
     // Wireless
     ESPADMIN_AVP_WIFI_OPMODE = 145,
     ESPADMIN_AVP_WIFI_SSID = 146,
@@ -99,7 +102,14 @@ typedef enum espadmin_avp_code_e {
     ESPADMIN_AVP_OTA_STATE = 165,
     ESPADMIN_AVP_OTA_BIN_DATA = 166,
     ESPADMIN_AVP_OTA_CURRENT_ADDR = 167,
-
+    // 
+    ESPADMIN_AVP_FW_BIN_DATE = 180,
+    //
+    ESPADMIN_AVP_FDB_INFO = 190,
+    ESPADMIN_AVP_FDB_DATA_ADDR = 191,
+    ESPADMIN_AVP_FDB_DATA_SIZE = 192,
+    ESPADMIN_AVP_FDB_FILE_SIZE = 193,
+    ESPADMIN_AVP_FDB_FILE_HWM  = 194,
 } espadmin_avp_code_t;
 
 typedef enum ota_upgrade_sate_e {

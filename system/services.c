@@ -20,16 +20,6 @@
  *
  */
 
-/* 
- *
- *  Description: Services catalog and control
- *    Provides: 
- *      - Common API for services
- *      - Storage for Configuration Data
- *      - Handling messagings between services
- *
- */
-
 #include "sysinit.h"
 #include "core/utils.h"
 #include "core/logging.h"
@@ -125,32 +115,33 @@ svcctl_find_conf (service_ident_t service_id, svcs_service_conf_t ** conf)
     return (*conf) ? SVCS_ERR_SUCCESS : SVCS_NOT_EXISTS;
 }
 
-LOCAL svcs_errcode_t ICACHE_FLASH_ATTR
-svcctl_svc_conf_get (svcs_service_t * svc, dtlv_ctx_t * conf)
+svcs_errcode_t  ICACHE_FLASH_ATTR
+svcctl_service_conf_get (service_ident_t service_id, dtlv_ctx_t * conf)
 {
     svcs_service_conf_t *conf_data;
-    d_svcs_check_svcs_error (svcctl_find_conf (svc->info.service_id, &conf_data)
-	);
+    d_svcs_check_svcs_error (svcctl_find_conf (service_id, &conf_data));
 
     size_t          length;
-    d_svcs_check_imdb_error (imdb_clsobj_length (sdata->svcres.hfdb, sdata->hconf, conf_data, &length)
-	);
+    d_svcs_check_imdb_error (imdb_clsobj_length (sdata->svcres.hfdb, sdata->hconf, conf_data, &length));
 
     length -= sizeof (svcs_service_conf_t);
-    d_svcs_check_dtlv_error (dtlv_ctx_init_decode (conf, (char *) conf_data->vardata, length)
-	);
+    d_svcs_check_dtlv_error (dtlv_ctx_init_decode (conf, (char *) conf_data->vardata, length));
 
     return SVCS_ERR_SUCCESS;
 }
 
-LOCAL svcs_errcode_t ICACHE_FLASH_ATTR
-svcctl_svc_conf_set (svcs_service_t * svc, dtlv_ctx_t * conf)
+svcs_errcode_t ICACHE_FLASH_ATTR
+svcctl_service_conf_set (service_ident_t service_id, dtlv_ctx_t * conf)
 {
-    svcs_service_conf_t *conf_data;
-    d_svcs_check_imdb_error (svcctl_find_conf (svc->info.service_id, &conf_data)
-	);
-    // TODO: Not Finished
-    //imdb_errcode_t res = imdb_clsobj_length(sdata->svcres.hfdb, sdata->hconf, conf_data, &length);
+    svcs_service_conf_t *conf_data = NULL;
+    d_svcs_check_svcs_error (svcctl_find_conf (service_id, &conf_data));
+
+    if (conf_data)
+        d_svcs_check_imdb_error (imdb_clsobj_delete (sdata->svcres.hfdb, sdata->hconf, conf_data));
+
+    d_svcs_check_imdb_error (imdb_clsobj_insert (sdata->svcres.hfdb, sdata->hconf, (void**) &conf_data, sizeof(svcs_service_conf_t) + conf->datalen));
+    os_memcpy(conf_data->vardata, conf->buf, conf->datalen);
+
     return SVCS_ERR_SUCCESS;
 }
 
@@ -201,7 +192,7 @@ svcctl_svc_start (svcs_service_t * svc)
     dtlv_ctx_t      conf;
     dtlv_ctx_t     *conf_ptr = NULL;
     {
-	svcs_errcode_t  res = svcctl_svc_conf_get (svc, &conf);
+	svcs_errcode_t  res = svcctl_service_conf_get (svc->info.service_id, &conf);
 	if (res == SVCS_ERR_SUCCESS) {
 	    conf_ptr = &conf;
 	}
@@ -328,11 +319,53 @@ svcctl_on_msg_info (dtlv_ctx_t * msg_out)
 LOCAL svcs_errcode_t ICACHE_FLASH_ATTR
 svcctl_on_msg_control (dtlv_ctx_t * msg_in, dtlv_ctx_t * msg_out)
 {
-    dtlv_nscode_t   path[] = { {{0, SVCS_AVP_SERVICE}
-				}
-    , {{0, 0}
-       }
-    };
+    dtlv_nscode_t   path[] = { {{0, SVCS_AVP_SERVICE}}, {{0, SVCS_AVP_SERVICE}},
+                               {{0, 0}}
+                             };
+    dtlv_davp_t     avp_array[SVCS_INFO_ARRAY_SZIE];
+    uint16          total_count;
+
+    dtlv_errcode_t  dtlv_res =
+	dtlv_avp_decode_bypath (msg_in, path, avp_array, SVCS_INFO_ARRAY_SZIE, true, &total_count);
+
+    if (dtlv_res != DTLV_ERR_SUCCESS) {
+	return SVCS_SERVICE_ERROR;
+    }
+
+    int             i;
+    for (i = 0; i < total_count; i++) {
+	dtlv_ctx_t      dtlv_ctx;
+	dtlv_ctx_init_decode (&dtlv_ctx, avp_array[i].avp->data, d_avp_data_length (avp_array[i].havpd.length));
+
+	service_ident_t service_id = 0;
+	uint8           senabled = 0xFF;
+
+        dtlv_seq_decode_begin (&dtlv_ctx, SERVICE_SERVICE_ID);
+        dtlv_seq_decode_uint16 (SVCS_AVP_SERVICE_ID, &service_id);
+        dtlv_seq_decode_uint8 (SVCS_AVP_SERVICE_ENABLED, &senabled);
+        dtlv_seq_decode_end (&dtlv_ctx);
+
+	if ((senabled != 0xFF) && (service_id != 0)) {
+	    svcs_errcode_t  ctl_res = (senabled) ? svcctl_service_start (service_id, NULL) : svcctl_service_stop (service_id, NULL);
+
+	    dtlv_avp_t     *gavp_srv;
+	    d_svcs_check_dtlv_error (dtlv_avp_encode_grouping (msg_out, 0, SVCS_AVP_SERVICE, &gavp_srv)
+	                             || dtlv_avp_encode_uint16 (msg_out, SVCS_AVP_SERVICE_ID, service_id)
+                                     || dtlv_avp_encode_uint8 (msg_out, COMMON_AVP_RESULT_CODE, ctl_res) 
+                                     || dtlv_avp_encode_group_done (msg_out, gavp_srv));
+	}
+    }
+
+    return SVCS_ERR_SUCCESS;
+}
+
+
+LOCAL svcs_errcode_t ICACHE_FLASH_ATTR
+svcctl_on_msg_config_set (dtlv_ctx_t * msg_in, dtlv_ctx_t * msg_out)
+{
+    dtlv_nscode_t   path[] = { {{0, SVCS_AVP_SERVICE}}, {{0, SVCS_AVP_SERVICE}},
+                               {{0, 0}}
+                             };
     dtlv_davp_t     avp_array[SVCS_INFO_ARRAY_SZIE];
     uint16          total_count;
 
@@ -347,48 +380,72 @@ svcctl_on_msg_control (dtlv_ctx_t * msg_in, dtlv_ctx_t * msg_out)
 	dtlv_ctx_t      dtlv_ctx;
 	dtlv_ctx_init_decode (&dtlv_ctx, avp_array[i].avp->data, d_avp_data_length (avp_array[i].havpd.length));
 
-	// response & action
-	dtlv_avp_t     *gavp_srv;
-	dtlv_avp_encode_grouping (msg_out, 0, SVCS_AVP_SERVICE, &gavp_srv);
+	service_ident_t service_id = 0;
+	char           *conf = NULL;
+        dtlv_size_t     conf_len = 0;
+
+        dtlv_seq_decode_begin (&dtlv_ctx, SERVICE_SERVICE_ID);
+        dtlv_seq_decode_uint16 (SVCS_AVP_SERVICE_ID, &service_id);
+        dtlv_seq_decode_group (COMMON_AVP_SVC_CONFIGURATION, conf, conf_len);
+        dtlv_seq_decode_end (&dtlv_ctx);
+
+	if (conf && (service_id != 0)) {
+	    dtlv_ctx_t      dtlv_conf;
+	    d_svcs_check_dtlv_error (dtlv_ctx_init_decode (&dtlv_conf, conf, conf_len));
+
+            svcs_errcode_t  conf_res = svcctl_service_conf_set (service_id, &dtlv_conf);
+
+	    dtlv_avp_t     *gavp_srv;
+	    d_svcs_check_dtlv_error (dtlv_avp_encode_grouping (msg_out, 0, SVCS_AVP_SERVICE, &gavp_srv)
+	                             || dtlv_avp_encode_uint16 (msg_out, SVCS_AVP_SERVICE_ID, service_id)
+                                     || dtlv_avp_encode_uint8 (msg_out, COMMON_AVP_RESULT_CODE, conf_res) 
+                                     || dtlv_avp_encode_group_done (msg_out, gavp_srv));
+	}
+    }
+
+    return SVCS_ERR_SUCCESS;
+}
+
+LOCAL svcs_errcode_t ICACHE_FLASH_ATTR
+svcctl_on_msg_config_get (dtlv_ctx_t * msg_in, dtlv_ctx_t * msg_out)
+{
+    dtlv_nscode_t   path[] = { {{0, SVCS_AVP_SERVICE}}, {{0, SVCS_AVP_SERVICE}},
+                               {{0, 0}}
+                             };
+    dtlv_davp_t     avp_array[SVCS_INFO_ARRAY_SZIE];
+    uint16          total_count;
+
+    dtlv_errcode_t  dtlv_res =
+	dtlv_avp_decode_bypath (msg_in, path, avp_array, SVCS_INFO_ARRAY_SZIE, true, &total_count);
+    if (dtlv_res != DTLV_ERR_SUCCESS) {
+	return SVCS_SERVICE_ERROR;
+    }
+
+    int             i;
+    for (i = 0; i < total_count; i++) {
+	dtlv_ctx_t      dtlv_ctx;
+	dtlv_ctx_init_decode (&dtlv_ctx, avp_array[i].avp->data, d_avp_data_length (avp_array[i].havpd.length));
 
 	service_ident_t service_id = 0;
-	service_name_t  sname = "";
-	uint8           senabled = -1;
-	while (dtlv_res == DTLV_ERR_SUCCESS) {
-	    dtlv_davp_t     avp;
-	    dtlv_res = dtlv_avp_decode (&dtlv_ctx, &avp);
-	    if (dtlv_res != DTLV_ERR_SUCCESS) {
-		break;
-	    }
-	    switch (avp.havpd.nscode.comp.code) {
-	    case SVCS_AVP_SERVICE_ID:
-		dtlv_avp_get_uint16 (&avp, &service_id);
-		dtlv_avp_encode_uint16 (msg_out, SVCS_AVP_SERVICE_ID, service_id);
-		break;
-	    case COMMON_AVP_SERVICE_NAME:
-		dtlv_avp_get_char (&avp, sname);
-		dtlv_avp_encode_char (msg_out, COMMON_AVP_SERVICE_NAME, sname);
-		break;
-	    case SVCS_AVP_SERVICE_ENABLED:
-		dtlv_avp_get_uint8 (&avp, &senabled);
-		break;
-	    default:
-		break;
-	    }
-	}
 
-	if ((senabled != -1) && (service_id != 0)) {
-	    svcs_errcode_t  ctl_res;
-	    if (senabled) {
-		ctl_res = svcctl_service_start (service_id, NULL);
-	    }
-	    else {
-		ctl_res = svcctl_service_stop (service_id, NULL);
-	    }
-	    dtlv_avp_encode_uint8 (msg_out, COMMON_AVP_RESULT_CODE, ctl_res);
-	}
+        dtlv_seq_decode_begin (&dtlv_ctx, SERVICE_SERVICE_ID);
+        dtlv_seq_decode_uint16 (SVCS_AVP_SERVICE_ID, &service_id);
+        dtlv_seq_decode_end (&dtlv_ctx);
 
-	dtlv_avp_encode_group_done (msg_out, gavp_srv);
+	if (service_id != 0) {
+	    dtlv_ctx_t      *dtlv_conf = NULL;
+            svcs_errcode_t  conf_res = svcctl_service_conf_get (service_id, dtlv_conf);
+
+	    dtlv_avp_t     *gavp_srv;
+	    dtlv_avp_t     *gavp_cfg;
+	    d_svcs_check_dtlv_error (dtlv_avp_encode_grouping (msg_out, 0, SVCS_AVP_SERVICE, &gavp_srv)
+	                             || dtlv_avp_encode_uint16 (msg_out, SVCS_AVP_SERVICE_ID, service_id)
+                                     || dtlv_avp_encode_uint8 (msg_out, COMMON_AVP_RESULT_CODE, conf_res)
+                                     || ((conf_res) ? false : ( dtlv_avp_encode_grouping (msg_out, 0, COMMON_AVP_SVC_CONFIGURATION, &gavp_cfg) 
+                                                           || dtlv_raw_encode (msg_out, dtlv_conf->buf, dtlv_conf->datalen)
+                                                           || dtlv_avp_encode_group_done (msg_out, gavp_cfg)))
+                                     || dtlv_avp_encode_group_done (msg_out, gavp_srv));
+	}
     }
 
     return SVCS_ERR_SUCCESS;
@@ -407,6 +464,12 @@ svcctl_on_message (service_ident_t orig_id, service_msgtype_t msgtype, void *ctx
     case SVCS_MSGTYPE_CONTROL:
 	res = svcctl_on_msg_control (msg_in, msg_out);
 	break;
+    case SVCS_MSGTYPE_CONFIG_GET:
+        res = svcctl_on_msg_config_get (msg_in, msg_out);
+        break;
+    case SVCS_MSGTYPE_CONFIG_SET:
+        res = svcctl_on_msg_config_set (msg_in, msg_out);
+        break;
     default:
 	res = SVCS_MSGTYPE_INVALID;
     }
@@ -414,9 +477,10 @@ svcctl_on_message (service_ident_t orig_id, service_msgtype_t msgtype, void *ctx
     return res;
 }
 
+
 /*
-[public] Start Service Controller Service
-  - result: svcs_errcode_t
+ *[public] Start Service Controller Service
+ *  - result: svcs_errcode_t
 */
 svcs_errcode_t  ICACHE_FLASH_ATTR
 svcctl_start (imdb_hndlr_t hmdb, imdb_hndlr_t hfdb)
@@ -447,11 +511,15 @@ svcctl_start (imdb_hndlr_t hmdb, imdb_hndlr_t hfdb)
     d_svcs_check_svcs_error (imdb_class_create (hmdb, &cdef2, &sdata->hsvcs)
 	);
 
-//    imdb_class_def_t cdef3 =
-//	{ SERVICES_IMDB_CLS_CONFIG, false, true, false, 0, SERVICES_CONFIG_STORAGE_PAGES,
-//SERVICES_CONFIG_STORAGE_PAGE_BLOCKS, SERVICES_CONFIG_STORAGE_PAGE_BLOCKS, sizeof (svcs_service_conf_t) };
-//    d_svcs_check_svcs_error (imdb_class_create (hfdb, &cdef3, &sdata->hconf)
-//	);
+    if (hfdb) {
+        imdb_class_find (hfdb, SERVICES_IMDB_CLS_CONFIG, &sdata->hconf);
+        if (!sdata->hconf) {
+            imdb_class_def_t cdef3 =
+	        { SERVICES_IMDB_CLS_CONFIG, false, true, false, 0, SERVICES_CONFIG_STORAGE_PAGES,
+                SERVICES_CONFIG_STORAGE_PAGE_BLOCKS, sizeof (svcs_service_conf_t) };
+            d_svcs_check_svcs_error (imdb_class_create (hfdb, &cdef3, &sdata->hconf));
+        }
+    }
 
     d_log_wprintf (SERVICES_SERVICE_NAME, "started");
     return SVCS_ERR_SUCCESS;
@@ -693,16 +761,4 @@ svcctl_service_message (service_ident_t orig_id,
 	d_log_wprintf (SERVICES_SERVICE_NAME, "message error:%u, id:%u", ret, dest_id);
 
     return ret;
-}
-
-svcs_errcode_t  ICACHE_FLASH_ATTR
-svcctl_service_conf_get (service_ident_t service_id, dtlv_ctx_t * conf)
-{
-    return SVCS_ERR_SUCCESS;
-}
-
-svcs_errcode_t  ICACHE_FLASH_ATTR
-svcctl_service_conf_set (service_ident_t service_id, dtlv_ctx_t * conf)
-{
-    return SVCS_ERR_SUCCESS;
 }
