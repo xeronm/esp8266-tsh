@@ -361,9 +361,9 @@ typedef struct sched_setnext_ctx_s {
 } sched_setnext_ctx_t;
 
 LOCAL imdb_errcode_t ICACHE_FLASH_ATTR
-sched_forall_next_time (void *ptr, void *data)
+sched_forall_next_time (imdb_fetch_obj_t *fobj, void *data)
 {
-    sched_entry_t *entry = d_pointer_as (sched_entry_t, ptr);
+    sched_entry_t *entry = d_pointer_as (sched_entry_t, fobj->dataptr);
     sched_setnext_ctx_t *ctx = d_pointer_as (sched_setnext_ctx_t, data);
 
     if (ctx->frenew || (entry->next_ctime == SCHED_NEXT_CTIME_NONE) || 
@@ -414,9 +414,9 @@ typedef struct sched_find_ctx_s {
  * [private] imdb forall callback
  */
 LOCAL imdb_errcode_t ICACHE_FLASH_ATTR
-sched_forall_find (void *ptr, void *data)
+sched_forall_find (imdb_fetch_obj_t *fobj, void *data)
 {
-    sched_entry_t *entry = d_pointer_as (sched_entry_t, ptr);
+    sched_entry_t *entry = d_pointer_as (sched_entry_t, fobj->dataptr);
     sched_find_ctx_t *find_ctx = d_pointer_as (sched_find_ctx_t, data);
     if (os_strncmp (entry->entry_name, find_ctx->entry_name, sizeof (entry_name_t)) == 0) {
 	find_ctx->entry = entry;
@@ -541,6 +541,8 @@ sched_entry_run (const entry_name_t * entry_name)
     return entry_run (entry);
 }
 
+#define SCHED_FETCH_BULK_COUNT	10
+
 LOCAL svcs_errcode_t ICACHE_FLASH_ATTR
 sched_on_msg_info (dtlv_ctx_t * msg_out)
 {
@@ -554,29 +556,29 @@ sched_on_msg_info (dtlv_ctx_t * msg_out)
 
     d_svcs_check_imdb_error (imdb_class_query (sdata->svcres->hmdb, sdata->hentry, PATH_NONE, &hcur));
 
-    sched_entry_t  *entries[10];
+    imdb_fetch_obj_t fobj[SCHED_FETCH_BULK_COUNT];
     uint16          rowcount;
-    d_svcs_check_imdb_error (imdb_class_fetch (hcur, 10, &rowcount, (void **)entries));
+    d_svcs_check_imdb_error (imdb_class_fetch (hcur, SCHED_FETCH_BULK_COUNT, &rowcount, fobj));
 
     bool            fcont = true;
     while (rowcount && fcont) {
 	int             i;
 	for (i = 0; i < rowcount; i++) {
-
+            sched_entry_t  *entry = d_pointer_as(sched_entry_t, fobj[i].dataptr);
 	    dtlv_avp_t     *gavp_in;
 	    d_svcs_check_imdb_error (dtlv_avp_encode_grouping (msg_out, 0, SCHED_AVP_ENTRY, &gavp_in)
-				     || dtlv_avp_encode_nchar (msg_out, SCHED_AVP_ENTRY_NAME, sizeof (entry_name_t), entries[i]->entry_name)
-				     || dtlv_avp_encode_nchar (msg_out, SCHED_AVP_STMT_NAME, sizeof (sh_stmt_name_t), entries[i]->stmt_name)
-				     || dtlv_raw_encode (msg_out, entries[i]->vardata, entries[i]->varlen)
-				     || dtlv_avp_encode_uint8 (msg_out, SCHED_AVP_ENTRY_STATE, entries[i]->state)
-				     || ((entries[i]->last_ctime) ? dtlv_avp_encode_uint32 (msg_out, SCHED_AVP_LAST_RUN_TIME, lt_time (&entries[i]->last_ctime)) : 0)
-				     || ((entries[i]->next_ctime != SCHED_NEXT_CTIME_NONE) ? dtlv_avp_encode_uint32 (msg_out, SCHED_AVP_NEXT_RUN_TIME, lt_time (&entries[i]->next_ctime)) : 0)
-				     || dtlv_avp_encode_uint16 (msg_out, SCHED_AVP_RUN_COUNT, entries[i]->run_count)
-				     || dtlv_avp_encode_uint16 (msg_out, SCHED_AVP_FAIL_COUNT, entries[i]->fail_count)
+				     || dtlv_avp_encode_nchar (msg_out, SCHED_AVP_ENTRY_NAME, sizeof (entry_name_t), entry->entry_name)
+				     || dtlv_avp_encode_nchar (msg_out, SCHED_AVP_STMT_NAME, sizeof (sh_stmt_name_t), entry->stmt_name)
+				     || dtlv_raw_encode (msg_out, entry->vardata, entry->varlen)
+				     || dtlv_avp_encode_uint8 (msg_out, SCHED_AVP_ENTRY_STATE, entry->state)
+				     || ((entry->last_ctime) ? dtlv_avp_encode_uint32 (msg_out, SCHED_AVP_LAST_RUN_TIME, lt_time (&entry->last_ctime)) : 0)
+				     || ((entry->next_ctime != SCHED_NEXT_CTIME_NONE) ? dtlv_avp_encode_uint32 (msg_out, SCHED_AVP_NEXT_RUN_TIME, lt_time (&entry->next_ctime)) : 0)
+				     || dtlv_avp_encode_uint16 (msg_out, SCHED_AVP_RUN_COUNT, entry->run_count)
+				     || dtlv_avp_encode_uint16 (msg_out, SCHED_AVP_FAIL_COUNT, entry->fail_count)
 				     || dtlv_avp_encode_group_done (msg_out, gavp_in));
 	}
 
-        d_svcs_check_imdb_error (imdb_class_fetch (hcur, 10, &rowcount, (void **)entries));
+        d_svcs_check_imdb_error (imdb_class_fetch (hcur, SCHED_FETCH_BULK_COUNT, &rowcount, fobj));
     }
 
     d_svcs_check_imdb_error (dtlv_avp_encode_group_done (msg_out, gavp));
@@ -631,7 +633,7 @@ sched_on_message (service_ident_t orig_id,
 
 	    sched_errcode_t sres = sched_entry_add (entry_name, sztsentry, stmt_name, vardata, varlen);
 	    if (sres != SCHED_ERR_SUCCESS) {
-                d_svcs_check_svcs_error (encode_service_result_ext (msg_out, sres));
+                d_svcs_check_svcs_error (encode_service_result_ext (msg_out, sres, NULL));
 	    }
 	}
         break;
@@ -661,7 +663,7 @@ sched_on_message (service_ident_t orig_id,
 		sres = sched_entry_run (entry_name);
 
 	    if (sres != SCHED_ERR_SUCCESS) {
-                d_svcs_check_svcs_error (encode_service_result_ext (msg_out, sres));
+                d_svcs_check_svcs_error (encode_service_result_ext (msg_out, sres, NULL));
 	    }
 	}
         break;

@@ -297,9 +297,14 @@ espadmin_on_msg_fdb (dtlv_ctx_t * msg_out)
 
     imdb_file_t hdr_file;
     if (fdb_header_read (&hdr_file) == IMDB_ERR_SUCCESS) {
+        #ifdef ARCH_XTENSA
         flash_ota_map_t * fwmap = get_flash_ota_map ();
-	d_svcs_check_dtlv_error (dtlv_avp_encode_uint32 (msg_out, ESPADMIN_AVP_FDB_DATA_ADDR, d_flash_user2_data_addr(fwmap))
-                                 || dtlv_avp_encode_uint32 (msg_out, ESPADMIN_AVP_FDB_DATA_SIZE, fio_user_size ())
+        #endif
+	d_svcs_check_dtlv_error (
+                                 #ifdef ARCH_XTENSA
+                                 dtlv_avp_encode_uint32 (msg_out, ESPADMIN_AVP_FDB_DATA_ADDR, d_flash_user2_data_addr(fwmap)) ||
+                                 #endif
+                                 dtlv_avp_encode_uint32 (msg_out, ESPADMIN_AVP_FDB_DATA_SIZE, fio_user_size ())
                                  || dtlv_avp_encode_uint32 (msg_out, ESPADMIN_AVP_FDB_FILE_SIZE, hdr_file.file_size * hdr_file.block_size)
                                  || dtlv_avp_encode_uint32 (msg_out, ESPADMIN_AVP_FDB_FILE_HWM, hdr_file.file_hwm * hdr_file.block_size)
                                 );
@@ -436,11 +441,17 @@ espadmin_on_msg_fwupdate_upload (dtlv_ctx_t * msg_in, dtlv_ctx_t * msg_out)
 
 #ifdef ARCH_XTENSA
 LOCAL void      ICACHE_FLASH_ATTR
-system_restart_timeout (void *args)
+task_system_restart (void *args)
 {
     system_shutdown ();
-    if (args)
-        fio_user_format (1);
+    system_restart ();
+}
+
+LOCAL void      ICACHE_FLASH_ATTR
+task_fdb_truncate (void *args)
+{
+    system_shutdown ();
+    fio_user_format (1);
     system_restart ();
 }
 #endif
@@ -456,15 +467,7 @@ espadmin_on_message (service_ident_t orig_id, service_msgtype_t msgtype, void *c
 	break;
 #ifdef ARCH_XTENSA
     case ESPADMIN_MSGTYPE_RESTART:
-        {
-            os_timer_t     *timer;
-            st_zalloc(timer, os_timer_t);
-
-            os_timer_disarm (timer);
-            os_timer_setfn (timer, system_restart_timeout, NULL);
-            os_timer_arm (timer, 10, false);
-            d_log_wprintf (ESPADMIN_SERVICE_NAME, "restart timeout:%d msec", 10);
-        }
+        system_post_delayed_cb (task_system_restart, NULL);
 	break;
     case ESPADMIN_MSGTYPE_FW_OTA_INIT:
 	res = espadmin_on_msg_fwupdate_init (msg_in, msg_out);
@@ -484,15 +487,7 @@ espadmin_on_message (service_ident_t orig_id, service_msgtype_t msgtype, void *c
 	}
 	break;
     case ESPADMIN_MSGTYPE_FDB_TRUNC:
-        {
-            os_timer_t     *timer;
-            st_zalloc(timer, os_timer_t);
-
-            os_timer_disarm (timer);
-            os_timer_setfn (timer, system_restart_timeout, (void*)true);
-            os_timer_arm (timer, 10, false);
-            d_log_wprintf (ESPADMIN_SERVICE_NAME, "restart timeout:%d msec", 10);
-        }
+        system_post_delayed_cb (task_fdb_truncate, NULL);
         break;
 #endif
     default:
@@ -521,24 +516,55 @@ espadmin_on_cfgupd (dtlv_ctx_t * conf)
     AUTH_MODE       wifi_ap_auth_mode = ESPADMIN_DEFAULT_WIFI_AP_AUTH_MODE;
 
     if (conf) {
-	dtlv_errcode_t  dtlv_res = DTLV_ERR_SUCCESS;
-	dtlv_davp_t     davp;
-	while (dtlv_res == DTLV_ERR_SUCCESS) {
-	    dtlv_res = dtlv_avp_decode (conf, &davp);
-	    switch (davp.havpd.nscode.nscode) {
-	    case ESPADMIN_AVP_WIRELESS:
-		// TODO: ...
-		break;
-	    default:
-		continue;
-	    }
-	}
+        dtlv_ctx_t dtlv_softap;
+        os_memset(&dtlv_softap, 0, sizeof(dtlv_ctx_t));
+        dtlv_ctx_t dtlv_station;
+        os_memset(&dtlv_station, 0, sizeof(dtlv_ctx_t));
+
+        dtlv_seq_decode_begin (conf, ESPADMIN_SERVICE_ID);
+        dtlv_seq_decode_uint8 (ESPADMIN_AVP_WIFI_OPMODE, &wifi_mode);
+        dtlv_seq_decode_group (ESPADMIN_AVP_WIFI_STATION, dtlv_softap.buf, dtlv_softap.datalen);
+        dtlv_seq_decode_group (ESPADMIN_AVP_WIFI_SOFTAP, dtlv_station.buf, dtlv_station.datalen);
+        dtlv_seq_decode_end (conf);
+
+        if (dtlv_softap.buf) {
+            char       *password = NULL;
+            dtlv_ctx_reset_decode (&dtlv_softap);
+            dtlv_seq_decode_begin (&dtlv_softap, ESPADMIN_SERVICE_ID);
+            dtlv_seq_decode_uint8 (ESPADMIN_AVP_WIFI_AUTH_MODE, &wifi_ap_auth_mode);
+            dtlv_seq_decode_ptr (ESPADMIN_AVP_WIFI_PASSWORD, password, char);
+            dtlv_seq_decode_end (&dtlv_softap);
+
+            size_t plen = os_strlen(password);
+            if (plen > 0)
+                os_memcpy (wifi_ap_password, password, MIN (sizeof (wifi_ap_password), plen));
+        }
+
+        if (dtlv_station.buf) {
+            char       *password = NULL;
+            char       *ssid = NULL;
+            dtlv_ctx_reset_decode (&dtlv_station);
+            dtlv_seq_decode_begin (&dtlv_station, ESPADMIN_SERVICE_ID);
+            dtlv_seq_decode_uint8 (ESPADMIN_AVP_WIFI_AUTO_CONNECT, &wifi_autoconnect);
+            dtlv_seq_decode_ptr (ESPADMIN_AVP_WIFI_PASSWORD, password, char);
+            dtlv_seq_decode_ptr (ESPADMIN_AVP_WIFI_SSID, ssid, char);
+            dtlv_seq_decode_end (&dtlv_station);
+
+            size_t plen = os_strlen(password);
+            if (plen > 0)
+                os_memcpy (wifi_st_password, password, MIN (sizeof (wifi_st_password), plen));
+
+            plen = os_strlen(ssid);
+            if (plen > 0)
+                os_memcpy (wifi_st_ssid, ssid, MIN (sizeof (wifi_st_ssid), plen));
+        }
     }
 
     // setup WiFi
     d_log_iprintf (ESPADMIN_SERVICE_NAME, "setup wifi mode:%u", wifi_mode);
 
-    wifi_set_opmode (wifi_mode);
+    if (wifi_set_opmode (wifi_mode))
+        d_log_eprintf (ESPADMIN_SERVICE_NAME, "wifi invalid mode:%u", wifi_mode);
 
     if ((wifi_mode == STATION_MODE) || (wifi_mode == STATIONAP_MODE)) {
 	struct station_config config;
@@ -547,7 +573,8 @@ espadmin_on_cfgupd (dtlv_ctx_t * conf)
 	os_memcpy (config.password, wifi_st_password, sizeof (wifi_st_password));
 
 	d_log_iprintf (ESPADMIN_SERVICE_NAME, "\tstation ssid:%s, auto:%u", config.ssid, wifi_autoconnect);
-	wifi_station_set_config (&config);
+	if (wifi_station_set_config (&config))
+            d_log_eprintf (ESPADMIN_SERVICE_NAME, "wifi invalid station config");
 	wifi_station_set_auto_connect (wifi_autoconnect);
     }
     if ((wifi_mode == SOFTAP_MODE) || (wifi_mode == STATIONAP_MODE)) {
@@ -558,7 +585,8 @@ espadmin_on_cfgupd (dtlv_ctx_t * conf)
 	config.authmode = wifi_ap_auth_mode;
 
 	d_log_iprintf (ESPADMIN_SERVICE_NAME, "\tsoftap ssid:%s, password:%s", config.ssid, config.password);
-	wifi_softap_set_config (&config);
+	if (wifi_softap_set_config (&config))
+            d_log_eprintf (ESPADMIN_SERVICE_NAME, "wifi invalid softap config");
     }
 #endif
 

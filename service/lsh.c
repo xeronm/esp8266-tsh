@@ -198,9 +198,9 @@ typedef struct sh_func_find_ctx_s {
 [private]
 */
 LOCAL imdb_errcode_t ICACHE_FLASH_ATTR
-sh_forall_func_find (void *ptr, void *data)
+sh_forall_func_find (imdb_fetch_obj_t *fobj, void *data)
 {
-    sh_func_entry_t *entry = d_pointer_as (sh_func_entry_t, ptr);
+    sh_func_entry_t *entry = d_pointer_as (sh_func_entry_t, fobj->dataptr);
     sh_func_find_ctx_t *find_ctx = d_pointer_as (sh_func_find_ctx_t, data);
     if (os_strncmp (entry->func_name, find_ctx->func_name, sizeof (sh_func_name_t)) == 0) {
 	find_ctx->entry = entry;
@@ -1728,9 +1728,9 @@ typedef struct sh_find_ctx_s {
  * [private] imdb forall callback
  */
 LOCAL imdb_errcode_t ICACHE_FLASH_ATTR
-sh_forall_find (void *ptr, void *data)
+sh_forall_find (imdb_fetch_obj_t *fobj, void *data)
 {
-    sh_stmt_t *stmt = d_pointer_as (sh_stmt_t, ptr);
+    sh_stmt_t *stmt = d_pointer_as (sh_stmt_t, fobj->dataptr);
     sh_find_ctx_t *find_ctx = d_pointer_as (sh_find_ctx_t, data);
     if (os_strncmp (stmt->info.name, find_ctx->stmt_name, sizeof (sh_stmt_name_t)) == 0) {
 	find_ctx->stmt = stmt;
@@ -1798,7 +1798,7 @@ sh_on_msg_stmt_add (dtlv_ctx_t * msg_in, dtlv_ctx_t * msg_out)
     if (res == SH_ERR_SUCCESS)
         d_log_iprintf (LSH_SERVICE_NAME, "add \"%s\"", stmt_name);
     else
-        d_svcs_check_svcs_error (encode_service_result_ext (msg_out, res));
+        d_svcs_check_svcs_error (encode_service_result_ext (msg_out, res, NULL));
 
     return SVCS_ERR_SUCCESS;
 }
@@ -1830,7 +1830,7 @@ sh_on_msg_stmt_remove (dtlv_ctx_t * msg_in, dtlv_ctx_t * msg_out)
     }
 
     if (res != SH_ERR_SUCCESS)
-        d_svcs_check_svcs_error (encode_service_result_ext (msg_out, res));
+        d_svcs_check_svcs_error (encode_service_result_ext (msg_out, res, NULL));
 
     return SVCS_ERR_SUCCESS;
 }
@@ -1867,7 +1867,7 @@ sh_on_msg_stmt_dump (dtlv_ctx_t * msg_in, dtlv_ctx_t * msg_out)
     case SH_STMT_NOT_EXISTS:
 	d_log_wprintf (LSH_SERVICE_NAME, sz_sh_error[SH_STMT_NOT_EXISTS], stmt_name);
     default:	
-        d_svcs_check_svcs_error (encode_service_result_ext (msg_out, res));
+        d_svcs_check_svcs_error (encode_service_result_ext (msg_out, res, NULL));
     }
 
     return SVCS_ERR_SUCCESS;
@@ -1901,10 +1901,12 @@ sh_on_msg_stmt_run (dtlv_ctx_t * msg_in, dtlv_ctx_t * msg_out)
     }
 
     if (res != SH_ERR_SUCCESS)
-        d_svcs_check_svcs_error (encode_service_result_ext (msg_out, res));
+        d_svcs_check_svcs_error (encode_service_result_ext (msg_out, res, NULL));
 
     return SVCS_ERR_SUCCESS;
 }
+
+#define LSH_FETCH_BULK_COUNT	10
 
 LOCAL svcs_errcode_t ICACHE_FLASH_ATTR
 sh_on_msg_info (dtlv_ctx_t * msg_out)
@@ -1915,15 +1917,15 @@ sh_on_msg_info (dtlv_ctx_t * msg_out)
     imdb_hndlr_t    hcur;
     d_svcs_check_imdb_error (imdb_class_query (sdata->svcres->hmdb, sdata->hstmt, PATH_NONE, &hcur));
 
-    void           *entries[10];
+    imdb_fetch_obj_t fobj[LSH_FETCH_BULK_COUNT];
     uint16          rowcount;
-    d_svcs_check_imdb_error (imdb_class_fetch (hcur, 10, &rowcount, entries));
+    d_svcs_check_imdb_error (imdb_class_fetch (hcur, LSH_FETCH_BULK_COUNT, &rowcount, fobj));
 
     bool            fcont = true;
     while (rowcount && fcont) {
 	int             i;
 	for (i = 0; i < rowcount; i++) {
-            sh_stmt_t      *stmt = d_pointer_as(sh_stmt_t, entries[i]);
+            sh_stmt_t      *stmt = d_pointer_as(sh_stmt_t, fobj[i].dataptr);
 	    dtlv_avp_t     *gavp_in;
 	    d_svcs_check_dtlv_error (dtlv_avp_encode_grouping (msg_out, 0, SH_AVP_STATEMENT, &gavp_in)
 				     || dtlv_avp_encode_nchar (msg_out, SH_AVP_STMT_NAME, sizeof (sh_stmt_name_t), stmt->info.name)
@@ -1932,7 +1934,7 @@ sh_on_msg_info (dtlv_ctx_t * msg_out)
 				     || dtlv_avp_encode_group_done (msg_out, gavp_in));
 	}
 
-        d_svcs_check_imdb_error (imdb_class_fetch (hcur, 10, &rowcount, entries));
+        d_svcs_check_imdb_error (imdb_class_fetch (hcur, LSH_FETCH_BULK_COUNT, &rowcount, fobj));
     }
     imdb_class_close (hcur);
     d_svcs_check_imdb_error (dtlv_avp_encode_group_done (msg_out, gavp));
@@ -1941,16 +1943,16 @@ sh_on_msg_info (dtlv_ctx_t * msg_out)
     d_svcs_check_dtlv_error (dtlv_avp_encode_list (msg_out, 0, SH_AVP_FUNCTION_NAME, DTLV_TYPE_CHAR, &gavp));
     d_svcs_check_imdb_error (imdb_class_query (sdata->svcres->hmdb, sdata->hfunc, PATH_NONE, &hcur));
 
-    d_svcs_check_imdb_error (imdb_class_fetch (hcur, 10, &rowcount, entries));
+    d_svcs_check_imdb_error (imdb_class_fetch (hcur, LSH_FETCH_BULK_COUNT, &rowcount, fobj));
     fcont = true;
     while (rowcount && fcont) {
 	int             i;
 	for (i = 0; i < rowcount; i++) {
-            sh_func_entry_t *func = d_pointer_as(sh_func_entry_t, entries[i]);
+            sh_func_entry_t *func = d_pointer_as(sh_func_entry_t, fobj[i].dataptr);
 	    d_svcs_check_dtlv_error (dtlv_avp_encode_nchar (msg_out, SH_AVP_FUNCTION_NAME, sizeof (sh_func_name_t), func->func_name));
 	}
 
-        d_svcs_check_imdb_error (imdb_class_fetch (hcur, 10, &rowcount, entries));
+        d_svcs_check_imdb_error (imdb_class_fetch (hcur, LSH_FETCH_BULK_COUNT, &rowcount, fobj));
     }
     imdb_class_close (hcur);
     d_svcs_check_imdb_error (dtlv_avp_encode_group_done (msg_out, gavp));

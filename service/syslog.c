@@ -136,7 +136,7 @@ syslog_on_msg_query (dtlv_ctx_t * msg_in, dtlv_ctx_t * msg_out)
 
     d_svcs_check_imdb_error (imdb_class_query (sdata->svcres->hmdb, sdata->hlogs, PATH_RECYCLE_SCAN_REW, &hcur));
 
-    void           *recs[LOG_FETCH_SIZE];
+    imdb_fetch_obj_t recs[LOG_FETCH_SIZE];
     uint16          rowcount;
     d_svcs_check_imdb_error (imdb_class_fetch (hcur, LOG_FETCH_SIZE, &rowcount, recs));
 
@@ -144,7 +144,7 @@ syslog_on_msg_query (dtlv_ctx_t * msg_in, dtlv_ctx_t * msg_out)
     while (rowcount && fcont) {
 	int             i;
 	for (i = 0; i < rowcount; i++) {
-	    syslog_logrec_t *rec = d_pointer_as (syslog_logrec_t, recs[i]);
+	    syslog_logrec_t *rec = d_pointer_as (syslog_logrec_t, recs[i].dataptr);
 	    //os_printf(" -- %u:%u %u - %u\n", i, rowcount, rec->rec_no, os_strlen(rec->vardata));
 
 	    if (rec->rec_no < rec_no) {

@@ -31,6 +31,12 @@
 
 #define SERVICE_SERVICE_ID		1
 
+typedef enum svcs_cfgtype_e {
+    SVCS_CFGTYPE_CURRENT = 0,
+    SVCS_CFGTYPE_NEW = 1,
+    SVCS_CFGTYPE_BACKUP = 2,
+} svcs_cfgtype_t;
+
 typedef enum svcs_errcode_e {
     SVCS_ERR_SUCCESS = 0,
     SVCS_INTERNAL_ERROR = 1,
@@ -56,12 +62,13 @@ typedef enum svcs_msgtype_e {
     SVCS_MSGTYPE_CONTROL = 2,
     SVCS_MSGTYPE_CONFIG_GET = 3,
     SVCS_MSGTYPE_CONFIG_SET = 4,
+    SVCS_MSGTYPE_CONFIG_SAVE = 5,
     // Multicast Messages
-    SVCS_MSGTYPE_NETWORK = 5,
-    SVCS_MSGTYPE_NETWORK_LOSS = 6,
-    SVCS_MSGTYPE_ADJTIME = 7,
-    SVCS_MSGTYPE_SYSTEM_START = 8,
-    SVCS_MSGTYPE_SYSTEM_STOP = 9,
+    SVCS_MSGTYPE_SYSTEM_START = 32,
+    SVCS_MSGTYPE_SYSTEM_STOP = 33,
+    SVCS_MSGTYPE_NETWORK = 34,
+    SVCS_MSGTYPE_NETWORK_LOSS = 35,
+    SVCS_MSGTYPE_ADJTIME = 36,
 } svcs_msgtype_t;
 
 typedef enum svcs_avp_code_e {
@@ -130,15 +137,16 @@ svcs_errcode_t  svcctl_service_uninstall (const char *name);
 svcs_errcode_t  svcctl_service_start (service_ident_t service_id, const char *name);
 svcs_errcode_t  svcctl_service_stop (service_ident_t service_id, const char *name);
 
-svcs_errcode_t  svcctl_service_conf_get (service_ident_t service_id, dtlv_ctx_t * conf);
+svcs_errcode_t  svcctl_service_conf_get (service_ident_t service_id, dtlv_ctx_t * conf, svcs_cfgtype_t cfgtype);
 svcs_errcode_t  svcctl_service_conf_set (service_ident_t service_id, dtlv_ctx_t * conf);
+svcs_errcode_t  svcctl_service_conf_save (service_ident_t service_id);
 
 svcs_errcode_t  svcctl_service_message (service_ident_t orig_id,
 					service_ident_t dest_id,
 					void *ctxdata,
 					service_msgtype_t msgtype, dtlv_ctx_t * msg_in, dtlv_ctx_t * msg_out);
 
-svcs_errcode_t  encode_service_result_ext (dtlv_ctx_t * msg_out, uint8 ext_code);
+svcs_errcode_t  encode_service_result_ext (dtlv_ctx_t * msg_out, uint8 ext_code, const char *errmsg);
 
 
 #define d_svcs_check_svcs_error(ret) \

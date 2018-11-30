@@ -28,6 +28,7 @@ typedef enum common_avp_code_e {
     COMMON_AVP_TIME_ZONE = 14,
     COMMON_AVP_SERVICE_NAME = 15,
     COMMON_AVP_PEREPHERIAL_GPIO_ID = 16,
+    COMMON_AVP_UPDATE_TIMESTAMP = 17,
 } common_avp_code_t;
 
 #endif

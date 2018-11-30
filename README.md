@@ -37,6 +37,16 @@ Use esptool.py
 |  7 | gpioctl   | GPIO control management      |
 |  8 | sched     | Cron-like scheduler          |
 
+### Service supported configuration ###
+
+| Id | Name      | Message                      |
+| ---| ----------| -----------------------------|
+|  2 | syslog    | ```{"syslog.Log-Severity": 4}```|
+|  3 | espadmin  |  |
+|  4 | udpctl    |  |
+|  5 | lwsh      |  |
+|  6 | ntp       | ```{"common.Time-Zone": "+3:00", "ntp.Poll-Interval": 10, "ntp.Peer": [{"common.Host-Name": "0.pool.ntp.org"}, {"common.Host-Name": "1.pool.ntp.org"}]}``` |
+|  8 | sched     |  |
 
 ## Memos
 

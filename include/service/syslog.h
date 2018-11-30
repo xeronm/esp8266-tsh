@@ -18,7 +18,7 @@
 #define SYSLOG_SERVICE_ID		2
 #define SYSLOG_SERVICE_NAME		"syslog"
 
-#define SYSLOG_DEFAULT_SEVERITY		LOG_INFO
+#define SYSLOG_DEFAULT_SEVERITY		LOG_WARNING
 
 typedef struct syslog_logrec_s {
     uint16          rec_no;

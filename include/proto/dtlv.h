@@ -124,12 +124,16 @@ dtlv_errcode_t  dtlv_ctx_reset_encode (dtlv_ctx_t * ctx);
 
 #define dtlv_check_namespace(davp, nsid) ( ((davp)->havpd.nscode.comp.namespace_id == 0) || ((davp)->havpd.nscode.comp.namespace_id == (nsid)) )
 
-#define dtlv_seq_decode_begin(ctx, namespace_id) \
+#define dtlv_seq_decode_begin(ctx, nsid) \
 	{ \
 	    dtlv_davp_t     davp; \
 	    while (dtlv_avp_decode ((ctx), &davp) == DTLV_ERR_SUCCESS) { \
-		if (!dtlv_check_namespace (&davp, (namespace_id) )) \
-		    break; \
+		if (dtlv_check_namespace (&davp, (nsid) )) {\
+		switch (davp.havpd.nscode.comp.code) {
+
+#define dtlv_seq_decode_ns(nsid) \
+                }} \
+		if (dtlv_check_namespace (&davp, (nsid) )) { \
 		switch (davp.havpd.nscode.comp.code) {
 
 #define dtlv_seq_decode_ptr(code, trg, type) \
@@ -144,13 +148,13 @@ dtlv_errcode_t  dtlv_ctx_reset_encode (dtlv_ctx_t * ctx);
 
 #define dtlv_seq_decode_octets(code, trg, buflen, outlen) \
 		case code: \
-		    (outlen) = d_avp_data_length(davp.havpd.length); \
+		    outlen = d_avp_data_length(davp.havpd.length); \
 		    os_memcpy (trg, davp.avp->data, MIN ((outlen), (buflen))); \
 		    break;
 
 #define dtlv_seq_decode_group(code, trg, outlen) \
 		case code: \
-		    (outlen) = d_avp_data_length(davp.havpd.length); \
+		    outlen = d_avp_data_length(davp.havpd.length); \
 		    trg = davp.avp->data; \
 		    break;
 
@@ -164,7 +168,7 @@ dtlv_errcode_t  dtlv_ctx_reset_encode (dtlv_ctx_t * ctx);
 		    dtlv_avp_get_uint32 (&davp, trg); \
 		    break;
 
-#define dtlv_seq_decode_end(ctx) 	}}}
+#define dtlv_seq_decode_end(ctx) 	}}}}
 
 
 /*

@@ -39,12 +39,16 @@
 #  include "service/device/dhtxx.h"
 #endif
 
-imdb_hndlr_t    hmdb = 0;
-imdb_hndlr_t    hfdb = 0;
-
+typedef struct system_data_s {
+    imdb_hndlr_t    hmdb;
+    imdb_hndlr_t    hfdb;
 #ifdef ARCH_XTENSA
-os_timer_t      timer_overflow;
+    os_timer_t      timer_overflow;
+    os_event_t      task_queue[TASK_QUEUE_LENGTH];
 #endif
+} system_data_t;
+
+LOCAL system_data_t *sdata = NULL;
 
 #define STARTUP_SERVICE_NAME	"startup"
 #define SHUTDOWN_SERVICE_NAME	"shutdown"
@@ -65,20 +69,29 @@ LOCAL reg_service_t const reg_services[REG_SERVICE_MAX] RODATA = {
     {syslog_service_install, SYSLOG_SERVICE_NAME},
     {lsh_service_install, LSH_SERVICE_NAME},
     {sched_service_install, SCHED_SERVICE_NAME},
-#ifdef ARCH_XTENSA
+    #ifdef ARCH_XTENSA
     {espadmin_service_install, ESPADMIN_SERVICE_NAME},
     {gpio_service_install, GPIO_SERVICE_NAME},
-#endif
+    #endif
     {udpctl_service_install, UDPCTL_SERVICE_NAME},
     {ntp_service_install, NTP_SERVICE_NAME},
-#ifdef ARCH_XTENSA
+    #ifdef ARCH_XTENSA
     {dht_service_install, DHT_SERVICE_NAME},
-#endif
+    #endif
+};
+
+
+LOCAL imdb_def_t db_def RODATA = { 
+	SYSTEM_IMDB_BLOCK_SIZE, 
+	BLOCK_CRC_NONE, 
+	false, 
+	0, 
+	0 
 };
 
 LOCAL imdb_def_t fdb_def RODATA = { 
 	SYSTEM_FDB_BLOCK_SIZE, 
-	BLOCK_CRC_NONE, 
+	BLOCK_CRC_META, 
 	true, 
 	SYSTEM_FDB_CACHE_BLOCKS, 
 	SYSTEM_FDB_FILE_SIZE 
@@ -96,13 +109,13 @@ LOCAL void      ICACHE_FLASH_ATTR
 time_overflow_setup (void)
 {
     // setup time overflow timer
-    os_memset (&timer_overflow, 0, sizeof (os_timer_t));
-    os_timer_disarm (&timer_overflow);
-    os_timer_setfn (&timer_overflow, time_overflow_timeout, NULL);
+    os_memset (&sdata->timer_overflow, 0, sizeof (os_timer_t));
+    os_timer_disarm (&sdata->timer_overflow);
+    os_timer_setfn (&sdata->timer_overflow, time_overflow_timeout, NULL);
 
     uint32          timeout_min = (0xFFFFFFFF / USEC_PER_SEC / SEC_PER_MIN / 2) + 1;
     d_log_iprintf (MAIN_SERVICE_NAME, "overflow timer:%u min", timeout_min);
-    os_timer_arm (&timer_overflow, timeout_min * MSEC_PER_MIN, true);
+    os_timer_arm (&sdata->timer_overflow, timeout_min * MSEC_PER_MIN, true);
 }
 #endif
 
@@ -119,69 +132,88 @@ wifi_event_handler_cb (System_Event_t * event)
 }
 #endif
 
+#ifdef ARCH_XTENSA
+void ICACHE_FLASH_ATTR  
+system_task_delayed_cb (ETSEvent *e) { 
+    if (e->sig) {
+        ETSTimerFunc *func_cb = (ETSTimerFunc *) e->sig;
+        func_cb ((void*)e->par);
+    }
+}
+#endif
+
 void            ICACHE_FLASH_ATTR
 system_init (void)
 {
-#ifdef ARCH_XTENSA
-  #ifdef ENABLE_AT
+    if (sdata) return;
+    st_alloc(sdata, system_data_t);
+  
+    #ifdef ARCH_XTENSA
+    system_os_task(system_task_delayed_cb, USER_TASK_PRIO_1, &sdata->task_queue, TASK_QUEUE_LENGTH);
+    #ifdef ENABLE_AT
     at_init ();
     atcmd_init ();
-  #else
+    #else
     uart_init (BIT_RATE_115200, BIT_RATE_115200);
-  #endif
-#endif
+    #endif
+    #endif
+
     os_printf (LINE_END LINE_END "*** system_startup ***" LINE_END);
 
-#ifdef ARCH_XTENSA
+    #ifdef ARCH_XTENSA
     d_log_wprintf (STARTUP_SERVICE_NAME, "*** %s, ver:%s, sdk:%s (build:" __DATE__ " " __TIME__ ") ***", APP_PRODUCT,
 		   APP_VERSION, system_get_sdk_version ());
     d_log_wprintf (STARTUP_SERVICE_NAME, "***  userbin:0x%06x, fmem:%d  ***", system_get_userbin_addr (),
 		   system_get_free_heap_size ());
-#endif
+    #endif
 
-#ifndef DISABLE_SYSTEM
+    #ifndef DISABLE_SYSTEM
     d_log_iprintf (STARTUP_SERVICE_NAME, "block_size imdb:%u,fdb:%u", SYSTEM_IMDB_BLOCK_SIZE, SYSTEM_FDB_BLOCK_SIZE);
-    imdb_def_t      db_def = { SYSTEM_IMDB_BLOCK_SIZE, BLOCK_CRC_NONE, false, 0, 0 };
-    imdb_init (&db_def, &hmdb);
 
-    imdb_init (&fdb_def, &hfdb);
+    imdb_init (&db_def, &sdata->hmdb);
+    imdb_init (&fdb_def, &sdata->hfdb);
 
-    svcctl_start (hmdb, hfdb);
+    svcctl_start (sdata->hmdb, sdata->hfdb);
     // installing services
     int             i;
     for (i = 0; i < REG_SERVICE_MAX; i++) {
 	reg_services[i].fn_install ();
     }
-#endif
+    #endif
 
-#ifdef ARCH_XTENSA
+    #ifdef ARCH_XTENSA
     time_overflow_setup ();
 
     wifi_set_event_handler_cb (wifi_event_handler_cb);
-#endif
+    #endif
 
     d_log_wprintf (STARTUP_SERVICE_NAME, "done, fmem:%d", system_get_free_heap_size ());
 
     svcctl_service_message (0, 0, NULL, SVCS_MSGTYPE_SYSTEM_START, NULL, NULL);
 
     // flush all changed blocks
-    imdb_flush (hfdb);
+    imdb_flush (sdata->hfdb);
 }
 
 void            ICACHE_FLASH_ATTR
 system_shutdown (void)
 {
+    if (!sdata) return;
+
     svcctl_service_message (0, 0, NULL, SVCS_MSGTYPE_SYSTEM_STOP, NULL, NULL);
 
-#ifndef DISABLE_SYSTEM
+    #ifndef DISABLE_SYSTEM
     svcctl_stop ();
 
-    imdb_done (hmdb);
-    imdb_done (hfdb);
-#endif
-#ifdef ARCH_XTENSA
+    imdb_done (sdata->hmdb);
+    imdb_done (sdata->hfdb);
+    #endif
+
+    #ifdef ARCH_XTENSA
     wifi_station_disconnect ();
-#endif
+    #endif
+    st_free(sdata);
+
     d_log_wprintf (SHUTDOWN_SERVICE_NAME, "done, fmem:%d", system_get_free_heap_size ());
     os_printf (LINE_END LINE_END "*** system_shutdown ***" LINE_END);
 }
@@ -189,23 +221,31 @@ system_shutdown (void)
 imdb_hndlr_t    ICACHE_FLASH_ATTR
 get_hmdb (void)
 {
-    return hmdb;
+    return sdata->hmdb;
 }
 
 imdb_hndlr_t    ICACHE_FLASH_ATTR
 get_fdb (void)
 {
-    return hfdb;
+    return sdata->hfdb;
 }
 
 uint8           ICACHE_FLASH_ATTR
 system_get_default_secret (unsigned char *buf, uint8 len)
 {
     uint8           macaddr[6];
-#ifdef ARCH_XTENSA
+    #ifdef ARCH_XTENSA
     if (wifi_get_macaddr (STATION_IF, macaddr))
 	return buf2hex ((char *) buf, (char *) &macaddr, MIN (sizeof (macaddr), len / 2));
     else
-#endif
-	return 0;
+    #endif
+        return 0;
 }
+
+#ifdef ARCH_XTENSA
+bool           ICACHE_FLASH_ATTR
+system_post_delayed_cb(ETSTimerFunc task, void *arg)
+{
+    return system_os_post(USER_TASK_PRIO_1, (os_signal_t) task, (os_param_t) arg);
+}
+#endif

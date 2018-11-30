@@ -90,7 +90,6 @@ typedef struct udpctl_data_s {
 #endif
     udpctl_client_t clients[UDPCTL_CLIENTS_MAX];
     udpctl_conf_t   conf;
-//      udpctl_buffer_t*        buffer;
 } udpctl_data_t;
 
 LOCAL udpctl_data_t *sdata = NULL;
@@ -585,6 +584,9 @@ LOCAL void      ICACHE_FLASH_ATTR
 udpctl_setup (void)
 {
 #ifdef ARCH_XTENSA
+    if (sdata->proto_udp.local_port)
+        os_conn_free (&sdata->conn);
+
     sdata->conn.type = ESPCONN_UDP;
     sdata->conn.proto.udp = &sdata->proto_udp;
     sdata->proto_udp.local_port = sdata->conf.port;
@@ -618,10 +620,10 @@ udpctl_on_stop ()
     if (!sdata)
 	return SVCS_NOT_RUN;
 
-#ifdef ARCH_XTENSA
+    #ifdef ARCH_XTENSA
     if (os_conn_free (&sdata->conn))
 	d_log_eprintf (UDPCTL_SERVICE_NAME, "conn free error");
-#endif
+    #endif
     d_svcs_check_imdb_error (imdb_clsobj_delete (sdata->svcres->hmdb, sdata->svcres->hdata, sdata));
 
     sdata = NULL;
@@ -677,6 +679,8 @@ udpctl_on_message (service_ident_t orig_id,
 }
 
 
+void ICACHE_FLASH_ATTR  task_udpctl_setup (void *arg) { udpctl_setup (); }
+
 svcs_errcode_t  ICACHE_FLASH_ATTR
 udpctl_on_cfgupd (dtlv_ctx_t * conf)
 {
@@ -695,11 +699,15 @@ udpctl_on_cfgupd (dtlv_ctx_t * conf)
 
     if (conf) {
         dtlv_seq_decode_begin (conf, UDPCTL_SERVICE_ID);
-        dtlv_seq_decode_octets(UDPCTL_AVP_SECRET, sdata->conf.secret, sizeof (sdata->conf.secret), sdata->conf.secret_len);
+        dtlv_seq_decode_octets (UDPCTL_AVP_SECRET, sdata->conf.secret, sizeof (sdata->conf.secret), sdata->conf.secret_len);
+        dtlv_seq_decode_uint16 (COMMON_AVP_IP_PORT, &sdata->conf.port);
         dtlv_seq_decode_end (conf);
     }
 
-    udpctl_setup ();
+    #ifdef ARCH_XTENSA
+    if (!system_post_delayed_cb (task_udpctl_setup, NULL))
+	d_log_eprintf (UDPCTL_SERVICE_NAME, "task setup failed");
+    #endif	
 
     return SVCS_ERR_SUCCESS;
 }

@@ -69,7 +69,7 @@ typedef struct ntp_short_s {
  */
 typedef struct ntp_conf_s {
     ip_port_t       local_port;
-    uint16          poll_timeout;
+    uint8           poll_timeout;
     sint8           time_zone;
     ntp_hostname_t  hostname[NTP_MAX_PEERS];
 } ntp_conf_t;
@@ -594,7 +594,7 @@ LOCAL svcs_errcode_t ICACHE_FLASH_ATTR
 ntp_on_msg_info (dtlv_ctx_t * msg_out)
 {
     dtlv_avp_t     *gavp;
-    d_svcs_check_imdb_error (dtlv_avp_encode_uint16 (msg_out, NTP_AVP_POLL_INTERVAL, sdata->conf.poll_timeout) ||
+    d_svcs_check_imdb_error (dtlv_avp_encode_uint8 (msg_out, NTP_AVP_POLL_INTERVAL, sdata->conf.poll_timeout) ||
 			     dtlv_avp_encode_uint8 (msg_out, COMMON_AVP_TIME_ZONE, sdata->conf.time_zone) ||
 			     dtlv_avp_encode_uint8 (msg_out, NTP_AVP_QUERY_STATE, sdata->tx_state) ||
 			     dtlv_avp_encode_uint32 (msg_out, NTP_AVP_QUERY_STATE_TIME, lt_time (&sdata->tx_state_time))
@@ -661,13 +661,13 @@ ntp_on_message (service_ident_t orig_id,
 LOCAL void      ICACHE_FLASH_ATTR
 ntp_setup (void)
 {
-    sdata->conf.local_port = NTP_DEFAULT_LOCAL_PORT;
-    sdata->conf.poll_timeout = NTP_DEFAULT_POLL_TIMEOUT_MIN;
-    sdata->conf.time_zone = NTP_DEFAULT_TIME_ZONE;
-
-    lt_set_timezone (sdata->conf.time_zone);
+    if (!lt_set_timezone (sdata->conf.time_zone))
+	d_log_eprintf (NTP_SERVICE_NAME, "invalid timezone: %d", sdata->conf.time_zone);
 
 #ifdef ARCH_XTENSA
+    if (sdata->ntpudp.local_port)
+        os_conn_free (&sdata->ntpconn);
+
     sdata->ntpconn.type = ESPCONN_UDP;
     sdata->ntpconn.proto.udp = &sdata->ntpudp;
     sdata->ntpudp.local_port = (sdata->conf.local_port) ? sdata->conf.local_port : espconn_port ();
@@ -675,7 +675,7 @@ ntp_setup (void)
 
     sdata->dnsconn.type = ESPCONN_TCP;
     sdata->dnsconn.proto.tcp = &(sdata->dnstcp);
-    d_log_iprintf (NTP_SERVICE_NAME, "timezone: " TZSTR ", localport: %u", TZ2STR (sdata->conf.time_zone),
+    d_log_iprintf (NTP_SERVICE_NAME, "timezone: " TZSTR ", localport: %u", TZ2STR (lt_get_timezone ()),
 		   sdata->ntpudp.local_port);
 
     if (os_conn_create (&sdata->ntpconn) || os_conn_set_recvcb (&sdata->ntpconn, ntp_recv_cb)
@@ -742,11 +742,38 @@ ntp_on_cfgupd (dtlv_ctx_t * conf)
     sdata->conf.poll_timeout = NTP_DEFAULT_POLL_TIMEOUT_MIN;
     sdata->conf.time_zone = NTP_DEFAULT_TIME_ZONE;
 #ifdef NTP_DEFAULT_SERVER_0
-    os_memcpy (sdata->conf.hostname[0], NTP_DEFAULT_SERVER_0, os_strlen (NTP_DEFAULT_SERVER_0));
+    os_memcpy (sdata->conf.hostname[0], NTP_DEFAULT_SERVER_0, MIN(sizeof (ntp_hostname_t), os_strlen (NTP_DEFAULT_SERVER_0)) );
 #endif
 #ifdef NTP_DEFAULT_SERVER_1
-    os_memcpy (sdata->conf.hostname[1], NTP_DEFAULT_SERVER_1, os_strlen (NTP_DEFAULT_SERVER_1));
+    os_memcpy (sdata->conf.hostname[1], NTP_DEFAULT_SERVER_1, MIN(sizeof (ntp_hostname_t), os_strlen (NTP_DEFAULT_SERVER_1)) );
 #endif
+
+    if (conf) {
+        dtlv_ctx_t dtlv_peers;
+        os_memset (&dtlv_peers, 0, sizeof (dtlv_ctx_t));
+
+        dtlv_seq_decode_begin (conf, NTP_SERVICE_ID);
+        dtlv_seq_decode_uint8 (COMMON_AVP_TIME_ZONE, (uint8 *) &sdata->conf.time_zone);
+        dtlv_seq_decode_uint8 (NTP_AVP_POLL_INTERVAL, &sdata->conf.poll_timeout);
+        dtlv_seq_decode_group (NTP_AVP_PEER, dtlv_peers.buf, dtlv_peers.datalen);
+        dtlv_seq_decode_end (conf);
+
+
+        dtlv_nscode_t   path[] = { {{0, NTP_SERVICE_ID}}, {{0, NTP_AVP_PEER}}, {{0, NTP_AVP_PEER}}, 
+                                   {{0, COMMON_AVP_HOST_NAME}}, {{0, 0}}
+                             };
+        dtlv_davp_t     avp_array[NTP_MAX_PEERS];
+        uint16          total_count = 0;
+
+        dtlv_avp_decode_bypath (conf, path, avp_array, NTP_MAX_PEERS, true, &total_count);
+        uint8           i;
+        for (i = 0; i < total_count; i++) {
+            os_memcpy (sdata->conf.hostname[i], avp_array[i].avp->data, MIN (sizeof (ntp_hostname_t), d_avp_data_length(avp_array[i].havpd.length)));
+        }
+    }
+
+    sdata->conf.poll_timeout = MAX(3, sdata->conf.poll_timeout);
+
     ntp_setup ();
 
     return SVCS_ERR_SUCCESS;

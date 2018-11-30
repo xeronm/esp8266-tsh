@@ -383,7 +383,7 @@ gpio_on_msg_output_set (dtlv_ctx_t * msg_in, dtlv_ctx_t * msg_out)
 
     gpio_result_t   res = gpio_common_check (gpio_id);
     if (res != GPIO_RESULT_SUCCESS) {
-        encode_service_result_ext (msg_out, res);
+        encode_service_result_ext (msg_out, res, NULL);
 	return SVCS_ERR_SUCCESS;
     }
 

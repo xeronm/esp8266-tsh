@@ -208,9 +208,14 @@ typedef struct imdb_class_info_s {
 
 typedef struct imdb_rowid_s {
     size_t   	    block_id;	// block rawid
-    uint8           reserved:2;	// reserved
+    uint8           ds_type:2;	// data slot type
     uint16          slot_offset:14;	// slot offset in block
 } imdb_rowid_t;
+
+typedef struct imdb_fetch_obj_s {
+    imdb_rowid_t    rowid;
+    void           *dataptr;
+} imdb_fetch_obj_t;
 
 imdb_errcode_t  imdb_init (imdb_def_t * imdb_def, imdb_hndlr_t * himdb);
 imdb_errcode_t  imdb_done (imdb_hndlr_t hmdb);
@@ -227,15 +232,18 @@ imdb_errcode_t  imdb_clsobj_delete (imdb_hndlr_t hmdb, imdb_hndlr_t hclass, void
 imdb_errcode_t  imdb_clsobj_resize (imdb_hndlr_t hmdb, imdb_hndlr_t hclass, void *ptr_old, void **ptr, size_t length);
 imdb_errcode_t  imdb_clsobj_length (imdb_hndlr_t hmdb, imdb_hndlr_t hclass, void *ptr, size_t * length);
 
+imdb_errcode_t  imdb_clsobj_update_init (imdb_hndlr_t hmdb, imdb_rowid_t *rowid, void **ptr);
+imdb_errcode_t  imdb_clsobj_update (imdb_hndlr_t hmdb, imdb_rowid_t *rowid, void **ptr);
+
 imdb_errcode_t  imdb_class_query (imdb_hndlr_t hmdb, imdb_hndlr_t hclass, imdb_access_path_t path, imdb_hndlr_t * hcur);
-imdb_errcode_t  imdb_class_fetch (imdb_hndlr_t hcur, uint16 count, uint16 * rowcount, void *ptr[]);
+imdb_errcode_t  imdb_class_fetch (imdb_hndlr_t hcur, uint16 count, uint16 * rowcount, imdb_fetch_obj_t fobj[]);
 imdb_errcode_t  imdb_class_close (imdb_hndlr_t hcur);
 
-typedef         imdb_errcode_t (*imdb_forall_func) (void *ptr, void *data);
+typedef         imdb_errcode_t (*imdb_forall_func) (imdb_fetch_obj_t *fobj, void *data);
 imdb_errcode_t  imdb_class_forall (imdb_hndlr_t hmdb, imdb_hndlr_t hclass, void *data, imdb_forall_func forall_func);
 
 // forall helpers
-imdb_errcode_t  imdb_forall_count (void *ptr, void *data);
+imdb_errcode_t  imdb_forall_count (imdb_fetch_obj_t *fobj, void *data);
 
 
 typedef struct imdb_file_s {

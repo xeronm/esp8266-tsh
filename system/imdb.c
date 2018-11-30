@@ -337,7 +337,8 @@ typedef enum imdb_block_type_s {
 
 typedef struct imdb_block_s {
     block_ptr_t     id;
-    uint16          crc16;
+    uint16          crc16;       // whole block CRC
+    uint8           crchdr;      // header CRC Fixme: make header CRC write and check for detect metadata corruption
     page_blocks_t   block_index;	// index of block
     imdb_lock_t     lock_flag:2; // Fixme: Current usage are weird
     uint8           footer_offset:6;	// slot offset from the ending of block
@@ -392,7 +393,6 @@ typedef struct imdb_slot_free_s {
 typedef struct imdb_cursor_s {
     imdb_t         *imdb;
     class_ptr_t     class;
-    imdb_rowid_t    rowid_first;
     imdb_rowid_t    rowid_last;
     uint32          fetch_recs;
     imdb_access_path_t access_path;
@@ -594,6 +594,7 @@ fdb_cache_get(imdb_bc_t * imdb_bc, size_t block_addr, bool alloc_new, imdb_lock_
     d_assert(block_addr, "block_addr=0");
 
     imdb_bc_block_t * bc_block;
+    imdb_block_t * mblock = NULL;
     ih_errcode_t res = ih_hash8_search(imdb_bc->hbcmap, (const char *) &block_addr, 0, (char**)&bc_block);
     if (res == IH_ENTRY_NOTFOUND) {
         block_size_t    block_size = imdb_bc->base.db_def.block_size;
@@ -612,7 +613,7 @@ fdb_cache_get(imdb_bc_t * imdb_bc, size_t block_addr, bool alloc_new, imdb_lock_
             }
         }
 
-        imdb_block_t * mblock = d_pointer_as(imdb_block_t, imdb_bc->bc_free_list);
+        mblock = d_pointer_as(imdb_block_t, imdb_bc->bc_free_list);
         imdb_bc->bc_free_list = imdb_bc->bc_free_list->fl_next_block;
         if (alloc_new) {
             #ifdef IMDB_ZERO_MEM
@@ -627,7 +628,7 @@ fdb_cache_get(imdb_bc_t * imdb_bc, size_t block_addr, bool alloc_new, imdb_lock_
             size_t hres = fio_user_read(block_addr, (uint32 *) mblock, block_size);
             if (hres != imdb_bc->base.db_def.block_size) {
                 d_log_eprintf (IMDB_SERVICE_NAME, sz_imdb_error[IMDB_FILE_READ_ERROR], block_addr, block_size, hres);
-                return NULL;
+                goto get_error;
             }
 
             #ifdef IMDB_BLOCK_CRC
@@ -639,7 +640,7 @@ fdb_cache_get(imdb_bc_t * imdb_bc, size_t block_addr, bool alloc_new, imdb_lock_
             #endif
             if (mblock->crc16 != crc) {
                 d_log_eprintf (IMDB_SERVICE_NAME, sz_imdb_error[IMDB_FILE_CRC_ERROR], block_addr, block_size, mblock->crc16);
-                return NULL;
+                goto get_error;
             }
 
             d_assert(mblock->lock_flag == DATA_LOCK_NONE, "block addr=%p, lock=%u", block_addr, mblock->lock_flag);
@@ -648,7 +649,7 @@ fdb_cache_get(imdb_bc_t * imdb_bc, size_t block_addr, bool alloc_new, imdb_lock_
         res = ih_hash8_add(imdb_bc->hbcmap, (const char *) &block_addr, 0, (char**)&bc_block, 0);
         if (res != IH_ERR_SUCCESS) {
             d_log_cprintf (IMDB_SERVICE_NAME, "block addr=%p, hash bcmap res=%u", block_addr, res);
-            return NULL;
+            goto get_error;
         }
         bc_block->rcnt = 0;
         bc_block->wcnt = 0;
@@ -673,6 +674,14 @@ fdb_cache_get(imdb_bc_t * imdb_bc, size_t block_addr, bool alloc_new, imdb_lock_
     bc_block->mptr->lock_flag = lock;
 
     return bc_block->mptr;
+
+get_error:
+    {
+        imdb_bc_free_block_t * free_block = d_pointer_as(imdb_bc_free_block_t, mblock);
+        free_block->fl_next_block = imdb_bc->bc_free_list;
+        imdb_bc->bc_free_list = free_block;
+    }
+    return NULL;
 }
 
 LOCAL bool ICACHE_FLASH_ATTR
@@ -1738,12 +1747,12 @@ imdb_errcode_t  imdb_class_find (imdb_hndlr_t hmdb, const char *name, imdb_hndlr
 }
 
 /*
-[public] Create class storage for object.
-  - hmdb: Handler to imdb instance
-  - cdef: Class definition
-  - hclass: Result Class instance handler
-  - result: imdb error code
-*/
+ * [public] Create class storage for object.
+ *   - hmdb: Handler to imdb instance
+ *   - cdef: Class definition
+ *   - hclass: Result Class instance handler
+ *   - result: imdb error code
+ */
 imdb_errcode_t  ICACHE_FLASH_ATTR
 imdb_class_create (imdb_hndlr_t hmdb, imdb_class_def_t * cdef, imdb_hndlr_t * hclass)
 {
@@ -1902,10 +1911,67 @@ imdb_clsobj_insert (imdb_hndlr_t hmdb, imdb_hndlr_t hclass, void **ptr, size_t l
 }
 
 /*
-[public] delete object from storage.
-  - hclass: handler to class instance
-  - ptr: pointer to deleting object
-  - result: imdb error code
+ * [public] write lock object block, need manual unlock.
+ *   - hmdb: Handler to imdb instance
+ *   - rowid: object row id
+ *   - ptr: pointer to deleting object
+ *   - result: imdb error code
+ */
+imdb_errcode_t  ICACHE_FLASH_ATTR
+imdb_clsobj_update_init (imdb_hndlr_t hmdb, imdb_rowid_t *rowid, void **ptr)
+{
+    *ptr = NULL;
+    d_imdb_check_hndlr (hmdb);
+    imdb_t         *imdb = d_hndlr2obj (imdb_t, hmdb);
+    if (imdb->db_def.opt_media) {
+        imdb_block_t *block = fdb_cache_get((imdb_bc_t*)(imdb), rowid->block_id, false, DATA_LOCK_WRITE);
+        if (!block) {
+            d_log_eprintf (IMDB_SERVICE_NAME, sz_imdb_error[IMDB_BLOCK_ACCESS], rowid->block_id);
+            return IMDB_BLOCK_ACCESS;
+        }
+
+        *ptr = d_pointer_add (void, block, d_bptr_size (rowid->slot_offset) + 
+                       (rowid->ds_type == DATA_SLOT_TYPE_1) ? 0 : sizeof (imdb_slot_free_t) );
+    }
+
+    return IMDB_ERR_SUCCESS;
+}
+
+/*
+ * [public] write lock and unlock object block.
+ *   - hmdb: Handler to imdb instance
+ *   - rowid: object row id
+ *   - ptr: pointer to deleting object
+ *   - result: imdb error code
+ */
+imdb_errcode_t  ICACHE_FLASH_ATTR
+imdb_clsobj_update (imdb_hndlr_t hmdb, imdb_rowid_t *rowid, void **ptr)
+{
+    *ptr = NULL;
+    d_imdb_check_hndlr (hmdb);
+    imdb_t         *imdb = d_hndlr2obj (imdb_t, hmdb);
+    if (imdb->db_def.opt_media) {
+        imdb_block_t *block = fdb_cache_get((imdb_bc_t*)(imdb), rowid->block_id, false, DATA_LOCK_WRITE);
+        if (!block) {
+            d_log_eprintf (IMDB_SERVICE_NAME, sz_imdb_error[IMDB_BLOCK_ACCESS], rowid->block_id);
+            return IMDB_BLOCK_ACCESS;
+        }
+        block->lock_flag = DATA_LOCK_NONE;
+
+        *ptr = d_pointer_add (void, block, d_bptr_size (rowid->slot_offset) + 
+                       ((rowid->ds_type == DATA_SLOT_TYPE_1) ? 0 : sizeof (imdb_slot_free_t)) );
+    }
+
+    return IMDB_ERR_SUCCESS;
+}
+
+
+/*
+ * [public] delete object from storage.
+ *   - hmdb: Handler to imdb instance
+ *   - hclass: handler to class instance
+ *   - ptr: pointer to deleting object
+ *   - result: imdb error code
  */
 imdb_errcode_t  ICACHE_FLASH_ATTR
 imdb_clsobj_delete (imdb_hndlr_t hmdb, imdb_hndlr_t hclass, void *ptr)
@@ -1926,11 +1992,8 @@ imdb_clsobj_delete (imdb_hndlr_t hmdb, imdb_hndlr_t hclass, void *ptr)
     imdb_class_t   *dbclass = &class_block->dbclass;
 
     imdb_slot_free_t *slot_free = NULL;
-    imdb_block_t   *block = NULL;
-
-    imdb_slot_data2_t *slot_data2;
-    imdb_slot_data4_t *slot_data4;
     imdb_slot_footer_t *slot_footer = NULL;
+    imdb_block_t   *block = NULL;
 
     obj_size_t      slen = 0;
     switch (dbclass->ds_type) {
@@ -1939,21 +2002,25 @@ imdb_clsobj_delete (imdb_hndlr_t hmdb, imdb_hndlr_t hclass, void *ptr)
 	return IMDB_INVALID_OPERATION;
 	break;
     case DATA_SLOT_TYPE_2:
-	slot_data2 = d_pointer_add (imdb_slot_data2_t, ptr, -sizeof (imdb_slot_data2_t));
-	d_assert (slot_data2->flags == SLOT_FLAG_DATA, "flags=%u", slot_data2->flags);
-	block = d_pointer_add (imdb_block_t, slot_data2, -d_bptr_size (slot_data2->block_offset));
-	slen = dbclass->cdef.obj_size + sizeof (imdb_slot_data2_t);
-	slot_free = (imdb_slot_free_t *) slot_data2;
+        {
+	    imdb_slot_data2_t *slot_data2 = d_pointer_add (imdb_slot_data2_t, ptr, -sizeof (imdb_slot_data2_t));
+	    d_assert (slot_data2->flags == SLOT_FLAG_DATA, "flags=%u", slot_data2->flags);
+	    block = d_pointer_add (imdb_block_t, slot_data2, -d_bptr_size (slot_data2->block_offset));
+	    slen = dbclass->cdef.obj_size + sizeof (imdb_slot_data2_t);
+	    slot_free = (imdb_slot_free_t *) slot_data2;
+	}
 	break;
     case DATA_SLOT_TYPE_4:
-	slot_data4 = d_pointer_add (imdb_slot_data4_t, ptr, -sizeof (imdb_slot_data4_t));
-	d_assert (slot_data4->flags == SLOT_FLAG_DATA, "flags=%u", slot_data4->flags);
-	slen = d_bptr_size (slot_data4->length);
-	slot_footer = d_pointer_add (imdb_slot_footer_t, slot_data4, slen - sizeof (imdb_slot_footer_t));
-	d_assert (slot_footer->flags == SLOT_FLAG_DATA, "flags=%u", slot_footer->flags);
+        {
+	    imdb_slot_data4_t *slot_data4 = d_pointer_add (imdb_slot_data4_t, ptr, -sizeof (imdb_slot_data4_t));
+	    d_assert (slot_data4->flags == SLOT_FLAG_DATA, "flags=%u", slot_data4->flags);
+	    slen = d_bptr_size (slot_data4->length);
+	    slot_footer = d_pointer_add (imdb_slot_footer_t, slot_data4, slen - sizeof (imdb_slot_footer_t));
+	    d_assert (slot_footer->flags == SLOT_FLAG_DATA, "flags=%u", slot_footer->flags);
 
-	block = d_pointer_add (imdb_block_t, slot_data4, -d_bptr_size (slot_data4->block_offset));
-	slot_free = (imdb_slot_free_t *) slot_data4;
+	    block = d_pointer_add (imdb_block_t, slot_data4, -d_bptr_size (slot_data4->block_offset));
+	    slot_free = (imdb_slot_free_t *) slot_data4;
+	}
 	break;
     default:
 	d_assert (false, "ds_type=%u", dbclass->ds_type);
@@ -2155,6 +2222,8 @@ imdb_class_cur_open (imdb_t * imdb, imdb_block_class_t * class_block, imdb_curso
     cur->imdb = imdb;
     cur->class.raw = class_block->block.id.raw;
 
+    cur->rowid_last.ds_type = class_block->dbclass.ds_type;
+
     switch (access_path) {
     case PATH_FULL_SCAN:
 	cur->rowid_last.block_id = class_block->block.id.raw;
@@ -2205,7 +2274,7 @@ imdb_class_cur_open (imdb_t * imdb, imdb_block_class_t * class_block, imdb_curso
   - result: imdb error code
 */
 LOCAL imdb_errcode_t  ICACHE_FLASH_ATTR
-imdb_class_cur_fetch (imdb_block_class_t * class_block, imdb_cursor_t * cur, uint16 count, uint16 * rowcount, void *ptr[])
+imdb_class_cur_fetch (imdb_block_class_t * class_block, imdb_cursor_t * cur, uint16 count, uint16 * rowcount, imdb_fetch_obj_t fobj[])
 {
     if (!cur->rowid_last.block_id) {
 	return IMDB_CURSOR_NO_DATA_FOUND;
@@ -2238,6 +2307,7 @@ imdb_class_cur_fetch (imdb_block_class_t * class_block, imdb_cursor_t * cur, uin
     bool foneblock = cur->imdb->db_def.opt_media; // for safe results access
     block_size_t    offset_limit;
 
+    imdb_fetch_obj_t * pfobj = &fobj[0];
     switch (cur->access_path) {
     case PATH_FULL_SCAN:
 	while (page_block) {
@@ -2247,19 +2317,20 @@ imdb_class_cur_fetch (imdb_block_class_t * class_block, imdb_cursor_t * cur, uin
 		}
 		offset_limit = d_block_upper_data_blimit (cur->imdb, block);
 		while (offset < offset_limit) {
-		    *ptr = NULL;
-		    while (!(*ptr) && offset < offset_limit) {
-			imdb_block_slot_next (cur->imdb, class_block, block, &offset, ptr);
+		    pfobj->dataptr = NULL;
+		    while (!pfobj->dataptr && offset < offset_limit) {
+                        pfobj->rowid.slot_offset = offset;
+			imdb_block_slot_next (cur->imdb, class_block, block, &offset, &pfobj->dataptr);
 		    }
-		    if (!(*ptr)) {
+		    if (!pfobj->dataptr)
 			break;
-		    }
+
+                    pfobj->rowid.block_id = block->id.raw;
+                    pfobj->rowid.ds_type = class_block->dbclass.ds_type;
 
 		    cur->rowid_last.slot_offset = offset;
-		    if (!cur->rowid_first.block_id) {
-			os_memcpy (&cur->rowid_first, &cur->rowid_last, sizeof (imdb_rowid_t));
-		    }
-		    ptr++;
+
+		    pfobj++;
 		    (*rowcount)++;
 		    if (*rowcount == count) {
 		        d_release_block (cur->imdb, block);
@@ -2319,12 +2390,14 @@ imdb_class_cur_fetch (imdb_block_class_t * class_block, imdb_cursor_t * cur, uin
 		}
 		offset_limit = d_block_lower_data_blimit (block);
 		while (offset > offset_limit) {
-		    imdb_block_slot_prev (class_block, block, &offset, ptr);
+                    pfobj->rowid.slot_offset = offset;
+		    imdb_block_slot_prev (class_block, block, &offset, &pfobj->dataptr);
+                    pfobj->rowid.block_id = block->id.raw;
+                    pfobj->rowid.ds_type = class_block->dbclass.ds_type;
+
 		    cur->rowid_last.slot_offset = offset;
-		    if (!cur->rowid_first.block_id) {
-			os_memcpy (&cur->rowid_first, &cur->rowid_last, sizeof (imdb_rowid_t));
-		    }
-		    ptr++;
+
+		    pfobj++;
 		    (*rowcount)++;
 
 		    if (*rowcount == count) {
@@ -2446,7 +2519,7 @@ imdb_class_query (imdb_hndlr_t hmdb, imdb_hndlr_t hclass, imdb_access_path_t acc
   - result: imdb error code
 */
 imdb_errcode_t  ICACHE_FLASH_ATTR
-imdb_class_fetch (imdb_hndlr_t hcur, uint16 count, uint16 * rowcount, void *ptr[])
+imdb_class_fetch (imdb_hndlr_t hcur, uint16 count, uint16 * rowcount, imdb_fetch_obj_t fobj[])
 {
     *rowcount = 0;
     d_imdb_check_hndlr (hcur);
@@ -2461,7 +2534,7 @@ imdb_class_fetch (imdb_hndlr_t hcur, uint16 count, uint16 * rowcount, void *ptr[
         return IMDB_BLOCK_ACCESS;
     }
 
-    imdb_errcode_t  ret = imdb_class_cur_fetch (class_block, cur, count, rowcount, ptr);
+    imdb_errcode_t  ret = imdb_class_cur_fetch (class_block, cur, count, rowcount, fobj);
     d_release_class_block (cur->imdb, class_block);
 
     return ret;
@@ -2483,23 +2556,25 @@ imdb_class_close (imdb_hndlr_t hcur)
     return IMDB_ERR_SUCCESS;
 }
 
+#define IMDB_FORALL_FETCH_BULK_COUNT	10
+
 imdb_errcode_t  ICACHE_FLASH_ATTR
 imdb_cursor_forall (imdb_hndlr_t hcur, void *data, imdb_forall_func forall_func)
 {
     d_imdb_check_hndlr (hcur);
-    void           *ptrs[10];
+    imdb_fetch_obj_t obj_array[IMDB_FORALL_FETCH_BULK_COUNT];
     imdb_errcode_t  ret = IMDB_ERR_SUCCESS;
     imdb_errcode_t  ret2 = IMDB_ERR_SUCCESS;
     uint16          rcnt;
     uint16          i;
 
     while (ret == IMDB_ERR_SUCCESS) {
-	ret = imdb_class_fetch (hcur, 10, &rcnt, ptrs);
+	ret = imdb_class_fetch (hcur, IMDB_FORALL_FETCH_BULK_COUNT, &rcnt, obj_array);
 	if (ret != IMDB_ERR_SUCCESS && ret != IMDB_CURSOR_NO_DATA_FOUND) {
 	    return ret;
 	}
 	for (i = 0; i < rcnt; i++) {
-	    ret2 = forall_func (ptrs[i], data);
+	    ret2 = forall_func (&obj_array[i], data);
 	    switch (ret2) {
 	    case IMDB_ERR_SUCCESS:
 		break;
@@ -2532,7 +2607,7 @@ imdb_class_forall (imdb_hndlr_t hmdb, imdb_hndlr_t hclass, void *data, imdb_fora
 }
 
 imdb_errcode_t  ICACHE_FLASH_ATTR
-imdb_forall_count (void *ptr, void *data)
+imdb_forall_count (imdb_fetch_obj_t *obj, void *data)
 {
     uint32         *objcount = (uint32 *) data;
     (*objcount)++;
