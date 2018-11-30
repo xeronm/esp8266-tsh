@@ -37,16 +37,31 @@ Use esptool.py
 |  7 | gpioctl   | GPIO control management      |
 |  8 | sched     | Cron-like scheduler          |
 
-### Service supported configuration ###
+### Supported configuration ###
 
-| Id | Name      | Message                      |
-| ---| ----------| -----------------------------|
-|  2 | syslog    | ```{"syslog.Log-Severity": 4}```|
-|  3 | espadmin  |  |
-|  4 | udpctl    |  |
-|  5 | lwsh      |  |
-|  6 | ntp       | ```{"common.Time-Zone": "+3:00", "ntp.Poll-Interval": 10, "ntp.Peer": [{"common.Host-Name": "0.pool.ntp.org"}, {"common.Host-Name": "1.pool.ntp.org"}]}``` |
-|  8 | sched     |  |
+#### Syslog ####
+```{"syslog.Log-Severity": 4}```
+
+|Parameter|Description|
+|---------|-----------|
+|syslog.Log-Severity| Logging severity (1- critical, 2- error, 3 - warning, 4 - information, 5 - debug) |
+
+#### NTP ####
+
+```{"common.Time-Zone": "+3:00", 
+ "ntp.Poll-Interval": 10, 
+ "ntp.Peer": [
+     {"common.Host-Name": "0.pool.ntp.org"}, 
+     {"common.Host-Name": "1.pool.ntp.org"}
+ ]
+}```
+
+|Parameter|Description|
+|---------|-----------|
+|common.Time-Zone| Local Timezone (1/4 hours) |
+|ntp.Poll-Interval| Poll interval (minutes) |
+|ntp.Peer| NTP Server peers (list 0-2 items) |
+|common.Host-Name| NTP Server host |
 
 ## Memos
 
