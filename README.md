@@ -43,25 +43,68 @@ Use esptool.py
 
 Example:
 ```
-{"syslog.Log-Severity": 4}
+  { "syslog.Log-Severity": 4 }
 ```
 
 |Parameter|Description|
 |---------|-----------|
 |syslog.Log-Severity| Logging severity (1- critical, 2- error, 3 - warning, 4 - information, 5 - debug) |
 
+#### ESP Admin ####
+
+Example:
+```
+  {
+    "esp.Wireless": {
+        "esp.WiFi-Operation-Mode": 3,
+        "esp.WIFI-Station": {
+            "esp.WiFi-SSID": "router01",
+            "esp.WiFi-Password": "router_password",
+            "esp.WiFi-Auto-Connect": 1
+        },
+        "esp.WIFI-Soft-AP": {
+            "esp.WiFi-Password": "ap_password",
+            "esp.WiFi-Auth-Mode": 4
+        }
+    }
+  }
+```
+
+|Parameter|Description|
+|---------|-----------|
+|esp.WiFi-Operation-Mode| WiFi operation mode (1- station, 2- softap, 3- station + softap) |
+|esp.WiFi-SSID| SSID |
+|esp.WiFi-Password| Password |
+|esp.WiFi-Auth-Mode| Soft AP authentication mode () |
+|esp.WiFi-Auto-Connect| Station mode auto connect |
+
+#### UDP ctl ####
+
+Example:
+```
+  {
+    "common.IP-Port": 3900,
+    "uctl.Secret": "mysecret"
+  }
+```
+
+|Parameter|Description|
+|---------|-----------|
+|common.IP-Port| Listening UDP port |
+|uctl.Secret| authentication secret |
+
 #### NTP ####
 
 Example:
 ```
-{ 
-  "common.Time-Zone": "+3:00", 
-  "ntp.Poll-Interval": 10, 
-  "ntp.Peer": [
-    { "common.Host-Name": "0.pool.ntp.org" }, 
-    { "common.Host-Name": "1.pool.ntp.org" }
-  ]
-}
+  { 
+    "common.Time-Zone": "+3:00", 
+    "ntp.Poll-Interval": 10, 
+    "ntp.Peer": [
+      { "common.Host-Name": "0.pool.ntp.org" }, 
+      { "common.Host-Name": "1.pool.ntp.org" }
+    ]
+  }
 ```
 
 |Parameter|Description|
