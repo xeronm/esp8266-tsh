@@ -40,7 +40,11 @@ Use esptool.py
 ### Supported configuration ###
 
 #### Syslog ####
-```{"syslog.Log-Severity": 4}```
+
+Example:
+```
+{"syslog.Log-Severity": 4}
+```
 
 |Parameter|Description|
 |---------|-----------|
@@ -48,13 +52,17 @@ Use esptool.py
 
 #### NTP ####
 
-```{"common.Time-Zone": "+3:00", 
- "ntp.Poll-Interval": 10, 
- "ntp.Peer": [
-     {"common.Host-Name": "0.pool.ntp.org"}, 
-     {"common.Host-Name": "1.pool.ntp.org"}
- ]
-}```
+Example:
+```
+{ 
+  "common.Time-Zone": "+3:00", 
+  "ntp.Poll-Interval": 10, 
+  "ntp.Peer": [
+    { "common.Host-Name": "0.pool.ntp.org" }, 
+    { "common.Host-Name": "1.pool.ntp.org" }
+  ]
+}
+```
 
 |Parameter|Description|
 |---------|-----------|
