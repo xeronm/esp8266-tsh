@@ -71,16 +71,16 @@ Example:
   }
 ```
 
-|Parameter|Description|
-|---------|-----------|
-|esp.WiFi-Operation-Mode| WiFi operation mode (1- station, 2- softap, 3- station + softap) |
-|esp.WiFi-Sleep-Type | WiFi sleep type (0- none, 1- light, 2- modem)|
+|Parameter|Description|Default|
+|---------|-----------|-------|
+|esp.WiFi-Operation-Mode| WiFi operation mode (1- station, 2- softap, 3- station + softap) | 3- station + softap |
+|esp.WiFi-Sleep-Type | WiFi sleep type (0- none, 1- light, 2- modem)| 2- modem |
 |esp.WIFI-Station| Station mode parameters (object) |
 |esp.WIFI-Soft-AP| Soft AP mode parameters (object) |
-|esp.WiFi-SSID| SSID |
-|esp.WiFi-Password| Password |
-|esp.WiFi-Auth-Mode| Soft AP authentication mode (0- open, 1- wep, 2- wpa psk, 3- wpa2 psk, 4- wpa/wpa2 psk) |
-|esp.WiFi-Auto-Connect| Station mode auto connect (0- disabled, 1- enabled)|
+|esp.WiFi-SSID| SSID | ESP_<STATION_MAC48[3:6]> |
+|esp.WiFi-Password| Password | <STATION_MAC48[1:6]> |
+|esp.WiFi-Auth-Mode| Soft AP authentication mode (0- open, 1- wep, 2- wpa psk, 3- wpa2 psk, 4- wpa/wpa2 psk) | 4- wpa/wpa2 psk |
+|esp.WiFi-Auto-Connect| Station mode auto connect (0- disabled, 1- enabled)| 1- enabled |
 
 ##### UDP ctl #####
 
@@ -92,10 +92,10 @@ Example:
   }
 ```
 
-|Parameter|Description|
-|---------|-----------|
-|common.IP-Port| Listening UDP port |
-|uctl.Secret| authentication secret |
+|Parameter|Description|Default|
+|---------|-----------|-------|
+|common.IP-Port| Listening UDP port | 3901 |
+|uctl.Secret| authentication secret | <STATION_MAC48> |
 
 ##### NTP #####
 
@@ -111,12 +111,12 @@ Example:
   }
 ```
 
-|Parameter|Description|
-|---------|-----------|
-|common.Time-Zone| Local Timezone (1/4 hours) |
-|ntp.Poll-Interval| Poll interval (minutes) |
-|ntp.Peer| NTP Server peers (object list 0-2 items) |
-|common.Host-Name| NTP Server host |
+|Parameter|Description|Default|
+|---------|-----------|-------|
+|common.Time-Zone| Local Timezone (1/4 hours) | +0:00 |
+|ntp.Poll-Interval| Poll interval (minutes) | 20 |
+|ntp.Peer| NTP Server peers (object list 0-2 items) | |
+|common.Host-Name| NTP Server host | 0.pool.ntp.org, 1.pool.ntp.org |
 
 ## Memos
 

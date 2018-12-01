@@ -103,6 +103,16 @@ svcctl_forall_find_conf (imdb_fetch_obj_t *fobj, void *data)
     return IMDB_ERR_SUCCESS;
 }
 
+LOCAL imdb_errcode_t ICACHE_FLASH_ATTR
+svcctl_forall_clean_conf (imdb_fetch_obj_t *fobj, void *data)
+{
+    svcs_service_conf_t *conf = d_pointer_as (svcs_service_conf_t, fobj->dataptr);
+    if (conf->cfgtype == SVCS_CFGTYPE_NEW) {
+        return imdb_clsobj_delete (sdata->svcres.hfdb, sdata->hconf, data);
+    }
+    return IMDB_ERR_SUCCESS;
+}
+
 LOCAL svcs_errcode_t ICACHE_FLASH_ATTR
 svcctl_find_conf (service_ident_t service_id, svcs_service_conf_t ** conf, svcs_cfgtype_t cfgtype)
 {
@@ -546,6 +556,8 @@ svcctl_start (imdb_hndlr_t hmdb, imdb_hndlr_t hfdb)
                 SERVICES_CONFIG_STORAGE_PAGE_BLOCKS, sizeof (svcs_service_conf_t) };
             d_svcs_check_svcs_error (imdb_class_create (hfdb, &cdef3, &sdata->hconf));
         }
+
+        imdb_class_forall (sdata->svcres.hfdb, sdata->hconf, NULL, svcctl_forall_clean_conf);
     }
 
     d_log_wprintf (SERVICES_SERVICE_NAME, "started");

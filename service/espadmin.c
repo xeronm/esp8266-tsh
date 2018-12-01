@@ -566,10 +566,10 @@ espadmin_on_cfgupd (dtlv_ctx_t * conf)
     // setup WiFi
     d_log_iprintf (ESPADMIN_SERVICE_NAME, "setup wifi mode:%u, sleep_type:%u", wifi_mode, wifi_sleep_type);
 
-    if (wifi_set_opmode (wifi_mode))
-        d_log_eprintf (ESPADMIN_SERVICE_NAME, "wifi invalid mode:%u", wifi_mode);
-    if (wifi_set_sleep_type (wifi_sleep_type))
-        d_log_eprintf (ESPADMIN_SERVICE_NAME, "wifi invalid sleep_type:%u", wifi_sleep_type);
+    if (!wifi_set_opmode (wifi_mode))
+        d_log_eprintf (ESPADMIN_SERVICE_NAME, "wifi set opmode:%u", wifi_mode);
+    if (!wifi_set_sleep_type (wifi_sleep_type))
+        d_log_eprintf (ESPADMIN_SERVICE_NAME, "wifi set sleep_type:%u", wifi_sleep_type);
 
     if ((wifi_mode == STATION_MODE) || (wifi_mode == STATIONAP_MODE)) {
 	struct station_config config;
@@ -578,8 +578,8 @@ espadmin_on_cfgupd (dtlv_ctx_t * conf)
 	os_memcpy (config.password, wifi_st_password, sizeof (wifi_st_password));
 
 	d_log_iprintf (ESPADMIN_SERVICE_NAME, "\tstation ssid:%s, auto:%u", config.ssid, wifi_autoconnect);
-	if (wifi_station_set_config (&config))
-            d_log_eprintf (ESPADMIN_SERVICE_NAME, "wifi invalid station config");
+	if (!wifi_station_set_config (&config))
+            d_log_eprintf (ESPADMIN_SERVICE_NAME, "wifi set station config");
 	wifi_station_set_auto_connect (wifi_autoconnect);
     }
     if ((wifi_mode == SOFTAP_MODE) || (wifi_mode == STATIONAP_MODE)) {
@@ -590,8 +590,8 @@ espadmin_on_cfgupd (dtlv_ctx_t * conf)
 	config.authmode = wifi_ap_auth_mode;
 
 	d_log_iprintf (ESPADMIN_SERVICE_NAME, "\tsoftap ssid:%s, password:%s", config.ssid, config.password);
-	if (wifi_softap_set_config (&config))
-            d_log_eprintf (ESPADMIN_SERVICE_NAME, "wifi invalid softap config");
+	if (!wifi_softap_set_config (&config))
+            d_log_eprintf (ESPADMIN_SERVICE_NAME, "wifi set softap config");
     }
 #endif
 
