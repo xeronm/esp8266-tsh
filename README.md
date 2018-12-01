@@ -39,7 +39,7 @@ Use esptool.py
 
 ### Supported configuration ###
 
-#### Syslog ####
+##### Syslog #####
 
 Example:
 ```
@@ -50,13 +50,14 @@ Example:
 |---------|-----------|
 |syslog.Log-Severity| Logging severity (1- critical, 2- error, 3 - warning, 4 - information, 5 - debug) |
 
-#### ESP Admin ####
+##### ESP Admin #####
 
 Example:
 ```
   {
     "esp.Wireless": {
         "esp.WiFi-Operation-Mode": 3,
+        "esp.WiFi-Sleep-Type": 2,
         "esp.WIFI-Station": {
             "esp.WiFi-SSID": "router01",
             "esp.WiFi-Password": "router_password",
@@ -73,12 +74,15 @@ Example:
 |Parameter|Description|
 |---------|-----------|
 |esp.WiFi-Operation-Mode| WiFi operation mode (1- station, 2- softap, 3- station + softap) |
+|esp.WiFi-Sleep-Type | WiFi sleep type (0- none, 1- light, 2- modem)|
+|esp.WIFI-Station| Station mode parameters (object) |
+|esp.WIFI-Soft-AP| Soft AP mode parameters (object) |
 |esp.WiFi-SSID| SSID |
 |esp.WiFi-Password| Password |
-|esp.WiFi-Auth-Mode| Soft AP authentication mode () |
-|esp.WiFi-Auto-Connect| Station mode auto connect |
+|esp.WiFi-Auth-Mode| Soft AP authentication mode (0- open, 1- wep, 2- wpa psk, 3- wpa2 psk, 4- wpa/wpa2 psk) |
+|esp.WiFi-Auto-Connect| Station mode auto connect (0- disabled, 1- enabled)|
 
-#### UDP ctl ####
+##### UDP ctl #####
 
 Example:
 ```
@@ -93,7 +97,7 @@ Example:
 |common.IP-Port| Listening UDP port |
 |uctl.Secret| authentication secret |
 
-#### NTP ####
+##### NTP #####
 
 Example:
 ```
@@ -111,7 +115,7 @@ Example:
 |---------|-----------|
 |common.Time-Zone| Local Timezone (1/4 hours) |
 |ntp.Poll-Interval| Poll interval (minutes) |
-|ntp.Peer| NTP Server peers (list 0-2 items) |
+|ntp.Peer| NTP Server peers (object list 0-2 items) |
 |common.Host-Name| NTP Server host |
 
 ## Memos

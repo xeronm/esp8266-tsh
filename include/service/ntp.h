@@ -25,7 +25,7 @@
 #define NTP_DEFAULT_SERVER_0		"0.pool.ntp.org"
 #define NTP_DEFAULT_SERVER_1		"1.pool.ntp.org"
 
-#define NTP_ADJUST_MIN_MSEC	50
+#define NTP_ADJUST_MIN_MSEC	20
 #define NTP_REQ_TIMEOUT_SEC	10
 #define NTP_REQ_COUNT		5
 

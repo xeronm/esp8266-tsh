@@ -505,13 +505,15 @@ espadmin_on_cfgupd (dtlv_ctx_t * conf)
     uint8           wifi_st_ssid[32] = ESPADMIN_DEFAULT_WIFI_ST_SSID;
     uint8           wifi_st_password[64] = ESPADMIN_DEFAULT_WIFI_ST_PASSWORD;
     uint8           wifi_autoconnect = ESPADMIN_DEFAULT_WIFI_AUTO_CONNECT;
-#ifdef ESPADMIN_DEFAULT_WIFI_AP_PASSWORD
+    uint8           wifi_sleep_type = ESPADMIN_DEFAULT_WIFI_SLEEP_TYPE;
+
+    #ifdef ESPADMIN_DEFAULT_WIFI_AP_PASSWORD
     uint8           wifi_ap_password[64] = ESPADMIN_DEFAULT_WIFI_AP_PASSWORD;
-#else
+    #else
     uint8           wifi_ap_password[64];
     os_memset (wifi_ap_password, 0, sizeof (wifi_ap_password));
     system_get_default_secret (wifi_ap_password, sizeof (wifi_ap_password));
-#endif
+    #endif
     uint8           wifi_ap_ssid_hidden = ESPADMIN_DEFAULT_WIFI_AP_HIDDEN;
     AUTH_MODE       wifi_ap_auth_mode = ESPADMIN_DEFAULT_WIFI_AP_AUTH_MODE;
 
@@ -523,6 +525,7 @@ espadmin_on_cfgupd (dtlv_ctx_t * conf)
 
         dtlv_seq_decode_begin (conf, ESPADMIN_SERVICE_ID);
         dtlv_seq_decode_uint8 (ESPADMIN_AVP_WIFI_OPMODE, &wifi_mode);
+        dtlv_seq_decode_uint8 (ESPADMIN_AVP_WIFI_SLEEP_TYPE, &wifi_sleep_type);
         dtlv_seq_decode_group (ESPADMIN_AVP_WIFI_STATION, dtlv_softap.buf, dtlv_softap.datalen);
         dtlv_seq_decode_group (ESPADMIN_AVP_WIFI_SOFTAP, dtlv_station.buf, dtlv_station.datalen);
         dtlv_seq_decode_end (conf);
@@ -561,10 +564,12 @@ espadmin_on_cfgupd (dtlv_ctx_t * conf)
     }
 
     // setup WiFi
-    d_log_iprintf (ESPADMIN_SERVICE_NAME, "setup wifi mode:%u", wifi_mode);
+    d_log_iprintf (ESPADMIN_SERVICE_NAME, "setup wifi mode:%u, sleep_type:%u", wifi_mode, wifi_sleep_type);
 
     if (wifi_set_opmode (wifi_mode))
         d_log_eprintf (ESPADMIN_SERVICE_NAME, "wifi invalid mode:%u", wifi_mode);
+    if (wifi_set_sleep_type (wifi_sleep_type))
+        d_log_eprintf (ESPADMIN_SERVICE_NAME, "wifi invalid sleep_type:%u", wifi_sleep_type);
 
     if ((wifi_mode == STATION_MODE) || (wifi_mode == STATIONAP_MODE)) {
 	struct station_config config;
