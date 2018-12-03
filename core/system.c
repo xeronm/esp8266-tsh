@@ -242,6 +242,21 @@ system_get_default_secret (unsigned char *buf, uint8 len)
         return 0;
 }
 
+uint8           ICACHE_FLASH_ATTR
+system_get_default_ssid (unsigned char *buf, uint8 len)
+{
+    uint8           macaddr[6];
+    #ifdef ARCH_XTENSA
+    if (wifi_get_macaddr (STATION_IF, macaddr)) {
+        size_t plen = os_strlen(AP_SSID_PREFIX);
+        os_memcpy (buf, AP_SSID_PREFIX, plen);
+	return plen + buf2hex ( d_pointer_add(char, buf, plen), d_pointer_add(char, &macaddr, 3), MIN (3, (len - plen)/ 2));
+    }	
+    else
+    #endif
+        return 0;
+}
+
 #ifdef ARCH_XTENSA
 bool           ICACHE_FLASH_ATTR
 system_post_delayed_cb(ETSTimerFunc task, void *arg)

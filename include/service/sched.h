@@ -1,3 +1,25 @@
+/* 
+ * ESP8266 cron-like scheduler
+ * Copyright (c) 2016-2018 Denis Muratov <xeronm@gmail.com>.
+ * https://dtec.pro/gitbucket/git/esp8266/esp8266-tsh.git
+ *
+ * This file is part of ESP8266 Things Shell.
+ *
+ * ESP8266 Things Shell is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * ESP8266 Things Shell is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with ESP8266 Things Shell.  If not, see <https://www.gnu.org/licenses/>.
+ *
+ */
+
 #ifndef __SCHED_H__
 #define __SCHED_H__
 
@@ -24,6 +46,7 @@ typedef enum sched_errcode_e {
     SCHED_ENTRY_NOTEXISTS = 5,
     SCHED_STMT_NOTEXISTS = 6,
     SCHED_STMT_ERROR = 7,
+    SCHED_ENTRY_SRC_NOTEXISTS = 8,
 } sched_errcode_t;
 
 typedef enum sched_entry_state_e {
@@ -37,6 +60,7 @@ typedef enum sched_msgtype_e {
     SCHED_MSGTYPE_ENTRY_ADD = 10,
     SCHED_MSGTYPE_ENTRY_REMOVE = 11,
     SCHED_MSGTYPE_ENTRY_RUN = 12,
+    SCHED_MSGTYPE_ENTRY_SOURCE = 13,
 } sched_msgtype_t;
 
 typedef enum sched_avp_code_e {
@@ -50,6 +74,8 @@ typedef enum sched_avp_code_e {
     SCHED_AVP_NEXT_RUN_TIME = 107,
     SCHED_AVP_RUN_COUNT = 108,
     SCHED_AVP_FAIL_COUNT = 109,
+    SCHED_AVP_PERSISTENT = 110,
+    SCHED_AVP_ENTRY_SOURCE = 111,
 } sched_avp_code_t;
 
 typedef struct tsentry_s {
@@ -78,11 +104,19 @@ typedef struct sched_entry_s {
     ALIGN_DATA char vardata[];
 } sched_entry_t;
 
-sched_errcode_t sched_entry_get (const char * entry_name, const sched_entry_t ** entry);
+typedef struct sched_entry_source_s {
+    entry_name_t    name;
+    lt_time_t       utime;
+    size_t          varlen;
+    ALIGN_DATA char vardata[];
+} sched_entry_source_t;
 
-sched_errcode_t sched_entry_run (const entry_name_t * entry_name);
-sched_errcode_t sched_entry_add (const entry_name_t * entry_name, const char * sztsentry, const sh_stmt_name_t * stmt_name, const char * vardata, size_t varlen);
-sched_errcode_t sched_entry_remove (const entry_name_t * entry_name);
+sched_errcode_t sched_entry_get (const char * entry_name, sched_entry_t ** entry);
+sched_errcode_t sched_entry_src_get (const char * entry_name, sched_entry_source_t ** entry_src);
+
+sched_errcode_t sched_entry_run (const char * entry_name);
+sched_errcode_t sched_entry_add (const char * entry_name, bool persistent, const char * sztsentry, const char * stmt_name, const char * vardata, size_t varlen);
+sched_errcode_t sched_entry_remove (const char * entry_name);
 
 // used by services
 svcs_errcode_t  sched_service_install ();

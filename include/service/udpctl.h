@@ -1,10 +1,26 @@
-/* Copyright (c) 2018 by Denis Muratov <xeronm@gmail.com>. All rights reserved
+/* 
+ * ESP8266 UDP Cotrol Protocol Service
+ * Copyright (c) 2016-2018 Denis Muratov <xeronm@gmail.com>.
+ * https://dtec.pro/gitbucket/git/esp8266/esp8266-tsh.git
  *
- *  FileName: udpctl.c
- *  Source: https://dtec.pro/gitbucket/git/esp8266/esp8266_lsh.git
+ * This file is part of ESP8266 Things Shell.
  *
- *  Description: UDP Cotrol Protocol Support
+ * ESP8266 Things Shell is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *
+ * ESP8266 Things Shell is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with ESP8266 Things Shell.  If not, see <https://www.gnu.org/licenses/>.
+ *
+ */
+
+/*
  *   Message Flow:
  *	Auth Request #0:
  *		Auth0 := hmac(Random)

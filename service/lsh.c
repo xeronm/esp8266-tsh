@@ -129,6 +129,7 @@ LOCAL const char *sz_sh_error[] RODATA = {
     "statement \"%s\" already exists",
     "statement \"%s\" not exists",
     "function \"%s\" call error",
+    "statement \"%s\" source not exists",
 };
 
 typedef enum sh_oper_type_e {
@@ -1722,6 +1723,7 @@ fn_print (sh_bc_arg_t * ret_arg, const arg_count_t arg_count, sh_bc_arg_type_t a
 typedef struct sh_find_ctx_s {
     char             *stmt_name;
     sh_stmt_t        *stmt;
+    sh_stmt_source_t *stmt_src;
 } sh_find_ctx_t;
 
 /*
@@ -1738,6 +1740,19 @@ sh_forall_find (imdb_fetch_obj_t *fobj, void *data)
     }
     return IMDB_ERR_SUCCESS;
 }
+
+LOCAL imdb_errcode_t ICACHE_FLASH_ATTR
+sh_forall_find_source (imdb_fetch_obj_t *fobj, void *data)
+{
+    sh_stmt_source_t *stmt_src = d_pointer_as (sh_stmt_source_t, fobj->dataptr);
+    sh_find_ctx_t *find_ctx = d_pointer_as (sh_find_ctx_t, data);
+    if (os_strncmp (stmt_src->name, find_ctx->stmt_name, sizeof (sh_stmt_name_t)) == 0) {
+	find_ctx->stmt_src = stmt_src;
+	return IMDB_CURSOR_BREAK;
+    }
+    return IMDB_ERR_SUCCESS;
+}
+
 
 /*
  * [public] find statement by name
@@ -1760,10 +1775,42 @@ stmt_get (char * stmt_name, sh_hndlr_t * hstmt)
     return (*hstmt) ? SH_ERR_SUCCESS : SH_STMT_NOT_EXISTS;
 }
 
+/*
+ * [public] find statement source by name
+ * - stmt_name: statement name (safe to use char* and sh_stmt_name_t*)
+ * - return: the pointer on function entry
+ */
 sh_errcode_t    ICACHE_FLASH_ATTR
-stmt_get2 (sh_stmt_name_t * stmt_name, sh_hndlr_t * hstmt) 
+stmt_src_get (char * stmt_name, sh_stmt_source_t ** stmt_src)
 {
-    return stmt_get( (char *) stmt_name, hstmt);
+    d_check_init();
+
+    sh_find_ctx_t find_ctx;
+    os_memset (&find_ctx, 0, sizeof (sh_find_ctx_t));
+    find_ctx.stmt_name = stmt_name;
+
+    imdb_class_forall (sdata->svcres->hfdb, sdata->hstmt_src, (void *) &find_ctx, sh_forall_find_source);
+    *stmt_src = find_ctx.stmt_src;
+
+    return (*stmt_src) ? SH_ERR_SUCCESS : SH_STMT_SOURCE_NOT_EXISTS;
+}
+
+/*
+ * [public] find statement by name, if not exists try to load from source
+ * - stmt_name: statement name (safe to use char* and sh_stmt_name_t*)
+ * - hstmt: result handler to statement
+ * - return: the pointer on function entry
+ */
+sh_errcode_t    stmt_get_ext (char * stmt_name, sh_hndlr_t * hstmt) 
+{
+    sh_errcode_t res = stmt_get2 (stmt_name, hstmt);
+    if (res == SH_STMT_NOT_EXISTS) {
+        sh_stmt_source_t *stmt_src;
+        if (stmt_src_get (stmt_name, &stmt_src) == SH_ERR_SUCCESS)
+            res = stmt_parse (stmt_src->szstmt, stmt_name, hstmt);
+    }
+
+    return res;
 }
 
 LOCAL sh_errcode_t ICACHE_FLASH_ATTR
@@ -1774,8 +1821,11 @@ sh_on_msg_stmt_add (dtlv_ctx_t * msg_in, dtlv_ctx_t * msg_out)
 
     char           *stmt_name = NULL;
     char           *stmt_text = NULL;
+    uint8           persistent = 0;
 
     dtlv_seq_decode_begin (msg_in, LSH_SERVICE_ID);
+
+    dtlv_seq_decode_uint8 (SH_AVP_PERSISTENT, &persistent);
     dtlv_seq_decode_ptr (SH_AVP_STMT_NAME, stmt_name, char);
     dtlv_seq_decode_ptr (SH_AVP_STMT_TEXT, stmt_text, char);
     dtlv_seq_decode_end (msg_in);
@@ -1787,16 +1837,84 @@ sh_on_msg_stmt_add (dtlv_ctx_t * msg_in, dtlv_ctx_t * msg_out)
     sh_hndlr_t       hstmt;
 
     reset_last_error ();
-    sh_errcode_t     res = stmt_get ( (char *)stmt_name, &hstmt);
+    sh_errcode_t     res = stmt_get2 (stmt_name, &hstmt);
     if (res == SH_ERR_SUCCESS) {
+        res = SH_STMT_EXISTS;
 	d_log_wprintf (LSH_SERVICE_NAME, sz_sh_error[SH_STMT_EXISTS], stmt_name);
     }
     else {
         res = stmt_parse (stmt_text, stmt_name, &hstmt);
     }
 
-    if (res == SH_ERR_SUCCESS)
+    if (res == SH_ERR_SUCCESS) {
         d_log_iprintf (LSH_SERVICE_NAME, "add \"%s\"", stmt_name);
+        if (persistent) {
+            sh_stmt_source_t *stmt_src = NULL;
+            stmt_src_get (stmt_name, &stmt_src);
+            imdb_errcode_t imdb_res = IMDB_ERR_SUCCESS;
+            if (stmt_src) {
+                d_log_wprintf (LSH_SERVICE_NAME, "source \"%s\" replaced", stmt_name);
+                imdb_res = imdb_clsobj_delete (sdata->svcres->hfdb, sdata->hstmt_src, stmt_src);
+                if (imdb_res != IMDB_ERR_SUCCESS)
+                    d_log_eprintf (LSH_SERVICE_NAME, "source \"%s\" delete failed: %u", stmt_name, imdb_res);
+            }
+
+            if (imdb_res == IMDB_ERR_SUCCESS) {
+                size_t slen = os_strlen(stmt_text);
+                imdb_errcode_t imdb_res = imdb_clsobj_insert (sdata->svcres->hfdb, sdata->hstmt_src, (void **) &stmt_src, sizeof (sh_stmt_source_t) + slen + 1);
+                if (imdb_res == IMDB_ERR_SUCCESS) {
+                    os_strncpy(stmt_src->name, stmt_name, sizeof (sh_stmt_name_t));
+                    stmt_src->utime = lt_time (NULL);
+                    os_strncpy(stmt_src->szstmt, stmt_text, slen + 1);
+                }
+                else
+                    d_log_eprintf (LSH_SERVICE_NAME, "source \"%s\" store failed: %u", stmt_name, imdb_res);
+
+                imdb_flush (sdata->svcres->hfdb);
+            }
+        }
+    }
+    else
+        d_svcs_check_svcs_error (encode_service_result_ext (msg_out, res, NULL));
+
+    return SVCS_ERR_SUCCESS;
+}
+
+LOCAL sh_errcode_t ICACHE_FLASH_ATTR
+sh_on_msg_stmt_load (dtlv_ctx_t * msg_in, dtlv_ctx_t * msg_out)
+{
+    if (!msg_in)
+        return SVCS_INVALID_MESSAGE;
+
+    char           *stmt_name = NULL;
+
+    dtlv_seq_decode_begin (msg_in, LSH_SERVICE_ID);
+    dtlv_seq_decode_ptr (SH_AVP_STMT_NAME, stmt_name, char);
+    dtlv_seq_decode_end (msg_in);
+
+    if (!stmt_name)
+	return SVCS_INVALID_MESSAGE;
+
+
+    sh_hndlr_t       hstmt;
+    sh_stmt_source_t *stmt_src = NULL;
+
+    reset_last_error ();
+    sh_errcode_t     res = stmt_get (stmt_name, &hstmt);
+    if (res == SH_ERR_SUCCESS) {
+        res = SH_STMT_EXISTS;
+	d_log_eprintf (LSH_SERVICE_NAME, sz_sh_error[SH_STMT_EXISTS], stmt_name);
+    }
+    else {
+        res = stmt_src_get (stmt_name, &stmt_src);
+        if (res == SH_STMT_SOURCE_NOT_EXISTS)
+	    d_log_eprintf (LSH_SERVICE_NAME, sz_sh_error[res], stmt_name);
+        else
+            res = stmt_parse (stmt_src->szstmt, stmt_name, &hstmt);
+    }
+
+    if (res == SH_ERR_SUCCESS)
+        d_log_iprintf (LSH_SERVICE_NAME, "load \"%s\"", stmt_name);
     else
         d_svcs_check_svcs_error (encode_service_result_ext (msg_out, res, NULL));
 
@@ -1819,17 +1937,31 @@ sh_on_msg_stmt_remove (dtlv_ctx_t * msg_in, dtlv_ctx_t * msg_out)
 	return SVCS_INVALID_MESSAGE;
 
     sh_hndlr_t       hstmt;
+    sh_stmt_source_t *stmt_src = NULL;
 
     reset_last_error ();
-    sh_errcode_t     res = stmt_get ( (char *)stmt_name, &hstmt);
+    sh_errcode_t     res = stmt_get2 (stmt_name, &hstmt);
     if (res == SH_STMT_NOT_EXISTS) {
 	d_log_wprintf (LSH_SERVICE_NAME, sz_sh_error[SH_STMT_NOT_EXISTS], stmt_name);
-    } else if (res == SH_ERR_SUCCESS) {
+    } 
+    else if (res == SH_ERR_SUCCESS) {
         res = stmt_free (hstmt);
         d_log_iprintf (LSH_SERVICE_NAME, "remove \"%s\"", stmt_name);
     }
 
-    if (res != SH_ERR_SUCCESS)
+    sh_errcode_t     res2 = stmt_src_get2 (stmt_name, &stmt_src);
+    if (res2 == SH_STMT_SOURCE_NOT_EXISTS) {
+	d_log_wprintf (LSH_SERVICE_NAME, sz_sh_error[res2], stmt_name);
+    } 
+    else if (res2 == SH_ERR_SUCCESS) {
+        imdb_errcode_t imdb_res = imdb_clsobj_delete (sdata->svcres->hfdb, sdata->hstmt_src, stmt_src);
+        if (imdb_res != IMDB_ERR_SUCCESS)
+            d_log_eprintf (LSH_SERVICE_NAME, "source \"%s\" delete failed: %u", stmt_name, imdb_res);
+
+        imdb_flush (sdata->svcres->hfdb);
+    }
+
+    if ((res != SH_ERR_SUCCESS) || (res2 != SH_ERR_SUCCESS))
         d_svcs_check_svcs_error (encode_service_result_ext (msg_out, res, NULL));
 
     return SVCS_ERR_SUCCESS;
@@ -1851,21 +1983,58 @@ sh_on_msg_stmt_dump (dtlv_ctx_t * msg_in, dtlv_ctx_t * msg_out)
 	return SVCS_INVALID_MESSAGE;
 
     sh_hndlr_t  hstmt;
-    dtlv_avp_t *avp;
-
-    char       *bufptr = d_ctx_next_avp_data_ptr (msg_out);
-
     reset_last_error ();
     sh_errcode_t res = stmt_get (stmt_name, &hstmt);
-    if (res == SH_ERR_SUCCESS)
+
+    char       *bufptr = d_ctx_next_avp_data_ptr (msg_out);
+    if (res == SH_ERR_SUCCESS) {
         res = stmt_dump (hstmt, bufptr, d_avp_data_length (d_ctx_length_left (msg_out)) - 128, true);
+    }
 
     switch (res) {
     case SH_ERR_SUCCESS:
-        d_svcs_check_dtlv_error (dtlv_avp_encode (msg_out, 0, SH_AVP_STMT_CODE, DTLV_TYPE_CHAR, os_strlen(bufptr) + 1, false, &avp));
+        {
+            dtlv_avp_t *avp;
+            d_svcs_check_dtlv_error (dtlv_avp_encode (msg_out, 0, SH_AVP_STMT_CODE, DTLV_TYPE_CHAR, os_strlen(bufptr) + 1, false, &avp));
+        }
         break;
     case SH_STMT_NOT_EXISTS:
 	d_log_wprintf (LSH_SERVICE_NAME, sz_sh_error[SH_STMT_NOT_EXISTS], stmt_name);
+    default:	
+        d_svcs_check_svcs_error (encode_service_result_ext (msg_out, res, NULL));
+    }
+
+    return SVCS_ERR_SUCCESS;
+}
+
+LOCAL svcs_errcode_t ICACHE_FLASH_ATTR
+sh_on_msg_stmt_source (dtlv_ctx_t * msg_in, dtlv_ctx_t * msg_out)
+{
+    if (!msg_in)
+        return SVCS_INVALID_MESSAGE;
+
+    char       *stmt_name = NULL;
+
+    dtlv_seq_decode_begin (msg_in, LSH_SERVICE_ID);
+    dtlv_seq_decode_ptr (SH_AVP_STMT_NAME, stmt_name, char);
+    dtlv_seq_decode_end (msg_in);
+
+    if (!stmt_name)
+	return SVCS_INVALID_MESSAGE;
+
+    sh_stmt_source_t *stmt_src = NULL;
+
+    reset_last_error ();
+    sh_errcode_t res = stmt_src_get (stmt_name, &stmt_src);
+
+    switch (res) {
+    case SH_ERR_SUCCESS:
+        d_svcs_check_dtlv_error ( dtlv_avp_encode_char (msg_out, SH_AVP_STMT_TEXT, stmt_src->szstmt)
+                                  || dtlv_avp_encode_uint32 (msg_out, COMMON_AVP_UPDATE_TIMESTAMP, stmt_src->utime)
+        );
+        break;
+    case SH_STMT_SOURCE_NOT_EXISTS:
+	d_log_wprintf (LSH_SERVICE_NAME, sz_sh_error[SH_STMT_SOURCE_NOT_EXISTS], stmt_name);
     default:	
         d_svcs_check_svcs_error (encode_service_result_ext (msg_out, res, NULL));
     }
@@ -1891,7 +2060,7 @@ sh_on_msg_stmt_run (dtlv_ctx_t * msg_in, dtlv_ctx_t * msg_out)
     sh_hndlr_t       hstmt;
 
     reset_last_error ();
-    sh_errcode_t     res = stmt_get ( (char *)stmt_name, &hstmt);
+    sh_errcode_t     res = stmt_get_ext2 ( stmt_name, &hstmt);
     if (res == SH_STMT_NOT_EXISTS) {
 	d_log_wprintf (LSH_SERVICE_NAME, sz_sh_error[SH_STMT_NOT_EXISTS], stmt_name);
     } else if (res == SH_ERR_SUCCESS) {
@@ -1960,6 +2129,39 @@ sh_on_msg_info (dtlv_ctx_t * msg_out)
     return SVCS_ERR_SUCCESS;
 }
 
+LOCAL svcs_errcode_t ICACHE_FLASH_ATTR
+sh_on_msg_stmt_list (dtlv_ctx_t * msg_out)
+{
+    dtlv_avp_t     *gavp;
+
+    d_svcs_check_dtlv_error ( dtlv_avp_encode_list (msg_out, 0, SH_AVP_STATEMENT_SOURCE, DTLV_TYPE_OBJECT, &gavp));
+    imdb_hndlr_t    hcur;
+    d_svcs_check_imdb_error (imdb_class_query (sdata->svcres->hfdb, sdata->hstmt_src, PATH_NONE, &hcur));
+
+    imdb_fetch_obj_t fobj[LSH_FETCH_BULK_COUNT];
+    uint16          rowcount;
+    d_svcs_check_imdb_error (imdb_class_fetch (hcur, LSH_FETCH_BULK_COUNT, &rowcount, fobj));
+
+    bool            fcont = true;
+    while (rowcount && fcont) {
+	int             i;
+	for (i = 0; i < rowcount; i++) {
+            sh_stmt_source_t *stmt_src = d_pointer_as(sh_stmt_source_t, fobj[i].dataptr);
+	    dtlv_avp_t     *gavp_in;
+	    d_svcs_check_dtlv_error (dtlv_avp_encode_grouping (msg_out, 0, SH_AVP_STATEMENT_SOURCE, &gavp_in)
+				     || dtlv_avp_encode_nchar (msg_out, SH_AVP_STMT_NAME, sizeof (sh_stmt_name_t), stmt_src->name)
+				     || dtlv_avp_encode_uint16 (msg_out, SH_AVP_STMT_OBJSIZE, os_strlen(stmt_src->szstmt))
+                                     || dtlv_avp_encode_uint32 (msg_out, COMMON_AVP_UPDATE_TIMESTAMP, stmt_src->utime)
+				     || dtlv_avp_encode_group_done (msg_out, gavp_in));
+	}
+
+        d_svcs_check_imdb_error (imdb_class_fetch (hcur, LSH_FETCH_BULK_COUNT, &rowcount, fobj));
+    }
+    imdb_class_close (hcur);
+    d_svcs_check_imdb_error (dtlv_avp_encode_group_done (msg_out, gavp));
+
+    return SVCS_ERR_SUCCESS;
+}
 
 svcs_errcode_t  ICACHE_FLASH_ATTR
 lsh_on_message (service_ident_t orig_id,
@@ -1970,11 +2172,20 @@ lsh_on_message (service_ident_t orig_id,
     case SVCS_MSGTYPE_INFO:
 	res = sh_on_msg_info (msg_out);
 	break;
+    case SH_MSGTYPE_STMT_LIST:
+        res = sh_on_msg_stmt_list(msg_out);
+        break;
     case SH_MSGTYPE_STMT_ADD:
         res = sh_on_msg_stmt_add (msg_in, msg_out);
         break;
+    case SH_MSGTYPE_STMT_LOAD:
+        res = sh_on_msg_stmt_load (msg_in, msg_out);
+        break;
     case SH_MSGTYPE_STMT_DUMP:
         res = sh_on_msg_stmt_dump (msg_in, msg_out);
+        break;
+    case SH_MSGTYPE_STMT_SOURCE:
+        res = sh_on_msg_stmt_source (msg_in, msg_out);
         break;
     case SH_MSGTYPE_STMT_RUN:
         res = sh_on_msg_stmt_run(msg_in, msg_out);
@@ -2040,7 +2251,7 @@ lsh_on_start (const svcs_resource_t * svcres, dtlv_ctx_t * conf)
         imdb_class_find (svcres->hfdb, LSH_IMDB_CLS_STMT_SRC, &(tmp_sdata->hstmt_src));
         if (!tmp_sdata->hstmt_src) {
             imdb_class_def_t cdef3 =
-	        { LSH_IMDB_CLS_STMT_SRC, false, true, false, 0, LSH_STMT_SRC_STORAGE_PAGES, LSH_STMT_STORAGE_PAGE_BLOCKS, sizeof (sh_stmt_t) };
+	        { LSH_IMDB_CLS_STMT_SRC, false, true, false, 0, LSH_STMT_SRC_STORAGE_PAGES, LSH_STMT_SRC_STORAGE_PAGE_BLOCKS, sizeof (sh_stmt_source_t) };
             d_svcs_check_imdb_error (imdb_class_create (svcres->hfdb, &cdef3, &(tmp_sdata->hstmt_src))
 	        );
 	}

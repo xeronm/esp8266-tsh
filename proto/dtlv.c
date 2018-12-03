@@ -252,7 +252,7 @@ dtlv_errcode_t  ICACHE_FLASH_ATTR
 dtlv_avp_encode_nchar (dtlv_ctx_t * ctx, const avp_code_t avp_code, const size_t maxlen, const char *data)
 {
     dtlv_avp_t     *avp;
-    size_t          length = MIN (maxlen, os_strnlen (data, maxlen));
+    size_t          length = os_strnlen (data, maxlen);
     dtlv_errcode_t  ret = dtlv_avp_encode (ctx, 0, avp_code, DTLV_TYPE_CHAR, length + 1, false, &avp);
     d_check_dtlv_error (ret);
     os_memcpy (avp->data, data, length);

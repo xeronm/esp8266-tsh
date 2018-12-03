@@ -30,6 +30,7 @@
 #define SYSTEM_FDB_FILE_SIZE	64
 #define SYSTEM_FDB_CACHE_BLOCKS	4
 #define TASK_QUEUE_LENGTH	4
+#define AP_SSID_PREFIX		"ESPTSH_"
 
 void            system_init (void);
 void            system_shutdown (void);
@@ -38,6 +39,7 @@ imdb_hndlr_t    get_hmdb (void);
 imdb_hndlr_t    get_fdb (void);
 
 uint8           system_get_default_secret (unsigned char *buf, uint8 len);
+uint8           system_get_default_ssid (unsigned char *buf, uint8 len);
 
 #ifdef ARCH_XTENSA
 bool            system_post_delayed_cb(ETSTimerFunc task, void *arg);

@@ -10,13 +10,13 @@
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Foobar is distributed in the hope that it will be useful,
+ * ESP8266 Things Shell is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Foobar.  If not, see <https://www.gnu.org/licenses/>.
+ * along with ESP8266 Things Shell.  If not, see <https://www.gnu.org/licenses/>.
  *
  */
 
@@ -62,6 +62,7 @@ typedef enum sh_errcode_e {
     SH_STMT_EXISTS = 17,
     SH_STMT_NOT_EXISTS = 18,
     SH_FUNC_ERROR = 19,
+    SH_STMT_SOURCE_NOT_EXISTS = 20,
 } sh_errcode_t;
 
 typedef enum sh_msgtype_e {
@@ -69,6 +70,9 @@ typedef enum sh_msgtype_e {
     SH_MSGTYPE_STMT_REMOVE = 11,
     SH_MSGTYPE_STMT_RUN = 12,
     SH_MSGTYPE_STMT_DUMP = 13,
+    SH_MSGTYPE_STMT_SOURCE = 14,
+    SH_MSGTYPE_STMT_LOAD = 15,
+    SH_MSGTYPE_STMT_LIST = 16,
 } sh_msgtype_t;
 
 typedef enum sh_avp_code_e {
@@ -79,6 +83,8 @@ typedef enum sh_avp_code_e {
     SH_AVP_STMT_CODE = 104,
     SH_AVP_STMT_PARSE_TIME = 105,
     SH_AVP_STMT_ARGUMENTS = 106,
+    SH_AVP_PERSISTENT = 107,
+    SH_AVP_STATEMENT_SOURCE = 108,
     SH_AVP_FUNCTION_NAME = 110,
 } sh_avp_code_t;
 
@@ -95,6 +101,12 @@ typedef struct sh_stmt_info_s {
     lt_time_t       parse_time;
     obj_size_t      length;
 } sh_stmt_info_t;
+
+typedef struct sh_stmt_source_s {
+    sh_stmt_name_t  name;
+    lt_time_t       utime;
+    char            szstmt[];
+} sh_stmt_source_t;
 
 typedef struct sh_bc_arg_s {
     union sh_bc_arg_u {
@@ -150,7 +162,15 @@ sh_errcode_t    stmt_eval (const sh_hndlr_t hstmt, sh_eval_ctx_t * ctx);
 sh_errcode_t    stmt_free (const sh_hndlr_t hstmt);
 
 sh_errcode_t    stmt_get (char * stmt_name, sh_hndlr_t * hstmt);
-sh_errcode_t    stmt_get2 (sh_stmt_name_t * stmt_name, sh_hndlr_t * hstmt);
+sh_errcode_t    stmt_src_get (char * stmt_name, sh_stmt_source_t ** stmt_src);
+// get stmt by name, if not exists try to load from source
+sh_errcode_t    stmt_get_ext (char * stmt_name, sh_hndlr_t * hstmt);
+
+// used for sh_stmt_name_t stmt_name
+#define stmt_get2(stmt_name, hstmt)		stmt_get( (char *) (stmt_name), (hstmt))
+#define stmt_src_get2(stmt_name, stmt_src)	stmt_src_get( (char *) (stmt_name), (stmt_src))
+#define stmt_get_ext2(stmt_name, hstmt)		stmt_get_ext( (char *) (stmt_name), (hstmt))
+
 
 // used by services
 svcs_errcode_t  lsh_service_install (void);

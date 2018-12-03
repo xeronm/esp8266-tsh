@@ -1797,9 +1797,8 @@ imdb_class_create (imdb_hndlr_t hmdb, imdb_class_def_t * cdef, imdb_hndlr_t * hc
 	class_last->dbclass.class_next.raw = rawid;
         d_release_class_block(imdb, class_last);
     }
-    else {
+    else
 	imdb->class_first.raw = rawid;
-    }
     imdb->class_last.raw = rawid;
 
     d_release_class_block (imdb, class_block);

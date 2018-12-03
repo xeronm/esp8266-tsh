@@ -511,8 +511,14 @@ espadmin_on_cfgupd (dtlv_ctx_t * conf)
     uint8           wifi_ap_password[64] = ESPADMIN_DEFAULT_WIFI_AP_PASSWORD;
     #else
     uint8           wifi_ap_password[64];
-    os_memset (wifi_ap_password, 0, sizeof (wifi_ap_password));
     system_get_default_secret (wifi_ap_password, sizeof (wifi_ap_password));
+    #endif
+    #ifdef ESPADMIN_DEFAULT_WIFI_AP_SSID
+    uint8           wifi_ap_ssid[32] = ESPADMIN_DEFAULT_WIFI_AP_SSID;
+    size_t          wifi_ap_ssid_len = sizeof (ESPADMIN_DEFAULT_WIFI_AP_SSID);
+    #else
+    uint8           wifi_ap_ssid[32];
+    size_t          wifi_ap_ssid_len = system_get_default_ssid (wifi_ap_ssid, sizeof (wifi_ap_ssid));
     #endif
     uint8           wifi_ap_ssid_hidden = ESPADMIN_DEFAULT_WIFI_AP_HIDDEN;
     AUTH_MODE       wifi_ap_auth_mode = ESPADMIN_DEFAULT_WIFI_AP_AUTH_MODE;
@@ -532,15 +538,20 @@ espadmin_on_cfgupd (dtlv_ctx_t * conf)
 
         if (dtlv_softap.buf) {
             char       *password = NULL;
+            char       *ssid = NULL;
             dtlv_ctx_reset_decode (&dtlv_softap);
             dtlv_seq_decode_begin (&dtlv_softap, ESPADMIN_SERVICE_ID);
-            dtlv_seq_decode_uint8 (ESPADMIN_AVP_WIFI_AUTH_MODE, &wifi_ap_auth_mode);
+            dtlv_seq_decode_uint8 (ESPADMIN_AVP_WIFI_AUTH_MODE, (uint8 *) &wifi_ap_auth_mode);
             dtlv_seq_decode_ptr (ESPADMIN_AVP_WIFI_PASSWORD, password, char);
+            dtlv_seq_decode_ptr (ESPADMIN_AVP_WIFI_SSID, ssid, char);
             dtlv_seq_decode_end (&dtlv_softap);
 
-            size_t plen = os_strlen(password);
-            if (plen > 0)
-                os_memcpy (wifi_ap_password, password, MIN (sizeof (wifi_ap_password), plen));
+            if (password && *password)
+                os_strncpy ((char*) wifi_ap_password, (char*) password, sizeof (wifi_ap_password));
+
+            wifi_ap_ssid_len = os_strlen(ssid);
+            if (wifi_ap_ssid_len)
+                os_strncpy ((char*) wifi_ap_ssid, (char*) ssid, sizeof (wifi_ap_ssid));
         }
 
         if (dtlv_station.buf) {
@@ -553,13 +564,11 @@ espadmin_on_cfgupd (dtlv_ctx_t * conf)
             dtlv_seq_decode_ptr (ESPADMIN_AVP_WIFI_SSID, ssid, char);
             dtlv_seq_decode_end (&dtlv_station);
 
-            size_t plen = os_strlen(password);
-            if (plen > 0)
-                os_memcpy (wifi_st_password, password, MIN (sizeof (wifi_st_password), plen));
+            if (password && *password)
+                os_strncpy ((char*) wifi_st_password, (char*) password, sizeof (wifi_st_password));
 
-            plen = os_strlen(ssid);
-            if (plen > 0)
-                os_memcpy (wifi_st_ssid, ssid, MIN (sizeof (wifi_st_ssid), plen));
+            if (ssid && *ssid)
+                os_strncpy ((char*) wifi_st_ssid, (char*) ssid, sizeof (wifi_st_ssid));
         }
     }
 
@@ -574,8 +583,8 @@ espadmin_on_cfgupd (dtlv_ctx_t * conf)
     if ((wifi_mode == STATION_MODE) || (wifi_mode == STATIONAP_MODE)) {
 	struct station_config config;
 	wifi_station_get_config (&config);
-	os_memcpy (config.ssid, wifi_st_ssid, sizeof (wifi_st_ssid));
-	os_memcpy (config.password, wifi_st_password, sizeof (wifi_st_password));
+	os_strncpy ((char*) config.ssid, (char*) wifi_st_ssid, sizeof (wifi_st_ssid));
+	os_strncpy ((char*) config.password, (char*) wifi_st_password, sizeof (wifi_st_password));
 
 	d_log_iprintf (ESPADMIN_SERVICE_NAME, "\tstation ssid:%s, auto:%u", config.ssid, wifi_autoconnect);
 	if (!wifi_station_set_config (&config))
@@ -585,7 +594,11 @@ espadmin_on_cfgupd (dtlv_ctx_t * conf)
     if ((wifi_mode == SOFTAP_MODE) || (wifi_mode == STATIONAP_MODE)) {
 	struct softap_config config;
 	wifi_softap_get_config (&config);
-	os_memcpy (config.password, wifi_ap_password, sizeof (wifi_ap_password));
+	if (wifi_ap_ssid_len) {
+	    os_strncpy ((char*) config.ssid, (char*) wifi_ap_ssid, sizeof (wifi_ap_ssid));
+            config.ssid_len = wifi_ap_ssid_len;
+	}
+	os_strncpy ((char*) config.password, (char*) wifi_ap_password, sizeof (wifi_ap_password));
 	config.ssid_hidden = wifi_ap_ssid_hidden;
 	config.authmode = wifi_ap_auth_mode;
 
