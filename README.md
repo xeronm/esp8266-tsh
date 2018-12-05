@@ -14,8 +14,6 @@ $ cd esp8266-tsh
 
 ### Configure
 
-
-
 Configurables are:
  - APP, SPI_MODE, SDK_IMAGE_TOOL in `Makefile`
  - Defines in `./include/core/config.h`
@@ -26,15 +24,6 @@ $ sudo docker run --name esp8266 -it --rm -v $PWD:/src/project dtec/esp8266:1.22
 /src/project# make cleanall
 /src/project# make build
 ```
-
-### Flash Firmware Image ###
-
-Use esptool.py
-```
-$ cd ./bin
-$ sudo esptool.py -p /dev/ttyUSB0 -b 115200 write_flash --flash_freq 80m --flash_mode dio --flash_size 32m --verify 0x00000 boot_v1.7.bin 0x01000 tsh-0.1.0-dev.spi4.app1.bin 0x7e000 blank.bin 0x3fc000 esp_init_data_default.bin 0x3fe000 blank.bin
-```
-
 
 ## Usage
 
@@ -148,6 +137,109 @@ Example:
   }
 ```
 
+## Examples
+
+### FAN Control Unit
+
+#### Flash Initial Firmware Image
+
+- connect ESP12E host by serial cable
+- use esptool for query module `MAC`
+```
+$  sudo esptool.py -p /dev/ttyUSB0 -b 115200 read_mac
+esptool.py v2.5.0
+Serial port /dev/ttyUSB0
+Connecting....
+Detecting chip type... ESP8266
+Chip is ESP8266EX
+Features: WiFi
+MAC: 5c:cf:7f:85:e1:96
+Uploading stub...
+Running stub...
+Stub running...
+MAC: 5c:cf:7f:85:e1:96
+Hard resetting via RTS pin...
+```
+
+- flash new firmware
+```
+$ cd ./bin
+$ sudo esptool.py -p /dev/ttyUSB0 -b 115200 write_flash --flash_freq 80m --flash_mode dio --flash_size 32m --verify 0x00000 boot_v1.7.bin 0x01000 tsh-0.1.0-dev.spi4.app1.bin 0x7e000 blank.bin 0x3fc000 esp_init_data_default.bin 0x3fe000 blank.bin
+...
+```
+- connect to hidden WiFi AP `ESPTSH_85e196` (last 6 digit of MAC) with password `5ccf7f85e196` (MAC)
+- query system information
+```
+$ ./tcli.py -H 192.168.4.1 -s 5ccf7f85e196 system info
+{
+    "common.Event-Timestamp": "2018.12.04 20:16:55",
+    "esp:common.Service-Message": {
+        "common.Application-Product": "esp8266 Things Shell (c) 2018 dtec.pro",
+        "common.Application-Version": "0.1.0-dev(657)",
+        "esp.Firmware": {
+            "esp.FW-Address": "0x081000",
+            "esp.FW-Size-Map": 4,
+            "esp.FW-Bin-Size": 331024,
+            "esp.FW-Bin-Date": "2018.12.04 20:05:11",
+            "esp.FW-User-Data-Address": "0x0fd000",
+            "esp.FW-User-Data-Size": 3133440,
+            "esp.FW-Release-Date": "2018.12.04 20:05:09",
+            "esp.FW-Digest": "e99c2d1a4dbba34ec41809ee21da906aab0d735b1cca2acdbcd5b63509896133",
+            "esp.FW-Init-Digest": "4646303030303030303030303030303030303030303030303030303030304646"
+        },
+        "esp.System": {
+            "esp.System-SDK-Version": "2.2.0-dev(9422289)",
+            "esp.System-Chip-ID": 8774038,
+            "esp.System-Flash-ID": 1458400,
+            "esp.System-Uptime": 239,
+            "esp.Heap-Free-Size": 11832,
+            "esp.System-Reset-Reason": 6,
+            "esp.System-CPU-Frequence": 80,
+            "esp.System-Boot-Loader-Version": 7
+        }
+    },
+    "common.Result-Code": 1
+}
+```
+#### Configure System
+
+#### Configure Script Logic and Schedule
+
+following terms were used:
+- global variable `last_ev` - last state change event (0- reset state, 1-force power on, 2- humidity high threshold, 3- humidity low threshold, 4- power off timeout)
+- global variable `last_dt` - last state change event date
+- gpio pin `4` for FAN relay
+- we are using Estimated Moving Average results of DHT sensor
+
+Make light-shell script with control rule logic:
+```
+## last_dt; ## last_ev; # sdt := sysdate(); 
+(last_ev <= 0) ?? { gpio_set(4, 1); last_ev := 1; last_dt := sdt; print(last_ev) }; 	// set initial state, force power on
+
+# temp = 0; # hmd = 0; # res := dht_get(1, temp, hmd); 
+(res & (hmd >= 5000) & (last_dt + 30 < sdt)) ?? { gpio_set(4, 1); last_ev := 2; last_dt := sdt; print(last_ev) }; 	// humidity high threshold
+(res & (hmd < 4000) & (last_dt + 30 < sdt)) ?? { gpio_set(4, 0); last_ev := 3; last_dt := sdt; print(last_ev) };	// humidity low threshold
+((last_ev <= 2) & (last_dt + 600 < sdt)) ?? { gpio_set(4, 0); last_ev := 4; last_dt := sdt; print(last_ev) };	// power off timeout
+```
+
+Add peristent named statement `fan_control`
+```
+$ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 lsh add -m '{
+  "lsh.Statement-Name": "fan_control",
+  "lsh.Persistent-Flag": 1,
+  "lsh.Statement-Text": "## last_dt; ## last_ev; # sdt := sysdate();	(last_ev <= 0) ?? { gpio_set(4, 1); last_ev := 1; last_dt := sdt; print(last_ev) };	# temp = 0; # hmd = 0; # res := dht_get(1, temp, hmd);	(res & (hmd >= 5000) & (last_dt + 30 < sdt)) ?? { gpio_set(4, 1); last_ev := 2; last_dt := sdt; print(last_ev) };	(res & (hmd < 4000) & (last_dt + 30 < sdt)) ?? { gpio_set(4, 0); last_ev := 3; last_dt := sdt; print(last_ev) };	((last_ev <= 2) & (last_dt + 600 < sdt)) ?? { gpio_set(4, 0); last_ev := 4; last_dt := sdt; print(last_ev) };"
+}'
+```
+
+Add peristent named statement `fan_reset_state`
+```
+$ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 lsh add -m '{
+  "lsh.Statement-Name": "fan_reset_state",
+  "lsh.Persistent-Flag": 1,
+  "lsh.Statement-Text": "## last_ev := 0"
+}'
+```
+
 ## Memos
 
 ### Indent
@@ -155,3 +247,6 @@ Example:
 $ find ./ -name '*.h' -exec indent -l120 -brs -br -i4 -ci4 -di16 -sc {} -o {} \;
 $ find ./ -name '*.c' -exec indent -l120 -brs -br -i4 -ci4 -di16 -sc {} -o {} \;
 ```
+
+"bin_size": 330208
+"bin_size": 329888

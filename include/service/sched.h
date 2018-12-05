@@ -61,6 +61,7 @@ typedef enum sched_msgtype_e {
     SCHED_MSGTYPE_ENTRY_REMOVE = 11,
     SCHED_MSGTYPE_ENTRY_RUN = 12,
     SCHED_MSGTYPE_ENTRY_SOURCE = 13,
+    SCHED_MSGTYPE_ENTRY_LIST = 14,
 } sched_msgtype_t;
 
 typedef enum sched_avp_code_e {
@@ -79,9 +80,7 @@ typedef enum sched_avp_code_e {
 } sched_avp_code_t;
 
 typedef struct tsentry_s {
-    uint8           flag_boot : 1;
-    uint8           flag_network : 1;
-    uint8           signal_id : 6;
+    uint8           mcastid[d_bitbuf_size (SVCS_MSGTYPE_MULTICAST_MAX - SVCS_MSGTYPE_MULTICAST_MIN + 1)];
     uint8           minpart[d_bitbuf_size (SCHEDULE_MINUTE_PARTS)];
     uint8           minute[d_bitbuf_size (MIN_PER_HOUR)];
     uint8           hour[d_bitbuf_size (HOUR_PER_DAY)];
@@ -147,5 +146,11 @@ svcs_errcode_t  sched_on_message (service_ident_t orig_id,
 
 #define d_sched_check_dtlv_error(ret) \
 	if ((ret) != DTLV_ERR_SUCCESS) return SCHED_INTERNAL_ERROR;
+
+#define d_sched_check_error(ret) \
+	{ \
+		sched_errcode_t r = (ret); \
+ 		if (r) return r; \
+	}
 
 #endif

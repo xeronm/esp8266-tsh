@@ -862,8 +862,9 @@ svcctl_service_message (service_ident_t orig_id,
 	return svcctl_on_message (orig_id, msgtype, ctxdata, msg_in, msg_out);
     }
 
-    // broadcast
-    if (dest_id == 0) {
+    svcs_errcode_t  ret = SVCS_ERR_SUCCESS;
+    if ((dest_id == 0) && (msgtype >= SVCS_MSGTYPE_MULTICAST_MIN) && (msgtype < SVCS_MSGTYPE_MULTICAST_MAX)) {
+        // multicast
 	d_log_iprintf (SERVICES_SERVICE_NAME, "broadcast message:%u", msgtype);
 	svcs_message_ctx_t ctx;
 
@@ -873,18 +874,23 @@ svcctl_service_message (service_ident_t orig_id,
 	ctx.msg_in = msg_in;
 	ctx.msg_out = msg_out;
 
-	return imdb_class_forall (sdata->svcres.hmdb, sdata->hsvcs, &ctx, svcctl_forall_message);
+	ret = imdb_class_forall (sdata->svcres.hmdb, sdata->hsvcs, &ctx, svcctl_forall_message);
     }
-
-    svcs_service_t *svc = NULL;
-    svcs_errcode_t  ret = svcctl_find (dest_id, NULL, &svc);
-    d_svcs_check_svcs_error (ret);
-    if (svc->info.state != SVCS_STATE_RUNNING) {
-	return SVCS_NOT_RUN;
+    else if ((dest_id != 0) && (msgtype < SVCS_MSGTYPE_MULTICAST_MIN)) {
+        svcs_service_t *svc = NULL;
+        ret = svcctl_find (dest_id, NULL, &svc);
+        d_svcs_check_svcs_error (ret);
+        if (svc->info.state != SVCS_STATE_RUNNING) {
+	   return SVCS_NOT_RUN;
+        }
+        ret = svc->on_message (orig_id, msgtype, ctxdata, msg_in, msg_out);
+        if ((ret != SVCS_ERR_SUCCESS) && (ret != SVCS_MSGTYPE_INVALID))
+	    d_log_wprintf (SERVICES_SERVICE_NAME, "message error:%u, id:%u", ret, dest_id);
     }
-    ret = svc->on_message (orig_id, msgtype, ctxdata, msg_in, msg_out);
-    if ((ret != SVCS_ERR_SUCCESS) && (ret != SVCS_MSGTYPE_INVALID))
-	d_log_wprintf (SERVICES_SERVICE_NAME, "message error:%u, id:%u", ret, dest_id);
+    else {
+	d_log_wprintf (SERVICES_SERVICE_NAME, "message type error:%u, id:%u", msgtype, dest_id);
+        ret = SVCS_MSGTYPE_INVALID;
+    }
 
     return ret;
 }

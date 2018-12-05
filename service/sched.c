@@ -208,9 +208,8 @@ parse_tsentry (const char *szentry, tsentry_t * entry)
     d_skip_space (ptr);
 
     if (*ptr == '@') {
-        entry->flag_boot = true;
         ptr++;
-        d_skip_space (ptr);
+        parse_tsmask (entry->mcastid, 0, SVCS_MSGTYPE_MULTICAST_MAX - SVCS_MSGTYPE_MULTICAST_MIN, &ptr);
     }
 
     parse_state_t res = parse_tsmask (entry->minpart, 0, SCHEDULE_MINUTE_PARTS-1, &ptr) ||
@@ -240,8 +239,6 @@ entry_set_next_time (sched_entry_t * entry)
     os_time_t       posix_time = lt_time (&curr_ctime);
     ltm_t           _tm;
     lt_localtime(posix_time, &_tm, false);
-
-    //d_log_dbprintf("-- 0 ", &entry->ts, sizeof(tsentry_t), "dump");
 
     uint8           minpart = _tm.tm_sec/SCHEDULE_MINUTE_PART_SECS + 1;
     while (!d_bitbuf_get (entry->ts.minpart, minpart % SCHEDULE_MINUTE_PARTS))
@@ -316,11 +313,11 @@ entry_run (sched_entry_t * entry)
     case SH_ERR_SUCCESS:
         break;
     case SH_STMT_NOT_EXISTS:
-        d_log_eprintf (SCHED_SERVICE_NAME, sz_sched_error[SCHED_STMT_NOTEXISTS], entry->entry_name, entry->stmt_name);
+        d_log_wprintf (SCHED_SERVICE_NAME, sz_sched_error[SCHED_STMT_NOTEXISTS], entry->entry_name, entry->stmt_name);
         res = SCHED_STMT_NOTEXISTS;
         goto run_fail;
     default:
-        d_log_eprintf (SCHED_SERVICE_NAME, sz_sched_error[SCHED_STMT_ERROR], entry->entry_name, entry->stmt_name, rres);
+        d_log_wprintf (SCHED_SERVICE_NAME, sz_sched_error[SCHED_STMT_ERROR], entry->entry_name, entry->stmt_name, rres);
         res = SCHED_STMT_ERROR;
         goto run_fail;
     }
@@ -383,6 +380,21 @@ sched_forall_next_time (imdb_fetch_obj_t *fobj, void *data)
 
     if (! ctx->entry || (ctx->entry->next_ctime > entry->next_ctime))
         ctx->entry = entry;
+
+    return IMDB_ERR_SUCCESS;
+}
+
+LOCAL imdb_errcode_t ICACHE_FLASH_ATTR
+sched_forall_mcast_signal (imdb_fetch_obj_t *fobj, void *data)
+{
+    sched_entry_t *entry = d_pointer_as (sched_entry_t, fobj->dataptr);
+    uint8 *signal_id = d_pointer_as (uint8, data);
+
+    if ((*signal_id >= SVCS_MSGTYPE_MULTICAST_MIN) && (*signal_id <= SVCS_MSGTYPE_MULTICAST_MAX) &&
+         d_bitbuf_get (entry->ts.mcastid, *signal_id - SVCS_MSGTYPE_MULTICAST_MIN))
+    {
+        entry_run (entry);
+    }
 
     return IMDB_ERR_SUCCESS;
 }
@@ -482,20 +494,19 @@ sched_entry_src_get (const char * entry_name, sched_entry_source_t ** entry_src)
     os_memset (&find_ctx, 0, sizeof (sched_find_ctx_t));
     find_ctx.entry_name = entry_name;
 
-    d_sched_check_imdb_error (imdb_class_forall (sdata->svcres->hmdb, sdata->hentry, (void *) &find_ctx, sched_forall_find_src));
+    d_sched_check_imdb_error (imdb_class_forall (sdata->svcres->hfdb, sdata->hentry_src, (void *) &find_ctx, sched_forall_find_src));
 
     *entry_src = find_ctx.entry_src;
     return (*entry_src) ? SCHED_ERR_SUCCESS : SCHED_ENTRY_SRC_NOTEXISTS;
 }
 
 
-sched_errcode_t ICACHE_FLASH_ATTR
-sched_entry_add (const char * entry_name, bool persistent, const char * sztsentry, const char * stmt_name, const char * vardata, size_t varlen)
+LOCAL sched_errcode_t ICACHE_FLASH_ATTR
+internal_entry_add (const char * entry_name, const char * sztsentry, const char * stmt_name, const char * vardata, size_t varlen, sched_entry_t ** pentry)
 {
-    d_check_init();
+    sched_entry_t * entry;
 
-    sched_entry_t    *entry;
-    if (sched_entry_get ( entry_name, &entry) == SCHED_ERR_SUCCESS) {
+    if (sched_entry_get (entry_name, &entry) == SCHED_ERR_SUCCESS) {
 	d_log_wprintf (SCHED_SERVICE_NAME, sz_sched_error[SCHED_ENTRY_EXISTS], entry_name);
 	return SCHED_ENTRY_EXISTS;
     }
@@ -519,8 +530,8 @@ sched_entry_add (const char * entry_name, bool persistent, const char * sztsentr
     os_memset (entry, 0, length);
 
     os_memcpy (&entry->ts, &ts_entry, sizeof (tsentry_t));
-    os_memcpy (entry->stmt_name, stmt_name, os_strnlen ((char *)stmt_name, sizeof (sh_stmt_name_t)) );
-    os_memcpy (entry->entry_name, entry_name, os_strnlen ((char *)entry_name, sizeof (entry_name_t)) );
+    os_strncpy (entry->stmt_name, stmt_name, sizeof (sh_stmt_name_t) );
+    os_strncpy (entry->entry_name, entry_name, sizeof (entry_name_t) );
 
     dtlv_ctx_t vd_ctx;
     d_sched_check_dtlv_error (dtlv_ctx_init_encode (&vd_ctx, entry->vardata, vd_len) || // MUST be the first AVP
@@ -532,6 +543,18 @@ sched_entry_add (const char * entry_name, bool persistent, const char * sztsentr
         os_memcpy (gavp->data, vardata, varlen);
     }
     entry->varlen = vd_ctx.datalen;
+    *pentry = entry;
+
+    return SCHED_ERR_SUCCESS;
+}
+
+sched_errcode_t ICACHE_FLASH_ATTR
+sched_entry_add (const char * entry_name, bool persistent, const char * sztsentry, const char * stmt_name, const char * vardata, size_t varlen)
+{
+    d_check_init();
+
+    sched_entry_t *entry;
+    d_sched_check_error (internal_entry_add (entry_name, sztsentry, stmt_name, vardata, varlen, &entry));
 
     entry_set_next_time(entry);
 
@@ -542,37 +565,38 @@ sched_entry_add (const char * entry_name, bool persistent, const char * sztsentr
     if (sdata->next_ctime > entry->next_ctime)
         next_timer_set(entry);
 
-    //
-    imdb_errcode_t imdb_res = IMDB_ERR_SUCCESS;
-    sched_entry_source_t *entry_src = NULL;
-    sched_entry_src_get (entry_name, &entry_src);
-    if (entry_src) {
-        d_log_wprintf (SCHED_SERVICE_NAME, "source \"%s\" replaced", entry_name);
-        imdb_res = imdb_clsobj_delete (sdata->svcres->hfdb, sdata->hentry_src, entry_src);
-        if (imdb_res != IMDB_ERR_SUCCESS)
-            d_log_eprintf (SCHED_SERVICE_NAME, "source \"%s\" delete failed: %u", entry_name, imdb_res);
-    } 
+    if (persistent) {
+        imdb_errcode_t imdb_res = IMDB_ERR_SUCCESS;
+        sched_entry_source_t *entry_src = NULL;
+        sched_entry_src_get (entry_name, &entry_src);
+        if (entry_src) {
+            d_log_wprintf (SCHED_SERVICE_NAME, "source \"%s\" replaced", entry_name);
+            imdb_res = imdb_clsobj_delete (sdata->svcres->hfdb, sdata->hentry_src, entry_src);
+            if (imdb_res != IMDB_ERR_SUCCESS)
+                d_log_eprintf (SCHED_SERVICE_NAME, "source \"%s\" delete failed: %u", entry_name, imdb_res);
+        } 
 
-    if (imdb_res == IMDB_ERR_SUCCESS) {
-        size_t slen = d_align(d_avp_full_length(os_strlen(sztsentry) + 1)) 
-                    + d_align(d_avp_full_length(sizeof(sh_stmt_name_t) + 1))
-                    + d_align(d_avp_full_length(varlen));
-        imdb_errcode_t imdb_res = imdb_clsobj_insert (sdata->svcres->hfdb, sdata->hentry_src, (void **) &entry_src, sizeof (sched_entry_source_t) + slen);
         if (imdb_res == IMDB_ERR_SUCCESS) {
-            os_strncpy(entry_src->name, entry_name, sizeof (entry_name_t));
-            entry_src->utime = lt_time (NULL);
-            entry_src->varlen = slen;
+            size_t slen = d_align(d_avp_full_length(os_strlen(sztsentry) + 1)) 
+                        + d_align(d_avp_full_length(sizeof(sh_stmt_name_t) + 1))
+                        + d_align(d_avp_full_length(varlen));
+            imdb_errcode_t imdb_res = imdb_clsobj_insert (sdata->svcres->hfdb, sdata->hentry_src, (void **) &entry_src, sizeof (sched_entry_source_t) + slen);
+            if (imdb_res == IMDB_ERR_SUCCESS) {
+                os_strncpy(entry_src->name, entry_name, sizeof (entry_name_t));
+                entry_src->utime = lt_time (NULL);
+                entry_src->varlen = slen;
 
-            dtlv_ctx_t ctx;
-            imdb_res = dtlv_ctx_init_encode (&ctx, entry_src->vardata, entry_src->varlen)
-                || dtlv_avp_encode_char (&ctx, SCHED_AVP_SCHEDULE_STRING, sztsentry)
-                || dtlv_avp_encode_nchar (&ctx, SCHED_AVP_STMT_NAME, sizeof (sh_stmt_name_t), stmt_name)
-                || dtlv_avp_encode_octets (&ctx, SCHED_AVP_STMT_NAME, varlen, vardata);
+                dtlv_ctx_t ctx;
+                imdb_res = dtlv_ctx_init_encode (&ctx, entry_src->vardata, entry_src->varlen)
+                    || dtlv_avp_encode_char (&ctx, SCHED_AVP_SCHEDULE_STRING, sztsentry)
+                    || dtlv_avp_encode_nchar (&ctx, SCHED_AVP_STMT_NAME, sizeof (sh_stmt_name_t), stmt_name)
+                    || dtlv_avp_encode_octets (&ctx, SCHED_AVP_STMT_ARGUMENTS, varlen, vardata);
+            }
+            else
+                d_log_eprintf (LSH_SERVICE_NAME, "source \"%s\" store failed: %u", stmt_name, imdb_res);
+
+            imdb_flush (sdata->svcres->hfdb);
         }
-        else
-            d_log_eprintf (LSH_SERVICE_NAME, "source \"%s\" store failed: %u", stmt_name, imdb_res);
-
-        imdb_flush (sdata->svcres->hfdb);
     }
 
     return SCHED_ERR_SUCCESS;
@@ -586,7 +610,7 @@ sched_entry_remove (const char * entry_name)
     sched_entry_t *entry;
     sched_errcode_t   res = sched_entry_get (entry_name, &entry);
     if (res == SCHED_ENTRY_NOTEXISTS) {
-	d_log_eprintf (SCHED_SERVICE_NAME, sz_sched_error[res], entry_name);
+	d_log_wprintf (SCHED_SERVICE_NAME, sz_sched_error[res], entry_name);
     } 
     else if (res == SCHED_ERR_SUCCESS) {
         d_log_iprintf (SCHED_SERVICE_NAME, "remove \"%s\"", entry_name);
@@ -667,6 +691,40 @@ sched_on_msg_info (dtlv_ctx_t * msg_out)
     return SVCS_ERR_SUCCESS;
 }
 
+LOCAL svcs_errcode_t ICACHE_FLASH_ATTR
+sched_on_msg_entry_list (dtlv_ctx_t * msg_out)
+{
+    dtlv_avp_t     *gavp;
+
+    d_svcs_check_dtlv_error ( dtlv_avp_encode_list (msg_out, 0, SCHED_AVP_ENTRY_SOURCE, DTLV_TYPE_OBJECT, &gavp));
+    imdb_hndlr_t    hcur;
+    d_svcs_check_imdb_error (imdb_class_query (sdata->svcres->hfdb, sdata->hentry_src, PATH_NONE, &hcur));
+
+    imdb_fetch_obj_t fobj[SCHED_FETCH_BULK_COUNT];
+    uint16          rowcount;
+    d_svcs_check_imdb_error (imdb_class_fetch (hcur, SCHED_FETCH_BULK_COUNT, &rowcount, fobj));
+
+    bool            fcont = true;
+    while (rowcount && fcont) {
+	int             i;
+	for (i = 0; i < rowcount; i++) {
+            sched_entry_source_t *entry_src = d_pointer_as(sched_entry_source_t, fobj[i].dataptr);
+	    dtlv_avp_t     *gavp_in;
+	    d_svcs_check_dtlv_error (dtlv_avp_encode_grouping (msg_out, 0, SCHED_AVP_ENTRY_SOURCE, &gavp_in)
+				     || dtlv_avp_encode_nchar (msg_out, SCHED_AVP_ENTRY_NAME, sizeof (entry_name_t), entry_src->name)
+				     || dtlv_avp_encode_uint16 (msg_out, COMMON_AVP_OBJECT_SIZE, entry_src->varlen)
+                                     || dtlv_avp_encode_uint32 (msg_out, COMMON_AVP_UPDATE_TIMESTAMP, entry_src->utime)
+				     || dtlv_avp_encode_group_done (msg_out, gavp_in));
+	}
+
+        d_svcs_check_imdb_error (imdb_class_fetch (hcur, SCHED_FETCH_BULK_COUNT, &rowcount, fobj));
+    }
+    imdb_class_close (hcur);
+    d_svcs_check_imdb_error (dtlv_avp_encode_group_done (msg_out, gavp));
+
+    return SVCS_ERR_SUCCESS;
+}
+
 svcs_errcode_t  ICACHE_FLASH_ATTR
 sched_on_message (service_ident_t orig_id,
 		   service_msgtype_t msgtype, void *ctxdata, dtlv_ctx_t * msg_in, dtlv_ctx_t * msg_out)
@@ -706,6 +764,9 @@ sched_on_message (service_ident_t orig_id,
                 d_svcs_check_svcs_error (encode_service_result_ext (msg_out, sres, NULL));
 	}
         break;
+    case SCHED_MSGTYPE_ENTRY_LIST:
+        res = sched_on_msg_entry_list(msg_out);
+        break;
     case SCHED_MSGTYPE_ENTRY_REMOVE:
     case SCHED_MSGTYPE_ENTRY_RUN:
     case SCHED_MSGTYPE_ENTRY_SOURCE:
@@ -732,9 +793,11 @@ sched_on_message (service_ident_t orig_id,
 	    case SCHED_MSGTYPE_ENTRY_SOURCE:
 	        {
                     sched_entry_source_t *entry_src = NULL;
-                    sres == sched_entry_src_get (entry_name, &entry_src);
-                    if (sres == SCHED_ERR_SUCCESS)
-                        dtlv_avp_encode_octets (msg_out, SCHED_AVP_ENTRY_SOURCE, entry_src->varlen, entry_src->vardata);
+                    sres = sched_entry_src_get (entry_name, &entry_src);
+                    if (sres == SCHED_ERR_SUCCESS) {
+                        d_svcs_check_dtlv_error (dtlv_avp_encode_octets (msg_out, SCHED_AVP_ENTRY_SOURCE, entry_src->varlen, entry_src->vardata) || 
+                                                 dtlv_avp_encode_uint32 (msg_out, COMMON_AVP_UPDATE_TIMESTAMP, entry_src->utime));
+                    }
                 }
 	    }
 
@@ -744,7 +807,11 @@ sched_on_message (service_ident_t orig_id,
 	}
         break;
     default:
-	res = SVCS_MSGTYPE_INVALID;
+        if ((msgtype >= SVCS_MSGTYPE_MULTICAST_MIN) && (SVCS_MSGTYPE_MULTICAST_MIN <= SVCS_MSGTYPE_MULTICAST_MAX)) {
+            d_sched_check_imdb_error (imdb_class_forall (sdata->svcres->hmdb, sdata->hentry, (void *) &msgtype, sched_forall_mcast_signal));
+        }
+        else 
+	    res = SVCS_MSGTYPE_INVALID;
     }
 
     return res;
@@ -774,6 +841,39 @@ svcs_errcode_t  ICACHE_FLASH_ATTR
 sched_service_uninstall (void)
 {
     return svcctl_service_uninstall (SCHED_SERVICE_NAME);
+}
+
+
+LOCAL imdb_errcode_t ICACHE_FLASH_ATTR
+sched_forall_load (imdb_fetch_obj_t *fobj, void *data)
+{
+    sched_entry_source_t *entry_src = d_pointer_as (sched_entry_source_t, fobj->dataptr);
+
+    dtlv_ctx_t      ctx;
+
+    const char     *sztsentry = NULL;
+    const char     *stmt_name = NULL;
+    const char     *vardata;
+    size_t          varlen = 0;
+
+    dtlv_ctx_init_decode (&ctx, entry_src->vardata, entry_src->varlen);
+    dtlv_seq_decode_begin (&ctx, SCHED_SERVICE_ID);
+    dtlv_seq_decode_ptr (SCHED_AVP_STMT_NAME, stmt_name, char);
+    dtlv_seq_decode_ptr (SCHED_AVP_SCHEDULE_STRING, sztsentry, char);
+    dtlv_seq_decode_group (SCHED_AVP_STMT_ARGUMENTS, vardata, varlen);
+    dtlv_seq_decode_end (&ctx);
+
+    if (sztsentry && stmt_name) {
+        sched_entry_t *entry;
+        sched_errcode_t res = internal_entry_add ( (const char *) entry_src->name, sztsentry, stmt_name, vardata, varlen, &entry);
+        if (res != SCHED_ERR_SUCCESS)
+            d_log_wprintf (SCHED_SERVICE_NAME, "load \"%s\" failed: %u", entry_src->name, res);
+    }
+    else 
+        d_log_wprintf (SCHED_SERVICE_NAME, "load \"%s\" failed: invalid source", entry_src->name);
+
+
+    return IMDB_ERR_SUCCESS;
 }
 
 svcs_errcode_t  ICACHE_FLASH_ATTR
@@ -806,10 +906,14 @@ sched_on_start (const svcs_resource_t * svcres, dtlv_ctx_t * conf)
     sdata = tmp_sdata;
 
     sdata->next_ctime = SCHED_NEXT_CTIME_NONE;
-#ifdef ARCH_XTENSA
+    #ifdef ARCH_XTENSA
     os_timer_disarm (&sdata->next_timer);
     os_timer_setfn (&sdata->next_timer, next_timer_timeout, NULL);
-#endif
+    #endif
+
+    imdb_class_forall (sdata->svcres->hfdb, sdata->hentry_src, NULL, sched_forall_load);
+    //sched_setall_next_time(true); do not set, wait ADJ_TIME event
+
     return SVCS_ERR_SUCCESS;
 }
 

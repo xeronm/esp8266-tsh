@@ -56,8 +56,9 @@ LOCAL system_data_t *sdata = NULL;
 typedef         svcs_errcode_t (*service_install) (void);
 
 typedef struct reg_service_s {
-    service_install fn_install;
-    service_name_t  name;
+    service_install 	fn_install;
+    service_name_t  	name;
+    bool		safe_mode;
 } reg_service_t;
 
 #ifdef ARCH_XTENSA
@@ -66,17 +67,17 @@ typedef struct reg_service_s {
 #define REG_SERVICE_MAX	5
 #endif
 LOCAL reg_service_t const reg_services[REG_SERVICE_MAX] RODATA = {
-    {syslog_service_install, SYSLOG_SERVICE_NAME},
-    {lsh_service_install, LSH_SERVICE_NAME},
-    {sched_service_install, SCHED_SERVICE_NAME},
+    {syslog_service_install, SYSLOG_SERVICE_NAME, true},
+    {lsh_service_install, LSH_SERVICE_NAME, false},
+    {sched_service_install, SCHED_SERVICE_NAME, false},
     #ifdef ARCH_XTENSA
-    {espadmin_service_install, ESPADMIN_SERVICE_NAME},
-    {gpio_service_install, GPIO_SERVICE_NAME},
+    {espadmin_service_install, ESPADMIN_SERVICE_NAME, false},
+    {gpio_service_install, GPIO_SERVICE_NAME, false},
     #endif
-    {udpctl_service_install, UDPCTL_SERVICE_NAME},
-    {ntp_service_install, NTP_SERVICE_NAME},
+    {udpctl_service_install, UDPCTL_SERVICE_NAME, true},
+    {ntp_service_install, NTP_SERVICE_NAME, false},
     #ifdef ARCH_XTENSA
-    {dht_service_install, DHT_SERVICE_NAME},
+    {dht_service_install, DHT_SERVICE_NAME, false},
     #endif
 };
 
@@ -149,7 +150,7 @@ system_init (void)
     st_alloc(sdata, system_data_t);
   
     #ifdef ARCH_XTENSA
-    system_os_task(system_task_delayed_cb, USER_TASK_PRIO_1, &sdata->task_queue, TASK_QUEUE_LENGTH);
+    system_os_task(system_task_delayed_cb, USER_TASK_PRIO_1, (ETSEvent *) &sdata->task_queue, TASK_QUEUE_LENGTH);
     #ifdef ENABLE_AT
     at_init ();
     atcmd_init ();

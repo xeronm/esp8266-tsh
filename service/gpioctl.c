@@ -202,7 +202,7 @@ gpio_release (uint8 gpio_id)
  * result: port value
  */
 LOCAL void    ICACHE_FLASH_ATTR
-fn_gpio_get (sh_bc_arg_t * ret_arg, const arg_count_t arg_count, sh_bc_arg_type_t arg_type[], sh_bc_arg_t * bc_args[]) 
+fn_gpio_get (sh_eval_ctx_t * evctx, sh_bc_arg_t * ret_arg, const arg_count_t arg_count, sh_bc_arg_type_t arg_type[], sh_bc_arg_t * bc_args[]) 
 {
 #ifdef ARCH_XTENSA
     uint32          gpio_id = GPIO_ID_NONE;
@@ -222,7 +222,7 @@ fn_gpio_get (sh_bc_arg_t * ret_arg, const arg_count_t arg_count, sh_bc_arg_type_
  * result: gpio_result_t
  */
 LOCAL void    ICACHE_FLASH_ATTR
-fn_gpio_set (sh_bc_arg_t * ret_arg, const arg_count_t arg_count, sh_bc_arg_type_t arg_type[], sh_bc_arg_t * bc_args[]) 
+fn_gpio_set (sh_eval_ctx_t * evctx, sh_bc_arg_t * ret_arg, const arg_count_t arg_count, sh_bc_arg_type_t arg_type[], sh_bc_arg_t * bc_args[]) 
 {
     if (arg_count != 2) {
         ret_arg->arg.value = GPIO_RESULT_ERROR;
@@ -250,7 +250,7 @@ fn_gpio_set (sh_bc_arg_t * ret_arg, const arg_count_t arg_count, sh_bc_arg_type_
  * result: gpio_result_t
  */
 LOCAL void    ICACHE_FLASH_ATTR
-fn_gpio_setup (sh_bc_arg_t * ret_arg, const arg_count_t arg_count, sh_bc_arg_type_t arg_type[], sh_bc_arg_t * bc_args[]) 
+fn_gpio_setup (sh_eval_ctx_t * evctx, sh_bc_arg_t * ret_arg, const arg_count_t arg_count, sh_bc_arg_type_t arg_type[], sh_bc_arg_t * bc_args[]) 
 {
     if (arg_count != 2) {
         ret_arg->arg.value = GPIO_RESULT_ERROR;

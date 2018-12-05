@@ -296,7 +296,7 @@ dht_hist_timeout (void *args)
  * result: dht_result_t
  */
 LOCAL void    ICACHE_FLASH_ATTR
-fn_dht_get (sh_bc_arg_t * ret_arg, const arg_count_t arg_count, sh_bc_arg_type_t arg_type[], sh_bc_arg_t * bc_args[]) 
+fn_dht_get (sh_eval_ctx_t * evctx, sh_bc_arg_t * ret_arg, const arg_count_t arg_count, sh_bc_arg_type_t arg_type[], sh_bc_arg_t * bc_args[]) 
 {
     if (arg_count != 3) {
         ret_arg->arg.value = DHT_RESULT_INTERNAL_ERROR;

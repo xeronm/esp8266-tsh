@@ -102,6 +102,7 @@ lt_localtime (const lt_time_t _time, struct ltm *_tm, bool utc)
     lt_daystotm(_d, _tm);
 }
 
+
 lt_time_t       ICACHE_FLASH_ATTR
 lt_mktime (struct ltm *_tm, bool utc)
 {
@@ -111,7 +112,7 @@ lt_mktime (struct ltm *_tm, bool utc)
 
     _time += lt_tmtodays(_tm) * SEC_PER_DAY;
 
-    if (utc == true) {
+    if (utc == false) {
 	_time -= TZ_2_SEC_FACTOR * _tm->tm_tz;
     }
 

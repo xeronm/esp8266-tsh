@@ -89,6 +89,7 @@ size_t          fio_user_size(void);
 #define os_strnlen	strnlen
 #define os_strncmp	strncmp
 #define os_strcmp	strcmp
+#define os_strncpy	strncpy
 #define os_memcpy	memcpy
 #define os_memset	memset
 #define os_memcmp	memcmp

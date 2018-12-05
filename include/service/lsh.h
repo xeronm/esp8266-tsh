@@ -77,7 +77,6 @@ typedef enum sh_msgtype_e {
 
 typedef enum sh_avp_code_e {
     SH_AVP_STATEMENT = 100,
-    SH_AVP_STMT_OBJSIZE = 101,
     SH_AVP_STMT_NAME = 102,
     SH_AVP_STMT_TEXT = 103,
     SH_AVP_STMT_CODE = 104,
@@ -86,15 +85,9 @@ typedef enum sh_avp_code_e {
     SH_AVP_PERSISTENT = 107,
     SH_AVP_STATEMENT_SOURCE = 108,
     SH_AVP_FUNCTION_NAME = 110,
+    SH_AVP_STMT_EXITCODE = 111,
+    SH_AVP_STMT_EXITADDR = 112,
 } sh_avp_code_t;
-
-typedef struct sh_eval_ctx_s {
-    sh_hndlr_t      hstmt;
-    bool            opt_only;
-    uint16          depth;
-    sh_errcode_t    errcode;
-    char            errmsg[80];
-} sh_eval_ctx_t;
 
 typedef struct sh_stmt_info_s {
     sh_stmt_name_t  name;
@@ -105,8 +98,17 @@ typedef struct sh_stmt_info_s {
 typedef struct sh_stmt_source_s {
     sh_stmt_name_t  name;
     lt_time_t       utime;
-    char            szstmt[];
+    size_t          varlen;
+    ALIGN_DATA char vardata[];
 } sh_stmt_source_t;
+
+typedef struct sh_eval_ctx_s {
+    sh_stmt_info_t *stmt_info;
+    bytecode_size_t addr;
+    uint8           exitcode;
+    sh_errcode_t    errcode;
+    char            errmsg[80];
+} sh_eval_ctx_t;
 
 typedef struct sh_bc_arg_s {
     union sh_bc_arg_u {
@@ -129,7 +131,7 @@ typedef enum sh_bc_arg_type_e {
 
 sh_bc_arg_type_t sh_pop_bcarg_type(uint16 * mask, sh_bc_arg_t * bc_arg);
 
-typedef void    (*sh_func_t) (sh_bc_arg_t * ret_arg, const arg_count_t arg_count, sh_bc_arg_type_t arg_type[], sh_bc_arg_t * bc_args[]);
+typedef void    (*sh_func_t) (sh_eval_ctx_t * evctx, sh_bc_arg_t * ret_arg, const arg_count_t arg_count, sh_bc_arg_type_t arg_type[], sh_bc_arg_t * bc_args[]);
 
 /*
 External function definition
@@ -161,10 +163,10 @@ sh_errcode_t    stmt_info (const sh_hndlr_t hstmt, sh_stmt_info_t * info);
 sh_errcode_t    stmt_eval (const sh_hndlr_t hstmt, sh_eval_ctx_t * ctx);
 sh_errcode_t    stmt_free (const sh_hndlr_t hstmt);
 
-sh_errcode_t    stmt_get (char * stmt_name, sh_hndlr_t * hstmt);
-sh_errcode_t    stmt_src_get (char * stmt_name, sh_stmt_source_t ** stmt_src);
+sh_errcode_t    stmt_get (const char * stmt_name, sh_hndlr_t * hstmt);
+sh_errcode_t    stmt_src_get (const char * stmt_name, sh_stmt_source_t ** stmt_src);
 // get stmt by name, if not exists try to load from source
-sh_errcode_t    stmt_get_ext (char * stmt_name, sh_hndlr_t * hstmt);
+sh_errcode_t    stmt_get_ext (const char * stmt_name, sh_hndlr_t * hstmt);
 
 // used for sh_stmt_name_t stmt_name
 #define stmt_get2(stmt_name, hstmt)		stmt_get( (char *) (stmt_name), (hstmt))
@@ -178,6 +180,9 @@ svcs_errcode_t  lsh_service_uninstall (void);
 svcs_errcode_t  lsh_on_start (const svcs_resource_t * svcres, dtlv_ctx_t * conf);
 svcs_errcode_t  lsh_on_stop (void);
 
+
+#define d_sh_check_dtlv_error(ret) \
+	if ((ret) != DTLV_ERR_SUCCESS) return SH_INTERNAL_ERROR;
 
 #define d_sh_check_error(ret) \
 	{ \
