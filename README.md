@@ -2,32 +2,39 @@ esp8266-tsh
 ===============
 Light-weight Shell for ESP8266
 
-## Buld Firmware from scratch
+# Scope
 
-### Preparing environment
+# References
+
+# Definitions and Abbrevations
+
+# Buld Firmware from scratch
+
+## Prepare build environment
 
 ```
-$ sudo docker pull dtec/esp8266
+$ sudo docker pull dtec/esp8266:1.22-p
 $ git clone https://github.com/xeronm/esp8266-tsh.git
 $ cd esp8266-tsh
 ```
 
-### Configure
+## Configure project
 
 Configurables are:
- - APP, SPI_MODE, SDK_IMAGE_TOOL in `Makefile`
- - Defines in `./include/core/config.h`
+- APP, SPI_MODE, SDK_IMAGE_TOOL in `Makefile`
+- Global project defines in `./include/core/config.h`
 
-### Buld Firmware Image
+## Buld Firmware
+
 ```
 $ sudo docker run --name esp8266 -it --rm -v $PWD:/src/project dtec/esp8266:1.22-p
-/src/project# make cleanall
 /src/project# make build
 ```
 
-## Usage
 
-### Service description
+# Usage
+
+## Service catalog
 
 | Id | Name      | Description                  |
 | ---| ----------| -----------------------------|
@@ -35,17 +42,17 @@ $ sudo docker run --name esp8266 -it --rm -v $PWD:/src/project dtec/esp8266:1.22
 |  1 | service   | service management           |
 |  2 | syslog    | system message logging       |
 |  3 | espadmin  | esp8266 system management    |
-|  4 | udpctl    | UDP cotrol server            |
+|  4 | udpctl    | UDP system management        |
 |  5 | lwsh      | Light-weight shell           |
 |  6 | ntp       | Network Time Protocol client |
 |  7 | gpioctl   | GPIO control management      |
 |  8 | sched     | Cron-like scheduler          |
 
-### Services configuration
+## Service documentation
 
-#### Syslog
+### System logging (syslog)
 
-System logging configuration parameters:
+#### Configuration parameters
 
 |Parameter|Level|Description|Default|
 |---------|-----|-----------|-------|
@@ -56,9 +63,9 @@ Example:
   { "syslog.Log-Severity": 4 }
 ```
 
-#### ESP Admin
+### esp8266 system management (espadmin)
 
-esp8266 system configuration parameters:
+#### Configuration parameters
 
 |Parameter|Level|Description|Default|
 |---------|-----|-----------|-------|
@@ -94,9 +101,9 @@ Example:
   }
 ```
 
-#### UDPCTL
+### UDP system management (udpctl)
 
-UDP control configuration parameters:
+#### Configuration parameters
 
 |Parameter|Level|Description|Default|
 |---------|-----|-----------|-------|
@@ -114,9 +121,9 @@ Example:
 ```
 
 
-#### NTP
+### Network Time Protocol client (ntp)
 
-NTP client configuration parameters:
+#### Configuration parameters
 
 |Parameter|Level|Description|Default|
 |---------|-----|-----------|-------|
@@ -137,14 +144,23 @@ Example:
   }
 ```
 
-## Examples
+# Examples
 
-### FAN Control Unit
+## FAN Control Unit
 
-#### Flash Initial Firmware Image
+### Scope
 
-- connect ESP12E to host by serial cable
-- use esptool for query module `MAC`
+Bathroom FAN control unit with DHT11 sensor and 1P solid state relay.
+
+Conrol Logic Goals
+- Force turn on FAN when system startup and every day-time hour. Turn off after 10 minutes timeout.
+- Turn on/off FAN when humidity reached high/low threshold. Regardless of humidity turn off after 20 minutes.
+- Cool-down turn on/off humidity event by 5 minutes after last on/off event.
+
+### Flash Initial Firmware Image
+
+1. Connect ESP12E to host by serial cable
+2. Use esptool for query module `MAC` (in our example was `5ccf7f85e196`)
 ```
 $  sudo esptool.py -p /dev/ttyUSB0 -b 115200 read_mac
 esptool.py v2.5.0
@@ -161,7 +177,7 @@ MAC: 5c:cf:7f:85:e1:96
 Hard resetting via RTS pin...
 ```
 
-- flash new firmware
+3. Flash Things-Shell firmware
 ```
 $ cd ./bin
 $ sudo esptool.py -p /dev/ttyUSB0 -b 115200 write_flash --flash_freq 80m --flash_mode dio --flash_size 32m --verify \
@@ -172,8 +188,9 @@ $ sudo esptool.py -p /dev/ttyUSB0 -b 115200 write_flash --flash_freq 80m --flash
     0x3fe000 blank.bin
 ...
 ```
-- connect to hidden WiFi AP `ESPTSH_85e196` (last 6 digit of MAC) with password `5ccf7f85e196` (MAC)
-- query system information
+
+4. Connect to hidden WiFi AP `ESPTSH_85e196` (last 6 digit of MAC) with password `5ccf7f85e196` (MAC)
+5. Check that firmware and `udpctl` service works. Query system information
 ```
 $ ./tcli.py -H 192.168.4.1 -s 5ccf7f85e196 system info
 {
@@ -207,25 +224,20 @@ $ ./tcli.py -H 192.168.4.1 -s 5ccf7f85e196 system info
 }
 ```
 
-#### Configure System
+### Configure System
 todo
 
-#### Configure Script Logic and Schedule
-
-Conrol Logic Goals:
-- force turn on FAN when system startup and every day-time hour, turn off after 10 minutes timeout
-- turn on/off FAN when humidity reached high/low threshold, regardless of humidity turn off after 20 minutes
-- cool-down humidity turn on/off event by 5 minutes after last on/off event
+### Configure Script Logic and Schedule
 
 Following terms were used:
-- global variable `last_ev` - last state change event (0- reset state, 1-force power on, 2- humidity high threshold, 3- humidity low threshold, 4- power off timeout)
-- global variable `last_dt` - last state change event date
-- gpio pin `4` for FAN relay
-- humidity turn on threshold: 50%
-- humidity turn off threshold: 40%
-- we are using Estimated Moving Average results of DHT sensor
+- global variable `last_ev` - last state change event (0- reset state, 1-force power on, 2- humidity high threshold, 3- humidity low threshold, 4- power off timeout);
+- global variable `last_dt` - last state change event date;
+- gpio pin `4` for FAN relay;
+- humidity turn on threshold: 50%;
+- humidity turn off threshold: 40%;
+- we are using estimated moving average results from DHT sensor.
 
-Make light-shell script with control rule logic. Solution is not optimal, may improved by using dht service thresholds and multicast signaling handling.
+1. Make light-shell script with control rule logic. Solution is not optimal, may improved by using dht service thresholds and multicast signal handling.
 ```
 ## last_dt; ## last_ev; # sdt := sysctime(); 
 (last_ev <= 0) ?? { gpio_set(4, 1); last_ev := 1; last_dt := sdt; print(last_ev) }; 	// set initial state, force power on
@@ -236,7 +248,7 @@ Make light-shell script with control rule logic. Solution is not optimal, may im
 ((last_ev = 1) && (last_dt + 600 < sdt) || (last_ev = 2) && (last_dt + 1200 < sdt)) ?? { gpio_set(4, 0); last_ev := 4; last_dt := sdt; print(last_ev) };	// power off timeout
 ```
 
-Add peristent named statement `fan_control`
+2. Add peristent named statement `fan_control`
 ```
 $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 lsh add -m '{
   "lsh.Statement-Name": "fan_control",
@@ -245,7 +257,7 @@ $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 lsh add -m '{
 }'
 ```
 
-Add peristent named statement `fan_force_on`
+3. Add peristent named statement `fan_force_on`
 ```
 $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 lsh add -m '{
   "lsh.Statement-Name": "fan_force_on",
@@ -254,15 +266,17 @@ $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 lsh add -m '{
 }'
 ```
 
-Perform simple tests. Force turn on when no initial state
+4. Perform simple tests. Force turn on when no initial state
 ```
 ```
 
-Force turn off after 10 minutes
+5. Force turn off after 10 minutes
 ```
 ```
 
-Add schedule
+6. Add schedule
+- `fan_force_on` at system startup and every 30th minutes of 08 - 22 day hours
+- `fan_control` at 15th seconds of every minute
 ```
 $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 sched add -m '{
   "sched.Entry-Name": "fan_force_on",
@@ -282,13 +296,10 @@ $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 sched add -m '{
 
 
 
-## Memos
+# Appendix: Memos
 
-### Indent
+## Indent
 ```
 $ find ./ -name '*.h' -exec indent -l120 -brs -br -i4 -ci4 -di16 -sc {} -o {} \;
 $ find ./ -name '*.c' -exec indent -l120 -brs -br -i4 -ci4 -di16 -sc {} -o {} \;
 ```
-
-"bin_size": 330208
-"bin_size": 329888
