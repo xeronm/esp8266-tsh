@@ -30,6 +30,7 @@ typedef enum common_avp_code_e {
     COMMON_AVP_PEREPHERIAL_GPIO_ID = 16,
     COMMON_AVP_UPDATE_TIMESTAMP = 17,
     COMMON_AVP_OBJECT_SIZE = 18,
+    COMMON_AVP_MULTICAST_SIGNAL = 19,
 } common_avp_code_t;
 
 #endif

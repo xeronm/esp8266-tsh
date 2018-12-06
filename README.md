@@ -143,7 +143,7 @@ Example:
 
 #### Flash Initial Firmware Image
 
-- connect ESP12E host by serial cable
+- connect ESP12E to host by serial cable
 - use esptool for query module `MAC`
 ```
 $  sudo esptool.py -p /dev/ttyUSB0 -b 115200 read_mac
@@ -164,7 +164,12 @@ Hard resetting via RTS pin...
 - flash new firmware
 ```
 $ cd ./bin
-$ sudo esptool.py -p /dev/ttyUSB0 -b 115200 write_flash --flash_freq 80m --flash_mode dio --flash_size 32m --verify 0x00000 boot_v1.7.bin 0x01000 tsh-0.1.0-dev.spi4.app1.bin 0x7e000 blank.bin 0x3fc000 esp_init_data_default.bin 0x3fe000 blank.bin
+$ sudo esptool.py -p /dev/ttyUSB0 -b 115200 write_flash --flash_freq 80m --flash_mode dio --flash_size 32m --verify \
+    0x00000 boot_v1.7.bin \
+    0x01000 tsh-0.1.0-dev.spi4.app1.bin \
+    0x7e000 blank.bin \
+    0x3fc000 esp_init_data_default.bin \
+    0x3fe000 blank.bin
 ...
 ```
 - connect to hidden WiFi AP `ESPTSH_85e196` (last 6 digit of MAC) with password `5ccf7f85e196` (MAC)
@@ -201,25 +206,34 @@ $ ./tcli.py -H 192.168.4.1 -s 5ccf7f85e196 system info
     "common.Result-Code": 1
 }
 ```
+
 #### Configure System
+todo
 
 #### Configure Script Logic and Schedule
 
-following terms were used:
+Conrol Logic Goals:
+- force turn on FAN when system startup and every day-time hour, turn off after 10 minutes timeout
+- turn on/off FAN when humidity reached high/low threshold, regardless of humidity turn off after 20 minutes
+- cool-down humidity turn on/off event by 5 minutes after last on/off event
+
+Following terms were used:
 - global variable `last_ev` - last state change event (0- reset state, 1-force power on, 2- humidity high threshold, 3- humidity low threshold, 4- power off timeout)
 - global variable `last_dt` - last state change event date
 - gpio pin `4` for FAN relay
+- humidity turn on threshold: 50%
+- humidity turn off threshold: 40%
 - we are using Estimated Moving Average results of DHT sensor
 
-Make light-shell script with control rule logic:
+Make light-shell script with control rule logic. Solution is not optimal, may improved by using dht service thresholds and multicast signaling handling.
 ```
-## last_dt; ## last_ev; # sdt := sysdate(); 
+## last_dt; ## last_ev; # sdt := sysctime(); 
 (last_ev <= 0) ?? { gpio_set(4, 1); last_ev := 1; last_dt := sdt; print(last_ev) }; 	// set initial state, force power on
 
 # temp = 0; # hmd = 0; # res := dht_get(1, temp, hmd); 
-(res & (hmd >= 5000) & (last_dt + 30 < sdt)) ?? { gpio_set(4, 1); last_ev := 2; last_dt := sdt; print(last_ev) }; 	// humidity high threshold
-(res & (hmd < 4000) & (last_dt + 30 < sdt)) ?? { gpio_set(4, 0); last_ev := 3; last_dt := sdt; print(last_ev) };	// humidity low threshold
-((last_ev <= 2) & (last_dt + 600 < sdt)) ?? { gpio_set(4, 0); last_ev := 4; last_dt := sdt; print(last_ev) };	// power off timeout
+((last_ev != 2) && res && (hmd >= 5000) && (last_dt + 5 < sdt)) ?? { gpio_set(4, 1); last_ev := 2; last_dt := sdt; print(last_ev) }; 	// humidity high threshold
+((last_ev = 2) && res && (hmd < 4000) && (last_dt + 5 < sdt)) ?? { gpio_set(4, 0); last_ev := 3; last_dt := sdt; print(last_ev) };	// humidity low threshold
+((last_ev = 1) && (last_dt + 600 < sdt) || (last_ev = 2) && (last_dt + 1200 < sdt)) ?? { gpio_set(4, 0); last_ev := 4; last_dt := sdt; print(last_ev) };	// power off timeout
 ```
 
 Add peristent named statement `fan_control`
@@ -227,18 +241,46 @@ Add peristent named statement `fan_control`
 $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 lsh add -m '{
   "lsh.Statement-Name": "fan_control",
   "lsh.Persistent-Flag": 1,
-  "lsh.Statement-Text": "## last_dt; ## last_ev; # sdt := sysdate();	(last_ev <= 0) ?? { gpio_set(4, 1); last_ev := 1; last_dt := sdt; print(last_ev) };	# temp = 0; # hmd = 0; # res := dht_get(1, temp, hmd);	(res & (hmd >= 5000) & (last_dt + 30 < sdt)) ?? { gpio_set(4, 1); last_ev := 2; last_dt := sdt; print(last_ev) };	(res & (hmd < 4000) & (last_dt + 30 < sdt)) ?? { gpio_set(4, 0); last_ev := 3; last_dt := sdt; print(last_ev) };	((last_ev <= 2) & (last_dt + 600 < sdt)) ?? { gpio_set(4, 0); last_ev := 4; last_dt := sdt; print(last_ev) };"
+  "lsh.Statement-Text": "## last_dt; ## last_ev; # sdt := sysctime();\n(last_ev <= 0) ?? { gpio_set(4, 1); last_ev := 1; last_dt := sdt; print(last_ev) };\n\n# temp = 0; # hmd = 0; # res := dht_get(1, temp, hmd);\n((last_ev != 2) && res && (hmd >= 5000) && (last_dt + 5 < sdt)) ?? { gpio_set(4, 1); last_ev := 2; last_dt := sdt; print(last_ev) };\n((last_ev = 2) && res && (hmd < 4000) && (last_dt + 5 < sdt)) ?? { gpio_set(4, 0); last_ev := 3; last_dt := sdt; print(last_ev) };\n((last_ev = 1) && (last_dt + 600 < sdt) || (last_ev = 2) && (last_dt + 1200 < sdt)) ?? { gpio_set(4, 0); last_ev := 4; last_dt := sdt; print(last_ev) };"
 }'
 ```
 
-Add peristent named statement `fan_reset_state`
+Add peristent named statement `fan_force_on`
 ```
 $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 lsh add -m '{
-  "lsh.Statement-Name": "fan_reset_state",
+  "lsh.Statement-Name": "fan_force_on",
   "lsh.Persistent-Flag": 1,
-  "lsh.Statement-Text": "## last_ev := 0"
+  "lsh.Statement-Text": "## last_ev := 1; ## last_dt = sysctime(); gpio_set(4, 1); print(last_ev)"
 }'
 ```
+
+Perform simple tests. Force turn on when no initial state
+```
+```
+
+Force turn off after 10 minutes
+```
+```
+
+Add schedule
+```
+$ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 sched add -m '{
+  "sched.Entry-Name": "fan_force_on",
+  "sched.Persistent-Flag": 1,
+  "sched.Schedule-String": "@0 0 30 8-22 * *",
+  "sched.Statement-Name": "fan_force_on",
+  "sched.Statement-Args": {}
+}'
+$ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 sched add -m '{
+  "sched.Entry-Name": "fan_control",
+  "sched.Persistent-Flag": 1,
+  "sched.Schedule-String": "1 * * * *",
+  "sched.Statement-Name": "fan_control",
+  "sched.Statement-Args": {}
+}'
+```
+
+
 
 ## Memos
 

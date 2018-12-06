@@ -65,6 +65,10 @@ typedef struct dht_conf_s {
     uint8           stat_timeout;	// moving average timeout
     uint8           hist_interval;	// history flush stat interval
     uint8           ema_alpha_pct;	// alpha pct
+    dht_t           thresh_high;
+    uint8           thresh_high_signal;
+    dht_t           thresh_low;
+    uint8           thresh_low_signal;
 } dht_conf_t;
 
 typedef struct dht_data_s {
@@ -260,6 +264,11 @@ dht_hist_timeout (void *args)
 	sdata->stat_last_time = _ts;
 	os_memcpy (&sdata->stat_last_value, &value, sizeof (dht_t));
 
+	os_memcpy (&sdata->stat_last_value, &value, sizeof (dht_t));
+
+        dht_t           prev_ema;
+	os_memcpy (&prev_ema, &sdata->stat_ema_value, sizeof (dht_t));
+
 	if (sdata->stat_ema_initcnt != DHTxx_EMA_INIT_COUNT) {
 	    sdata->stat_ema_value.hmdt =
 		(sdata->stat_ema_value.hmdt * (100 - DHT_DEFAULT_EMA_ALPHA_PCT) +
@@ -271,6 +280,25 @@ dht_hist_timeout (void *args)
 	else
 	    os_memcpy (&sdata->stat_ema_value, &value, sizeof (dht_t));
 
+        if (!sdata->stat_ema_initcnt) {
+            if ((sdata->conf.thresh_high_signal) && 
+               ( 
+                   ((prev_ema.hmdt < sdata->conf.thresh_high.hmdt) && (sdata->stat_ema_value.hmdt >= sdata->conf.thresh_high.hmdt)) || 
+                   ((prev_ema.temp < sdata->conf.thresh_high.temp) && (sdata->stat_ema_value.temp >= sdata->conf.thresh_high.temp))
+               )) 
+            {
+                svcctl_service_message (0, 0, NULL, sdata->conf.thresh_high_signal, NULL, NULL);
+            }
+
+            if ((sdata->conf.thresh_low_signal) && 
+               ( 
+                   ((prev_ema.hmdt > sdata->conf.thresh_low.hmdt) && (sdata->stat_ema_value.hmdt <= sdata->conf.thresh_low.hmdt)) || 
+                   ((prev_ema.temp > sdata->conf.thresh_low.temp) && (sdata->stat_ema_value.temp <= sdata->conf.thresh_low.temp))
+               )) 
+            {
+                svcctl_service_message (0, 0, NULL, sdata->conf.thresh_low_signal, NULL, NULL);
+            }
+        }
     }
     else {
 	sdata->stat_retry_count++;
@@ -281,10 +309,10 @@ dht_hist_timeout (void *args)
 	    sdata->stat_retry_count = 0;
 	    sdata->stat_ema_initcnt = DHTxx_EMA_INIT_COUNT;
 	}
-#ifdef ARCH_XTENSA
+        #ifdef ARCH_XTENSA
 	else
 	    os_timer_arm (&sdata->stat_fail_timer, DHT_MIN_QUERY_TIMEOUT_SEC * MSEC_PER_SEC, false);
-#endif
+        #endif
     }
 
 }
@@ -381,7 +409,18 @@ dht_on_msg_info (dtlv_ctx_t * msg_out)
 			     dtlv_avp_encode_uint8 (msg_out, DHT_SENSOR_TYPE, sdata->conf.type) ||
 			     dtlv_avp_encode_uint8 (msg_out, DHT_STAT_TIMEOUT, sdata->conf.stat_timeout) ||
 			     dtlv_avp_encode_uint8 (msg_out, DHT_STAT_HIST_INTERVAL, sdata->conf.hist_interval) ||
-			     dtlv_avp_encode_uint8 (msg_out, DHT_STAT_EMA_ALPHA_PCT, sdata->conf.ema_alpha_pct));
+			     dtlv_avp_encode_uint8 (msg_out, DHT_STAT_EMA_ALPHA_PCT, sdata->conf.ema_alpha_pct) ||
+                             (sdata->conf.thresh_high_signal ? (dtlv_avp_encode_grouping (msg_out, 0, DHT_THRESHOLD_HIGH, &gavp)
+				        || dtlv_avp_encode_uint16 (msg_out, DHT_HUMIDITY, sdata->conf.thresh_high.hmdt)
+				        || dtlv_avp_encode_uint16 (msg_out, DHT_TEMPERATURE, sdata->conf.thresh_high.temp)
+			                || dtlv_avp_encode_uint8 (msg_out, COMMON_AVP_MULTICAST_SIGNAL, sdata->conf.thresh_high_signal)
+				        || dtlv_avp_encode_group_done (msg_out, gavp)) : 0) ||
+                             (sdata->conf.thresh_low_signal ? (dtlv_avp_encode_grouping (msg_out, 0, DHT_THRESHOLD_HIGH, &gavp)
+				        || dtlv_avp_encode_uint16 (msg_out, DHT_HUMIDITY, sdata->conf.thresh_low.hmdt)
+				        || dtlv_avp_encode_uint16 (msg_out, DHT_TEMPERATURE, sdata->conf.thresh_low.temp)
+			                || dtlv_avp_encode_uint8 (msg_out, COMMON_AVP_MULTICAST_SIGNAL, sdata->conf.thresh_low_signal)
+				        || dtlv_avp_encode_group_done (msg_out, gavp)) : 0)
+                            );
 
     if (sdata->stat_ema_initcnt != DHTxx_EMA_INIT_COUNT) {
 	d_svcs_check_dtlv_error (dtlv_avp_encode_grouping (msg_out, 0, DHT_STAT_LAST, &gavp) ||
@@ -390,11 +429,12 @@ dht_on_msg_info (dtlv_ctx_t * msg_out)
 				 || dtlv_avp_encode_uint16 (msg_out, DHT_HUMIDITY, sdata->stat_last_value.hmdt)
 				 || dtlv_avp_encode_uint16 (msg_out, DHT_TEMPERATURE, sdata->stat_last_value.temp)
 				 || dtlv_avp_encode_group_done (msg_out, gavp)
-				 || (!sdata->stat_ema_initcnt) ? (dtlv_avp_encode_grouping (msg_out, 0, DHT_STAT_AVERAGE, &gavp)
+				 || ((!sdata->stat_ema_initcnt) ? (dtlv_avp_encode_grouping (msg_out, 0, DHT_STAT_AVERAGE, &gavp)
 				        || dtlv_avp_encode_uint16 (msg_out, DHT_HUMIDITY, sdata->stat_ema_value.hmdt)
 				        || dtlv_avp_encode_uint16 (msg_out, DHT_TEMPERATURE, sdata->stat_ema_value.temp)
 				        || dtlv_avp_encode_group_done (msg_out, gavp)) : 
-                                     dtlv_avp_encode_uint8 (msg_out, DHT_STAT_EMA_INIT_COUNT, sdata->stat_ema_initcnt));
+                                     dtlv_avp_encode_uint8 (msg_out, DHT_STAT_EMA_INIT_COUNT, sdata->stat_ema_initcnt))
+                                );
     }
     else {
 	d_svcs_check_dtlv_error (dtlv_avp_encode_grouping (msg_out, 0, DHT_STAT_LAST, &gavp) ||
@@ -435,6 +475,20 @@ dht_on_message (service_ident_t orig_id, service_msgtype_t msgtype, void *ctxdat
     return res;
 }
 
+LOCAL ICACHE_FLASH_ATTR 
+dht_on_cfgupd_thresh(dtlv_ctx_t * ctx, dht_t * thresh, uint8 * thresh_signal) {
+    dtlv_ctx_reset_decode (ctx);
+    dtlv_seq_decode_begin (ctx, DHT_SERVICE_ID);
+    dtlv_seq_decode_uint16 (DHT_HUMIDITY, &thresh->hmdt);
+    dtlv_seq_decode_uint16 (DHT_TEMPERATURE, &thresh->temp);
+    dtlv_seq_decode_uint8 (COMMON_AVP_MULTICAST_SIGNAL, thresh_signal);
+    dtlv_seq_decode_end (ctx);
+
+    if ((*thresh_signal) && ((*thresh_signal < SVCS_MSGTYPE_MULTICAST_MIN) || (*thresh_signal > SVCS_MSGTYPE_MULTICAST_MAX))) {
+        d_log_wprintf (DHT_SERVICE_NAME, "invalid signal:%u", *thresh_signal);
+        *thresh_signal = 0;
+    }
+}
 
 svcs_errcode_t  ICACHE_FLASH_ATTR
 dht_on_cfgupd (dtlv_ctx_t * conf)
@@ -443,9 +497,35 @@ dht_on_cfgupd (dtlv_ctx_t * conf)
 
     sdata->conf.gpio_id = DHT_DEFAULT_GPIO;
     sdata->conf.type = DHT_DEFAULT_SENSOR_TYPE;
-    sdata->conf.stat_timeout = MAX (DHT_DEFAULT_STAT_TIMEOUT_SEC, DHT_MIN_STAT_TIMEOUT_SEC);
+    sdata->conf.stat_timeout = DHT_DEFAULT_STAT_TIMEOUT_SEC;
     sdata->conf.hist_interval = DHT_DEFAULT_HIST_INTERVAL;
     sdata->conf.ema_alpha_pct = DHT_DEFAULT_EMA_ALPHA_PCT;
+
+
+    if (conf) {
+        dtlv_ctx_t dtlv_trhigh;
+        os_memset(&dtlv_trhigh, 0, sizeof(dtlv_ctx_t));
+        dtlv_ctx_t dtlv_trlow;
+        os_memset(&dtlv_trlow, 0, sizeof(dtlv_ctx_t));
+
+        dtlv_seq_decode_begin (conf, DHT_SERVICE_ID);
+        dtlv_seq_decode_uint8 (COMMON_AVP_PEREPHERIAL_GPIO_ID, &sdata->conf.gpio_id);
+        dtlv_seq_decode_uint8 (DHT_STAT_TIMEOUT, &sdata->conf.stat_timeout);
+        dtlv_seq_decode_uint8 (DHT_STAT_EMA_ALPHA_PCT, &sdata->conf.ema_alpha_pct);
+        dtlv_seq_decode_group (DHT_THRESHOLD_HIGH, dtlv_trhigh.buf, dtlv_trhigh.datalen);
+        dtlv_seq_decode_group (DHT_THRESHOLD_LOW, dtlv_trlow.buf, dtlv_trlow.datalen);
+        dtlv_seq_decode_end (conf);
+
+        if (dtlv_trhigh.buf)
+            dht_on_cfgupd_thresh(&dtlv_trhigh, &sdata->conf.thresh_high, &sdata->conf.thresh_high_signal);
+
+        if (dtlv_trlow.buf)
+            dht_on_cfgupd_thresh(&dtlv_trlow, &sdata->conf.thresh_low, &sdata->conf.thresh_low_signal);
+    }
+
+    sdata->conf.stat_timeout = MAX (sdata->conf.stat_timeout, DHT_MIN_STAT_TIMEOUT_SEC);
+    sdata->conf.ema_alpha_pct = MAX (sdata->conf.ema_alpha_pct, DHT_MIN_EMA_ALPHA_PCT);
+    sdata->conf.ema_alpha_pct = MIN (sdata->conf.ema_alpha_pct, DHT_MAX_EMA_ALPHA_PCT);
 
     d_log_iprintf (DHT_SERVICE_NAME, "gpio:%u, timeout:%u", sdata->conf.gpio_id, sdata->conf.stat_timeout);
 
@@ -456,13 +536,13 @@ dht_on_cfgupd (dtlv_ctx_t * conf)
     sdata->stat_ema_initcnt = DHTxx_EMA_INIT_COUNT;
     sdata->stat_last_result = DHT_RESULT_UNAVAILABLE;
 
-#ifdef ARCH_XTENSA
+    #ifdef ARCH_XTENSA
     os_timer_disarm (&sdata->stat_timer);
     sdata->gpio_res = gpio_acquire (sdata->conf.gpio_id, true, NULL);
     if (sdata->gpio_res == GPIO_RESULT_SUCCESS) {
 	os_timer_arm (&sdata->stat_timer, sdata->conf.stat_timeout * MSEC_PER_SEC, true);
     }
-#endif
+    #endif
 
     return SVCS_ERR_SUCCESS;
 }

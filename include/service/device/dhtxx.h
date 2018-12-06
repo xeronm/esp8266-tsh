@@ -34,6 +34,8 @@ typedef struct dht_s {
 #define DHT_MIN_QUERY_TIMEOUT_SEC	5
 #define DHT_FAIL_RETRY_COUNT		3
 #define DHT_MIN_STAT_TIMEOUT_SEC	20
+#define DHT_MIN_EMA_ALPHA_PCT		5
+#define DHT_MAX_EMA_ALPHA_PCT		95
 
 #define DHT_DEFAULT_EMA_ALPHA_PCT	90	// Exponentioal moving average alpha PCT
 #define DHT_DEFAULT_SENSOR_TYPE		DHT_DHT11
@@ -58,6 +60,8 @@ typedef enum dht_avp_code_e {
     DHT_STAT_LAST = 108,
     DHT_STAT_AVERAGE = 109,
     DHT_STAT_EMA_INIT_COUNT = 110,
+    DHT_THRESHOLD_HIGH = 111,
+    DHT_THRESHOLD_LOW = 112,
 } dht_avp_code_t;
 
 

@@ -1610,8 +1610,8 @@ stmt_eval (const sh_hndlr_t hstmt, sh_eval_ctx_t * ctx)
     ctx->stmt_info = &stmt->info;
     ctx->exitcode = 0;
     
-    while (bc_ptr < ptr_max) {
-        ctx->addr = bc_ptr - stmt->vardata;
+    ctx->addr = bc_ptr - stmt->vardata;
+    while ((bc_ptr < ptr_max) && (ctx->exitcode == 0)) {
 	sh_bc_oper_t   *bc_oper_ptr = d_pointer_as (sh_bc_oper_t, bc_ptr);
 	sh_oper_desc_t *opdesc = &sh_oper_desc[bc_oper_ptr->optype];
 
@@ -1641,7 +1641,6 @@ stmt_eval (const sh_hndlr_t hstmt, sh_eval_ctx_t * ctx)
 	    d_sh_check_error ( stmt_eval_func(stmt, ctx, bc_oper_ptr, &bc_ptr));
 	    break;
 	case SH_OPER_RET:
-            bc_ptr = ptr_max;
             ctx->exitcode = 1;
 	    break;
 	case SH_OPER_IF:
@@ -1680,6 +1679,9 @@ stmt_eval (const sh_hndlr_t hstmt, sh_eval_ctx_t * ctx)
 	    }
 	    break;
 	}
+
+	if (ctx->exitcode == 0)
+            ctx->addr = bc_ptr - stmt->vardata;
     }
 
     return SH_ERR_SUCCESS;
