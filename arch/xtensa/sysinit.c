@@ -141,6 +141,13 @@ fio_user_write(uint32 addr, uint32 *buffer, uint32 size)
         uint32          addr_s0 = sec * SPI_FLASH_SEC_SIZE;
         uint32          addr_s1 = addr_s0 + SPI_FLASH_SEC_SIZE;
 
+        if (spi_flash_read (addr_s0, (uint32*) tmp_buffer, SPI_FLASH_SEC_SIZE))
+            return 0;
+        os_memcpy(tmp_buffer + (addr0 - addr_s0), buffer, size);
+        if (spi_flash_erase_sector (sec) || spi_flash_write(addr_s0, tmp_buffer, SPI_FLASH_SEC_SIZE))
+            return 0;
+
+        /*
         if (spi_flash_read (addr_s0, (uint32*) tmp_buffer, SPI_FLASH_SEC_SIZE) ||
             spi_flash_erase_sector (sec) ||
             (addr_s0 < addr0 ? spi_flash_write(addr_s0, (uint32*) tmp_buffer, addr0 - addr_s0) : false) ||
@@ -148,11 +155,14 @@ fio_user_write(uint32 addr, uint32 *buffer, uint32 size)
             (addr1 < addr_s1 ? spi_flash_write(addr0 + size, (uint32*) (tmp_buffer + (addr1 - addr_s0)), addr_s1 - addr1) : false)
            )
             return 0;
+        */
     }
-    else {
-        if (spi_flash_erase_sector (sec) || spi_flash_write(addr0, buffer, size))
+    else if (size == SPI_FLASH_SEC_SIZE) {
+        if (spi_flash_erase_sector (sec) || spi_flash_write(addr0, buffer, SPI_FLASH_SEC_SIZE))
             return 0;
     }
+    else
+        return 0;
 
     return size;
 }

@@ -87,6 +87,8 @@ typedef enum sh_avp_code_e {
     SH_AVP_FUNCTION_NAME = 110,
     SH_AVP_STMT_EXITCODE = 111,
     SH_AVP_STMT_EXITADDR = 112,
+    SH_AVP_STMT_ADDR_START = 113,
+    SH_AVP_STMT_ADDR_STOP = 114,
 } sh_avp_code_t;
 
 typedef struct sh_stmt_info_s {
@@ -158,7 +160,7 @@ sh_errcode_t    sh_func_get (const char *func_name, sh_func_entry_t ** entry);
 sh_errcode_t    sh_func_register (sh_func_entry_t * func_entry);
 
 sh_errcode_t    stmt_parse (const char * szstr, const char * stmt_name, sh_hndlr_t * hstmt);
-sh_errcode_t    stmt_dump (const sh_hndlr_t hstmt, char *buf, size_t len, bool resolve_glob);
+sh_errcode_t    stmt_dump (const sh_hndlr_t hstmt, char *buf, size_t len, bool resolve_glob, bytecode_size_t addr_start, bytecode_size_t addr_stop);
 sh_errcode_t    stmt_info (const sh_hndlr_t hstmt, sh_stmt_info_t * info);
 sh_errcode_t    stmt_eval (const sh_hndlr_t hstmt, sh_eval_ctx_t * ctx);
 sh_errcode_t    stmt_free (const sh_hndlr_t hstmt);

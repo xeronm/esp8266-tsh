@@ -69,6 +69,7 @@
  *  - idle_tx: idlle timer (in seconds)
  *  - recycle_tx: connection timer (in seconds)
  *  - softap_idle_timeout: TODO: in STATIONAP mode timeout for disable SOFTAP if station has IP and no active udpctl connection throught SOFTAP
+ *  - maddr: multicast remote addr TODO:
  */
 typedef struct udpctl_conf_s {
     ip_port_t       port;
@@ -79,6 +80,7 @@ typedef struct udpctl_conf_s {
     uint8           idle_tx;
     uint8           recycle_tx;
     uint8           softap_idle_timeout;
+    ipv4_addr_t     maddr;
 } udpctl_conf_t;
 
 typedef struct udpctl_data_s {
@@ -700,6 +702,7 @@ udpctl_on_cfgupd (dtlv_ctx_t * conf)
     if (conf) {
         dtlv_seq_decode_begin (conf, UDPCTL_SERVICE_ID);
         dtlv_seq_decode_octets (UDPCTL_AVP_SECRET, sdata->conf.secret, sizeof (sdata->conf.secret), sdata->conf.secret_len);
+        dtlv_seq_decode_uint32 (UDPCTL_AVP_MULTICAST_ADDR, &sdata->conf.maddr.addr);
         dtlv_seq_decode_uint16 (COMMON_AVP_IP_PORT, &sdata->conf.port);
         dtlv_seq_decode_end (conf);
     }

@@ -79,12 +79,10 @@ size_t          __strnlen (const char *s, size_t maxlen);
 /*
    Network 
 */
-typedef struct ipv4_addr_s {
-    union {
+typedef union ipv4_addr_s {
 	uint32          addr;
 	uint8           bytes[4];
 	struct ip_addr  ip;
-    };
 } ipv4_addr_t;
 
 typedef uint16  ip_port_t;

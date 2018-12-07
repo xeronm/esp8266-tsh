@@ -235,7 +235,7 @@ dht_query (dht_t * value)
 
     value->hmdt = be16toh(data.comp.hmdt);
     value->temp = be16toh(data.comp.temp);
-    if (sdata->conf.type == DHT_DHT11) {
+    if (sdata->conf.type == DHT_TYPE_DHT11) {
         value->hmdt = (value->hmdt >> 8)*100;
         value->temp = (value->temp >> 8)*100;
     }
@@ -475,7 +475,7 @@ dht_on_message (service_ident_t orig_id, service_msgtype_t msgtype, void *ctxdat
     return res;
 }
 
-LOCAL ICACHE_FLASH_ATTR 
+LOCAL void ICACHE_FLASH_ATTR 
 dht_on_cfgupd_thresh(dtlv_ctx_t * ctx, dht_t * thresh, uint8 * thresh_signal) {
     dtlv_ctx_reset_decode (ctx);
     dtlv_seq_decode_begin (ctx, DHT_SERVICE_ID);
@@ -509,6 +509,7 @@ dht_on_cfgupd (dtlv_ctx_t * conf)
         os_memset(&dtlv_trlow, 0, sizeof(dtlv_ctx_t));
 
         dtlv_seq_decode_begin (conf, DHT_SERVICE_ID);
+        dtlv_seq_decode_uint8 (DHT_SENSOR_TYPE, (uint8 *) &sdata->conf.type);
         dtlv_seq_decode_uint8 (COMMON_AVP_PEREPHERIAL_GPIO_ID, &sdata->conf.gpio_id);
         dtlv_seq_decode_uint8 (DHT_STAT_TIMEOUT, &sdata->conf.stat_timeout);
         dtlv_seq_decode_uint8 (DHT_STAT_EMA_ALPHA_PCT, &sdata->conf.ema_alpha_pct);

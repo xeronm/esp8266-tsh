@@ -17,8 +17,8 @@ typedef enum dht_result_e {
 } dht_result_t;
 
 typedef enum dht_type_e {
-    DHT_DHT11 = 0,
-    DHT_AM2302,
+    DHT_TYPE_DHT11 = 0,
+    DHT_TYPE_AM2302 = 1,
 } dht_type_t;
 
 typedef struct dht_s {
@@ -38,7 +38,7 @@ typedef struct dht_s {
 #define DHT_MAX_EMA_ALPHA_PCT		95
 
 #define DHT_DEFAULT_EMA_ALPHA_PCT	90	// Exponentioal moving average alpha PCT
-#define DHT_DEFAULT_SENSOR_TYPE		DHT_DHT11
+#define DHT_DEFAULT_SENSOR_TYPE		DHT_TYPE_DHT11
 #define DHT_DEFAULT_GPIO		4
 #define DHT_DEFAULT_STAT_TIMEOUT_SEC	20
 #define DHT_DEFAULT_HIST_INTERVAL	4

@@ -147,6 +147,7 @@ typedef enum udpctl_cmd_code_e {
 
 typedef enum udpctl_avp_code_e {
     UDPCTL_AVP_PROTOCOL = 100,
+    UDPCTL_AVP_MULTICAST_ADDR = 101,
     UDPCTL_AVP_IDLE_TIMEOUT = 102,
     UDPCTL_AVP_AUTH_TIMEOUT = 103,
     UDPCTL_AVP_RECYCLE_TIMEOUT = 104,

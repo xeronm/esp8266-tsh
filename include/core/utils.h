@@ -117,7 +117,9 @@
 
 //
 #define d_char_is_space(ptr)	(*(ptr) == ' ' || *(ptr) == '\t')
+#define d_char_is_space2(ptr)	(*(ptr) == ' ' || *(ptr) == '\t' || *(ptr) == '\n')
 #define d_skip_space(ptr)	while d_char_is_space(ptr) { (ptr)++; }
+#define d_skip_space2(ptr)	while d_char_is_space2(ptr) { (ptr)++; }
 #define d_skip_not_space(ptr)	while ((! d_char_is_space(ptr)) && (*(ptr) != '\0')) { (ptr)++; }
 #define d_char_is_digit(ptr)	((*(ptr) >= '0') && (*(ptr) <= '9'))
 #define d_char_is_letter(ptr)	( ((*(ptr) >= 'a') && (*(ptr) <= 'z')) || ((*(ptr) >= 'A') && (*(ptr) <= 'Z')) )

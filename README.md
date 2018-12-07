@@ -225,7 +225,49 @@ $ ./tcli.py -H 192.168.4.1 -s 5ccf7f85e196 system info
 ```
 
 ### Configure System
-todo
+
+1. Setup Wi-Fi station mode
+```
+$ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 service config set -m '{   
+  "service.Service": [
+      { 
+          "service.Service-Id": 3, 
+          "esp:common.Service-Configuration": {
+              "esp.Wireless": {
+                  "esp.WIFI-Station": {
+                      "esp.WiFi-SSID": "DMHOME",
+                      "esp.WiFi-Password": "d7bfeb9a3b2111e893fbc8f7330dd8c8",
+                      "esp.WiFi-Auto-Connect": 1
+                  }
+              }
+          }
+      } 
+  ] 
+}'
+```
+
+2. Setup Time-Zone
+```
+$ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 service config set -m '{   
+  "service.Service": [
+      { 
+          "service.Service-Id": 6, 
+          "ntp:common.Service-Configuration": {"common.Time-Zone": "+3:00"}
+      } 
+  ] 
+}'
+```
+
+3. Save configuration
+```
+$ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 service config save -m '{
+  "service.Service": [
+      { "service.Service-Id": 3 } ,
+      { "service.Service-Id": 6 }
+  ] 
+}'
+```
+
 
 ### Configure Script Logic and Schedule
 
@@ -262,15 +304,34 @@ $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 lsh add -m '{
 $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 lsh add -m '{
   "lsh.Statement-Name": "fan_force_on",
   "lsh.Persistent-Flag": 1,
-  "lsh.Statement-Text": "## last_ev := 1; ## last_dt = sysctime(); gpio_set(4, 1); print(last_ev)"
+  "lsh.Statement-Text": "## last_ev := 1; ## last_dt = sysctime();\ngpio_set(4, 1); print(last_ev)"
 }'
 ```
 
 4. Perform simple tests. Force turn on when no initial state
 ```
+$ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 lsh run -m '{ "lsh.Statement-Name": "fan_control" }'
+{
+    "common.Event-Timestamp": "2018.12.07 08:47:26",
+    "lsh:common.Service-Message": {
+        "lsh.Exit-Code": 1,
+        "lsh.Exit-Address": "0x0088"
+    },
+    "common.Result-Code": 1
+}
+
+$ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 lsh run -m '{ "lsh.Statement-Name": "fan_control" }'
+{
+    "common.Event-Timestamp": "2018.12.07 08:47:29",
+    "lsh:common.Service-Message": {
+        "lsh.Exit-Code": 0,
+        "lsh.Exit-Address": "0x030c"
+    },
+    "common.Result-Code": 1
+}
 ```
 
-5. Force turn off after 10 minutes
+5. ..., Turn off after 10 minutes timeout
 ```
 ```
 

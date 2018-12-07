@@ -524,51 +524,62 @@ espadmin_on_cfgupd (dtlv_ctx_t * conf)
     AUTH_MODE       wifi_ap_auth_mode = ESPADMIN_DEFAULT_WIFI_AP_AUTH_MODE;
 
     if (conf) {
-        dtlv_ctx_t dtlv_softap;
-        os_memset(&dtlv_softap, 0, sizeof(dtlv_ctx_t));
-        dtlv_ctx_t dtlv_station;
-        os_memset(&dtlv_station, 0, sizeof(dtlv_ctx_t));
+        dtlv_ctx_t wifi_conf;
+        os_memset(&wifi_conf, 0, sizeof(dtlv_ctx_t));
 
         dtlv_seq_decode_begin (conf, ESPADMIN_SERVICE_ID);
-        dtlv_seq_decode_uint8 (ESPADMIN_AVP_WIFI_OPMODE, &wifi_mode);
-        dtlv_seq_decode_uint8 (ESPADMIN_AVP_WIFI_SLEEP_TYPE, &wifi_sleep_type);
-        dtlv_seq_decode_group (ESPADMIN_AVP_WIFI_STATION, dtlv_softap.buf, dtlv_softap.datalen);
-        dtlv_seq_decode_group (ESPADMIN_AVP_WIFI_SOFTAP, dtlv_station.buf, dtlv_station.datalen);
+        dtlv_seq_decode_group (ESPADMIN_AVP_WIRELESS, wifi_conf.buf, wifi_conf.datalen);
         dtlv_seq_decode_end (conf);
 
-        if (dtlv_softap.buf) {
-            char       *password = NULL;
-            char       *ssid = NULL;
-            dtlv_ctx_reset_decode (&dtlv_softap);
-            dtlv_seq_decode_begin (&dtlv_softap, ESPADMIN_SERVICE_ID);
-            dtlv_seq_decode_uint8 (ESPADMIN_AVP_WIFI_AUTH_MODE, (uint8 *) &wifi_ap_auth_mode);
-            dtlv_seq_decode_ptr (ESPADMIN_AVP_WIFI_PASSWORD, password, char);
-            dtlv_seq_decode_ptr (ESPADMIN_AVP_WIFI_SSID, ssid, char);
-            dtlv_seq_decode_end (&dtlv_softap);
+        if (wifi_conf.buf) {
+            dtlv_ctx_reset_decode (&wifi_conf);
 
-            if (password && *password)
-                os_strncpy ((char*) wifi_ap_password, (char*) password, sizeof (wifi_ap_password));
-
-            wifi_ap_ssid_len = os_strlen(ssid);
-            if (wifi_ap_ssid_len)
-                os_strncpy ((char*) wifi_ap_ssid, (char*) ssid, sizeof (wifi_ap_ssid));
-        }
-
-        if (dtlv_station.buf) {
-            char       *password = NULL;
-            char       *ssid = NULL;
-            dtlv_ctx_reset_decode (&dtlv_station);
-            dtlv_seq_decode_begin (&dtlv_station, ESPADMIN_SERVICE_ID);
-            dtlv_seq_decode_uint8 (ESPADMIN_AVP_WIFI_AUTO_CONNECT, &wifi_autoconnect);
-            dtlv_seq_decode_ptr (ESPADMIN_AVP_WIFI_PASSWORD, password, char);
-            dtlv_seq_decode_ptr (ESPADMIN_AVP_WIFI_SSID, ssid, char);
-            dtlv_seq_decode_end (&dtlv_station);
-
-            if (password && *password)
-                os_strncpy ((char*) wifi_st_password, (char*) password, sizeof (wifi_st_password));
-
-            if (ssid && *ssid)
-                os_strncpy ((char*) wifi_st_ssid, (char*) ssid, sizeof (wifi_st_ssid));
+            dtlv_ctx_t softap_conf;
+            os_memset(&softap_conf, 0, sizeof(dtlv_ctx_t));
+            dtlv_ctx_t station_conf;
+            os_memset(&station_conf, 0, sizeof(dtlv_ctx_t));
+    
+            dtlv_seq_decode_begin (&wifi_conf, ESPADMIN_SERVICE_ID);
+            dtlv_seq_decode_uint8 (ESPADMIN_AVP_WIFI_OPMODE, &wifi_mode);
+            dtlv_seq_decode_uint8 (ESPADMIN_AVP_WIFI_SLEEP_TYPE, &wifi_sleep_type);
+            dtlv_seq_decode_group (ESPADMIN_AVP_WIFI_SOFTAP, softap_conf.buf, softap_conf.datalen);
+            dtlv_seq_decode_group (ESPADMIN_AVP_WIFI_STATION, station_conf.buf, station_conf.datalen);
+            dtlv_seq_decode_end (&wifi_conf);
+    
+            if (softap_conf.buf) {
+                char       *password = NULL;
+                char       *ssid = NULL;
+                dtlv_ctx_reset_decode (&softap_conf);
+                dtlv_seq_decode_begin (&softap_conf, ESPADMIN_SERVICE_ID);
+                dtlv_seq_decode_uint8 (ESPADMIN_AVP_WIFI_AUTH_MODE, (uint8 *) &wifi_ap_auth_mode);
+                dtlv_seq_decode_ptr (ESPADMIN_AVP_WIFI_PASSWORD, password, char);
+                dtlv_seq_decode_ptr (ESPADMIN_AVP_WIFI_SSID, ssid, char);
+                dtlv_seq_decode_end (&softap_conf);
+    
+                if (password && *password)
+                    os_strncpy ((char*) wifi_ap_password, (char*) password, sizeof (wifi_ap_password));
+    
+                wifi_ap_ssid_len = os_strlen(ssid);
+                if (wifi_ap_ssid_len)
+                    os_strncpy ((char*) wifi_ap_ssid, (char*) ssid, sizeof (wifi_ap_ssid));
+            }
+    
+            if (station_conf.buf) {
+                char       *password = NULL;
+                char       *ssid = NULL;
+                dtlv_ctx_reset_decode (&station_conf);
+                dtlv_seq_decode_begin (&station_conf, ESPADMIN_SERVICE_ID);
+                dtlv_seq_decode_uint8 (ESPADMIN_AVP_WIFI_AUTO_CONNECT, &wifi_autoconnect);
+                dtlv_seq_decode_ptr (ESPADMIN_AVP_WIFI_PASSWORD, password, char);
+                dtlv_seq_decode_ptr (ESPADMIN_AVP_WIFI_SSID, ssid, char);
+                dtlv_seq_decode_end (&station_conf);
+    
+                if (password && *password)
+                    os_strncpy ((char*) wifi_st_password, (char*) password, sizeof (wifi_st_password));
+    
+                if (ssid && *ssid)
+                    os_strncpy ((char*) wifi_st_ssid, (char*) ssid, sizeof (wifi_st_ssid));
+            }
         }
     }
 

@@ -795,7 +795,10 @@ sched_on_message (service_ident_t orig_id,
                     sched_entry_source_t *entry_src = NULL;
                     sres = sched_entry_src_get (entry_name, &entry_src);
                     if (sres == SCHED_ERR_SUCCESS) {
-                        d_svcs_check_dtlv_error (dtlv_avp_encode_octets (msg_out, SCHED_AVP_ENTRY_SOURCE, entry_src->varlen, entry_src->vardata) || 
+                        //dtlv_avp_t     *gavp_in;
+                        d_svcs_check_dtlv_error (//dtlv_avp_encode_grouping (msg_out, 0, SCHED_AVP_ENTRY_SOURCE, &gavp_in) || 
+                                                 dtlv_raw_encode (msg_out, entry_src->vardata, entry_src->varlen) ||
+                                                 //dtlv_avp_encode_group_done (msg_out, gavp_in) ||
                                                  dtlv_avp_encode_uint32 (msg_out, COMMON_AVP_UPDATE_TIMESTAMP, entry_src->utime));
                     }
                 }
