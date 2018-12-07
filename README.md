@@ -308,11 +308,11 @@ $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 lsh add -m '{
 }'
 ```
 
-4. Perform simple tests. Force turn on when no initial state
-```
-$ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 lsh run -m '{ "lsh.Statement-Name": "fan_control" }'
+4. Perform simple tests. 
+4.1. Force turn on when no initial state
+```$ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 lsh run -m '{ "lsh.Statement-Name": "fan_control" }'
 {
-    "common.Event-Timestamp": "2018.12.07 08:47:26",
+    "common.Event-Timestamp": "2018.12.07 08:37:26",
     "lsh:common.Service-Message": {
         "lsh.Exit-Code": 1,
         "lsh.Exit-Address": "0x0088"
@@ -322,7 +322,7 @@ $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 lsh run -m '{ "lsh.Statement-Name": 
 
 $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 lsh run -m '{ "lsh.Statement-Name": "fan_control" }'
 {
-    "common.Event-Timestamp": "2018.12.07 08:47:29",
+    "common.Event-Timestamp": "2018.12.07 08:37:29",
     "lsh:common.Service-Message": {
         "lsh.Exit-Code": 0,
         "lsh.Exit-Address": "0x030c"
@@ -331,11 +331,52 @@ $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 lsh run -m '{ "lsh.Statement-Name": 
 }
 ```
 
-5. ..., Turn off after 10 minutes timeout
-```
+4.2. Turn off after 10 minutes timeout
+```$ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 lsh run -m '{ "lsh.Statement-Name": "fan_control" }'
+{
+    "common.Event-Timestamp": "2018.12.07 08:57:12",
+    "lsh:common.Service-Message": {
+        "lsh.Exit-Code": 1,
+        "lsh.Exit-Address": "0x0308"
+    },
+    "common.Result-Code": 1
+}
+
+$ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 lsh run -m '{ "lsh.Statement-Name": "fan_control" }'
+{
+    "common.Event-Timestamp": "2018.12.07 08:57:14",
+    "lsh:common.Service-Message": {
+        "lsh.Exit-Code": 0,
+        "lsh.Exit-Address": "0x030c"
+    },
+    "common.Result-Code": 1
+}
 ```
 
-6. Add schedule
+4.3. Force turn on
+```$ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 lsh run -m '{ "lsh.Statement-Name": "fan_force_on" }'
+{
+    "common.Event-Timestamp": "2018.12.07 08:59:32",
+    "lsh:common.Service-Message": {
+        "lsh.Exit-Code": 0,
+        "lsh.Exit-Address": "0x005c"
+    },
+    "common.Result-Code": 1
+}
+```
+
+4.4. Output results (uart port)
+```
+[1200.868] [warn ][ntp] adjust time to: 2018.12.07 08:35:35+3:00 offset:-1.7
+[1674.718] [info ][lwsh] load "fan_control"
+[1674.719] [info ][lwsh] fan_control out: 1
+[2400.828] [warn ][ntp] adjust time to: 2018.12.07 08:55:34+3:00 offset:0.982
+[2499.240] [info ][lwsh] fan_control out: 4
+[2639.283] [info ][lwsh] load "fan_force_on"
+[2639.283] [info ][lwsh] fan_force_on out: 1
+```
+
+5. Add schedule
 - `fan_force_on` at system startup and every 30th minutes of 08 - 22 day hours
 - `fan_control` at 15th seconds of every minute
 ```
