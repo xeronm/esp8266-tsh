@@ -67,18 +67,19 @@ espadmin_on_stop ()
     return SVCS_ERR_SUCCESS;
 }
 
-#define VERSION_BUFFER_SIZE	30
-
 LOCAL svcs_errcode_t ICACHE_FLASH_ATTR
 espadmin_on_msg_product (dtlv_ctx_t * msg_out)
 {
-#ifdef ARCH_XTENSA
+    #ifdef ARCH_XTENSA
     char            version[VERSION_BUFFER_SIZE];
     os_snprintf (version, VERSION_BUFFER_SIZE, FW_VERSTR, FW_VER2STR (&fw_info));
     d_svcs_check_dtlv_error (dtlv_avp_encode_nchar
 			     (msg_out, COMMON_AVP_APP_PRODUCT, sizeof (fw_info.product), fw_info.product)
-			     || dtlv_avp_encode_nchar (msg_out, COMMON_AVP_APP_VERSION, VERSION_BUFFER_SIZE, version));
-#endif
+			     || dtlv_avp_encode_nchar (msg_out, COMMON_AVP_APP_VERSION, VERSION_BUFFER_SIZE, version)
+			     || dtlv_avp_encode_char (msg_out, COMMON_AVP_HOST_NAME, wifi_station_get_hostname())
+			     || dtlv_avp_encode_char (msg_out, COMMON_AVP_SYSTEM_DESCRIPTION, system_get_description())
+                         );
+    #endif
     return SVCS_ERR_SUCCESS;
 }
 
@@ -469,6 +470,12 @@ espadmin_on_message (service_ident_t orig_id, service_msgtype_t msgtype, void *c
     case ESPADMIN_MSGTYPE_RESTART:
         system_post_delayed_cb (task_system_restart, NULL);
 	break;
+    case ESPADMIN_MSGTYPE_FW_OTA_ABORT:
+        {
+            upgrade_err_t ures = fwupdate_abort ();
+	    d_svcs_check_svcs_error (espadmin_on_msg_fwupdate_info (msg_out, ures));
+        }
+        break;
     case ESPADMIN_MSGTYPE_FW_OTA_INIT:
 	res = espadmin_on_msg_fwupdate_init (msg_in, msg_out);
 	break;
@@ -524,12 +531,18 @@ espadmin_on_cfgupd (dtlv_ctx_t * conf)
     AUTH_MODE       wifi_ap_auth_mode = ESPADMIN_DEFAULT_WIFI_AP_AUTH_MODE;
 
     if (conf) {
+        const char *sysdescr = NULL;
+
         dtlv_ctx_t wifi_conf;
         os_memset(&wifi_conf, 0, sizeof(dtlv_ctx_t));
 
         dtlv_seq_decode_begin (conf, ESPADMIN_SERVICE_ID);
         dtlv_seq_decode_group (ESPADMIN_AVP_WIRELESS, wifi_conf.buf, wifi_conf.datalen);
+        dtlv_seq_decode_ptr (COMMON_AVP_SYSTEM_DESCRIPTION, sysdescr, char);
         dtlv_seq_decode_end (conf);
+
+        if (sysdescr)
+            system_set_description (sysdescr);
 
         if (wifi_conf.buf) {
             dtlv_ctx_reset_decode (&wifi_conf);

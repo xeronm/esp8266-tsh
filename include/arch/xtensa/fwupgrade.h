@@ -77,6 +77,7 @@ typedef struct upgrade_info_s {
 upgrade_err_t   fwupdate_init (firmware_info_t * fwinfo, firmware_digest_t * init_digest);
 upgrade_err_t   fwupdate_upload (uint8 * data, size_t length);
 upgrade_err_t   fwupdate_done (void);
+upgrade_err_t   fwupdate_abort (void);
 
 upgrade_err_t   fw_verify (firmware_info_t * fwinfo, firmware_digest_t * init_digest);
 

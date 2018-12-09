@@ -354,14 +354,25 @@ fwupdate_done (void)
 }
 
 upgrade_err_t   ICACHE_FLASH_ATTR
+fwupdate_abort (void) {
+    if (!sdata) {
+	d_log_eprintf (MAIN_SERVICE_NAME FWUPG_SUB_SERVICE_NAME, sz_upgrade_error[UPGRADE_NOT_INIT]);
+	return UPGRADE_NOT_INIT;
+    }
+
+    firmware_flash_done (true);
+    return UPGRADE_ERR_SUCCESS;
+}
+
+upgrade_err_t   ICACHE_FLASH_ATTR
 fwupdate_info (upgrade_info_t * info)
 {
+    os_memset (info, 0, sizeof (upgrade_info_t));
     if (!sdata) {
 	d_log_dprintf (MAIN_SERVICE_NAME FWUPG_SUB_SERVICE_NAME, sz_upgrade_error[UPGRADE_NOT_INIT]);
 	return UPGRADE_NOT_INIT;
     }
 
-    os_memset (info, 0, sizeof (upgrade_info_t));
     info->state = sdata->state;
     info->fwbin_start_addr = sdata->fwbin_start_addr;
     info->fwbin_curr_addr = sdata->fwbin_curr_addr;

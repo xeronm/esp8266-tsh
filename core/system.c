@@ -42,6 +42,7 @@
 typedef struct system_data_s {
     imdb_hndlr_t    hmdb;
     imdb_hndlr_t    hfdb;
+    char            sysdescr[SYSTEM_DESCRIPTION_LENGTH + 1];
 #ifdef ARCH_XTENSA
     os_timer_t      timer_overflow;
     os_event_t      task_queue[TASK_QUEUE_LENGTH];
@@ -211,7 +212,8 @@ system_shutdown (void)
     #endif
 
     #ifdef ARCH_XTENSA
-    wifi_station_disconnect ();
+    //wifi_station_disconnect ();
+    os_timer_disarm (&sdata->timer_overflow);
     #endif
     st_free(sdata);
 
@@ -246,17 +248,35 @@ system_get_default_secret (unsigned char *buf, uint8 len)
 uint8           ICACHE_FLASH_ATTR
 system_get_default_ssid (unsigned char *buf, uint8 len)
 {
-    uint8           macaddr[6];
     #ifdef ARCH_XTENSA
+    char * hostname = wifi_station_get_hostname ();
+    size_t plen = os_strlen(hostname);
+    if (plen) {
+        os_strncpy(buf, hostname, len);
+    }
+    else
+    /*
+    uint8           macaddr[6];
     if (wifi_get_macaddr (STATION_IF, macaddr)) {
         size_t plen = os_strlen(AP_SSID_PREFIX);
         os_memcpy (buf, AP_SSID_PREFIX, plen);
 	return plen + buf2hex ( d_pointer_add(char, buf, plen), d_pointer_add(char, &macaddr, 3), MIN (3, (len - plen)/ 2));
     }	
-    else
+    else*/
     #endif
         return 0;
 }
+
+const char    *ICACHE_FLASH_ATTR
+system_get_description () {
+    return (const char *) sdata->sysdescr;
+}
+
+void           ICACHE_FLASH_ATTR
+system_set_description (const char *sysdescr) {
+    os_strncpy(sdata->sysdescr, sysdescr, SYSTEM_DESCRIPTION_LENGTH);
+}
+
 
 #ifdef ARCH_XTENSA
 bool           ICACHE_FLASH_ATTR

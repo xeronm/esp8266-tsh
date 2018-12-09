@@ -723,13 +723,13 @@ ntp_on_start (const svcs_resource_t * svcres, dtlv_ctx_t * conf)
 
     sdata->tx_state = NTP_TX_STATE_NONE;
 
-#ifdef ARCH_XTENSA
+    #ifdef ARCH_XTENSA
     os_timer_disarm (&sdata->tx_timer);
     os_timer_setfn (&sdata->tx_timer, ntp_tx_timeout, NULL);
 
     os_timer_disarm (&sdata->poll_timer);
     os_timer_setfn (&sdata->poll_timer, ntp_poll_timeout, NULL);
-#endif
+    #endif
     ntp_on_cfgupd (conf);
 
     return SVCS_ERR_SUCCESS;
@@ -741,13 +741,13 @@ ntp_on_stop ()
     if (!sdata)
 	return SVCS_NOT_RUN;
 
-#ifdef ARCH_XTENSA
+    #ifdef ARCH_XTENSA
     os_timer_disarm (&sdata->tx_timer);
     os_timer_disarm (&sdata->poll_timer);
 
     if (os_conn_free (&sdata->ntpconn)) //|| os_conn_free (&sdata->dnsconn))
 	d_log_eprintf (NTP_SERVICE_NAME, "conn free error");
-#endif
+    #endif
     d_svcs_check_imdb_error (imdb_clsobj_delete (sdata->svcres->hmdb, sdata->svcres->hdata, sdata));
     sdata = NULL;
 

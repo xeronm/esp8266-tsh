@@ -31,6 +31,7 @@
 #define SYSTEM_FDB_CACHE_BLOCKS	4
 #define TASK_QUEUE_LENGTH	4
 #define AP_SSID_PREFIX		"ESP_"
+#define SYSTEM_DESCRIPTION_LENGTH	80
 
 void            system_init (void);
 void            system_shutdown (void);
@@ -40,6 +41,9 @@ imdb_hndlr_t    get_fdb (void);
 
 uint8           system_get_default_secret (unsigned char *buf, uint8 len);
 uint8           system_get_default_ssid (unsigned char *buf, uint8 len);
+
+const char    *system_get_description ();
+void           system_set_description (const char *sysdescr);
 
 #ifdef ARCH_XTENSA
 bool            system_post_delayed_cb(ETSTimerFunc task, void *arg);

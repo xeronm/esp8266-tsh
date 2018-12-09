@@ -120,9 +120,8 @@ parse_tsmask (uint8 * buf, unsigned int vmin, unsigned int vmax, const char **sz
 	    if ((*ptr == '-') || (*ptr == '/')) {
 		if ( (state != PS_NUMBER) || ((*ptr == '-') && (last_num == ~0)) )
 		    goto parse_end;
-		else
-		    state = (*ptr == '-') ? PS_RANGE : PS_MASK;
-
+                prev_num = last_num;
+		state = (*ptr == '-') ? PS_RANGE : PS_MASK;
 		break;
 	    }
 
@@ -137,7 +136,8 @@ parse_tsmask (uint8 * buf, unsigned int vmin, unsigned int vmax, const char **sz
 		if (state == PS_NONE)
 		    state = PS_NUMBER;
 		else {
-		    prev_num = last_num;
+		    if (state != PS_RANGE)
+		        prev_num = last_num;
 		    state = PS_WAIT_COMA;
 		}
 	    }
@@ -158,6 +158,7 @@ parse_tsmask (uint8 * buf, unsigned int vmin, unsigned int vmax, const char **sz
 	if ((state == PS_END_OF_EXPR) || (state == PS_END_OF_ITEM)) {
 	    switch (prev_state) {
 	    case PS_RANGE:
+	        os_printf("-- range %u-%u\n", prev_num - vmin, last_num - vmin);
 		d_bitbuf_rset (buf, prev_num - vmin, last_num - vmin);
 		break;
 	    case PS_MASK:
@@ -189,6 +190,7 @@ parse_tsmask (uint8 * buf, unsigned int vmin, unsigned int vmax, const char **sz
 
     }
 
+    os_printf("-- buf: %x\n", *buf);
 parse_end:
     *szstr = ptr;
     return state;
@@ -337,7 +339,7 @@ LOCAL void      next_timer_timeout (void *args);
 LOCAL void      ICACHE_FLASH_ATTR
 next_timer_set (sched_entry_t *entry)
 {
-#ifdef ARCH_XTENSA
+    #ifdef ARCH_XTENSA
     os_timer_disarm (&sdata->next_timer);
     if (! entry) {
         sdata->next_ctime = SCHED_NEXT_CTIME_NONE;
@@ -359,7 +361,7 @@ next_timer_set (sched_entry_t *entry)
         os_timer_setfn (&sdata->next_timer, next_timer_timeout, NULL);
         os_timer_arm (&sdata->next_timer, SCHED_MAX_TIMEOUT_SEC*MSEC_PER_SEC, false);
     }
-#endif
+    #endif
 }
 
 typedef struct sched_setnext_ctx_s {
@@ -926,6 +928,10 @@ sched_on_stop (void)
 {
     if (!sdata)
 	return SVCS_NOT_RUN;
+
+    #ifdef ARCH_XTENSA
+    os_timer_disarm (&sdata->next_timer);
+    #endif
 
     sched_data_t     *tmp_sdata = sdata;
     sdata = NULL;

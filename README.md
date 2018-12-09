@@ -226,13 +226,14 @@ $ ./tcli.py -H 192.168.4.1 -s 5ccf7f85e196 system info
 
 ### Configure System
 
-1. Setup Wi-Fi station mode
+1. Setup Wi-Fi station mode and system description
 ```
 $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 service config set -m '{   
   "service.Service": [
       { 
           "service.Service-Id": 3, 
           "esp:common.Service-Configuration": {
+              "common.System-Description": "Bathroom FAN#1",
               "esp.Wireless": {
                   "esp.WIFI-Station": {
                       "esp.WiFi-SSID": "DMHOME",
@@ -273,7 +274,7 @@ $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 service config save -m '{
 Following terms were used:
 - global variable `last_ev` - last state change event (0- reset state, 1-force power on, 2- humidity high threshold, 3- humidity low threshold, 4- power off timeout);
 - global variable `last_dt` - last state change event date;
-- gpio pin `4` for FAN relay;
+- gpio pin `0` for FAN solid state relay G3MB-202P; low-level on pin relates to open state on relay;
 - humidity turn on threshold: 50%;
 - humidity turn off threshold: 40%;
 - we are using estimated moving average results from DHT sensor.
@@ -282,12 +283,12 @@ Following terms were used:
 ```
 
 ## last_dt; ## last_ev; # sdt := sysctime(); 
-(last_ev <= 0) ?? { gpio_set(4, 1); last_ev := 1; last_dt := sdt; print(last_ev) }; 	// set initial state, force power on
+(last_ev <= 0) ?? { gpio_set(0, 0); last_ev := 1; last_dt := sdt; print(last_ev) }; 	// set initial state, force power on
 
-# temp = 0; # hmd = 0; # res := dht_get(1, temp, hmd); 
-((last_ev != 2) && res && (hmd >= 5000) && (last_dt + 5 < sdt)) ?? { gpio_set(4, 1); last_ev := 2; last_dt := sdt; print(last_ev) }; 	// humidity high threshold
-((last_ev = 2) && res && (hmd < 4000) && (last_dt + 5 < sdt)) ?? { gpio_set(4, 0); last_ev := 3; last_dt := sdt; print(last_ev) };	// humidity low threshold
-((last_ev = 1) && (last_dt + 600 < sdt) || (last_ev = 2) && (last_dt + 1200 < sdt)) ?? { gpio_set(4, 0); last_ev := 4; last_dt := sdt; print(last_ev) };	// power off timeout
+# temp = 0; # hmd = 0; # res := ! dht_get(1, hmd, temp); 
+((last_ev != 2) && res && (hmd >= 3600) && (last_dt + 300 < sdt)) ?? { gpio_set(0, 0); last_ev := 2; last_dt := sdt; print(last_ev) }; 	// humidity high threshold
+((last_ev = 2) && res && (hmd < 3600) && (last_dt + 300 < sdt)) ?? { gpio_set(0, 1); last_ev := 3; last_dt := sdt; print(last_ev) };	// humidity low threshold
+((last_ev = 1) && (last_dt + 720 < sdt) || (last_ev = 2) && (last_dt + 1800 < sdt)) ?? { gpio_set(0, 1); last_ev := 4; last_dt := sdt; print(last_ev) };	// power off timeout
 
 ```
 
@@ -296,7 +297,7 @@ Following terms were used:
 $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 lsh add -m '{
   "lsh.Statement-Name": "fan_control",
   "lsh.Persistent-Flag": 1,
-  "lsh.Statement-Text": "## last_dt; ## last_ev; # sdt := sysctime();\n(last_ev <= 0) ?? { gpio_set(4, 1); last_ev := 1; last_dt := sdt; print(last_ev) };\n\n# temp = 0; # hmd = 0; # res := dht_get(1, temp, hmd);\n((last_ev != 2) && res && (hmd >= 5000) && (last_dt + 5 < sdt)) ?? { gpio_set(4, 1); last_ev := 2; last_dt := sdt; print(last_ev) };\n((last_ev = 2) && res && (hmd < 4000) && (last_dt + 5 < sdt)) ?? { gpio_set(4, 0); last_ev := 3; last_dt := sdt; print(last_ev) };\n((last_ev = 1) && (last_dt + 600 < sdt) || (last_ev = 2) && (last_dt + 1200 < sdt)) ?? { gpio_set(4, 0); last_ev := 4; last_dt := sdt; print(last_ev) };"
+  "lsh.Statement-Text": "## last_dt; ## last_ev; # sdt := sysctime();\n(last_ev <= 0) ?? { gpio_set(0, 0); last_ev := 1; last_dt := sdt; print(last_ev) };\n\n# temp = 0; # hmd = 0; # res := !dht_get(1, hmd, temp);\n((last_ev != 2) && res && (hmd >= 3600) && (last_dt + 300 < sdt)) ?? { gpio_set(0, 0); last_ev := 2; last_dt := sdt; print(last_ev) };\n((last_ev = 2) && res && (hmd < 3600) && (last_dt + 300 < sdt)) ?? { gpio_set(0, 1); last_ev := 3; last_dt := sdt; print(last_ev) };\n((last_ev = 1) && (last_dt + 720 < sdt) || (last_ev = 2) && (last_dt + 1800 < sdt)) ?? { gpio_set(0, 1); last_ev := 4; last_dt := sdt; print(last_ev) };"
 }'
 ```
 
@@ -305,7 +306,7 @@ $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 lsh add -m '{
 $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 lsh add -m '{
   "lsh.Statement-Name": "fan_force_on",
   "lsh.Persistent-Flag": 1,
-  "lsh.Statement-Text": "## last_ev := 1; ## last_dt = sysctime();\ngpio_set(4, 1); print(last_ev)"
+  "lsh.Statement-Text": "## last_ev := 1; ## last_dt = sysctime();\ngpio_set(0, 0); print(last_ev)"
 }'
 ```
 
@@ -379,13 +380,13 @@ $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 lsh run -m '{ "lsh.Statement-Name": 
 ```
 
 5. Add schedule
-- `fan_force_on` at system startup and every 30th minutes of 08 - 22 day hours
+- `fan_force_on` at system startup and every 30th minutes of 09 - 21 day hours
 - `fan_control` at 15th seconds of every minute
 ```
 $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 sched add -m '{
   "sched.Entry-Name": "fan_force_on",
   "sched.Persistent-Flag": 1,
-  "sched.Schedule-String": "@0 0 30 8-22 * *",
+  "sched.Schedule-String": "@0 0 30 9-21 * *",
   "sched.Statement-Name": "fan_force_on",
   "sched.Statement-Args": {}
 }'

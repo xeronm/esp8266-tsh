@@ -367,12 +367,12 @@ dht_on_start (const svcs_resource_t * svcres, dtlv_ctx_t * conf)
     os_memset (sdata, 0, sizeof (dht_data_t));
     sdata->svcres = svcres;
 
-#ifdef ARCH_XTENSA
+    #ifdef ARCH_XTENSA
     os_timer_disarm (&sdata->stat_timer);
     os_timer_setfn (&sdata->stat_timer, dht_hist_timeout, NULL);
     os_timer_disarm (&sdata->stat_fail_timer);
     os_timer_setfn (&sdata->stat_fail_timer, dht_hist_timeout, NULL);
-#endif
+    #endif
     // register functions
     sh_func_entry_t fn_entries[1] = {
         { DHT_SERVICE_ID, false, false, 0, "dht_get", { fn_dht_get } },
@@ -391,6 +391,10 @@ dht_on_stop ()
     if (!sdata)
 	return SVCS_NOT_RUN;
 
+    #ifdef ARCH_XTENSA
+    os_timer_disarm (&sdata->stat_timer);
+    os_timer_disarm (&sdata->stat_fail_timer);
+    #endif 
     if (sdata->gpio_res == GPIO_RESULT_SUCCESS)
 	gpio_release (sdata->conf.gpio_id);
 
