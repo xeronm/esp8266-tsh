@@ -1858,7 +1858,7 @@ sh_on_msg_stmt_add (dtlv_ctx_t * msg_in, dtlv_ctx_t * msg_out)
     dtlv_seq_decode_ptr (SH_AVP_STMT_TEXT, stmt_text, char);
     dtlv_seq_decode_end (msg_in);
 
-    if (!stmt_name || !stmt_text)
+    if (!stmt_name || !stmt_text || !os_strlen(stmt_name) || !os_strlen(stmt_text))
 	return SVCS_INVALID_MESSAGE;
 
 
@@ -1898,6 +1898,7 @@ sh_on_msg_stmt_add (dtlv_ctx_t * msg_in, dtlv_ctx_t * msg_out)
                     dtlv_ctx_t ctx;
                     imdb_res = dtlv_ctx_init_encode (&ctx, stmt_src->vardata, stmt_src->varlen)
                             || dtlv_avp_encode_char (&ctx, SH_AVP_STMT_TEXT, stmt_text);
+                    stmt_src->varlen = (imdb_res == IMDB_ERR_SUCCESS) ? ctx.datalen : 0;
                 }
                 else
                     d_log_eprintf (LSH_SERVICE_NAME, "source \"%s\" store failed: %u", stmt_name, imdb_res);

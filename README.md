@@ -242,8 +242,7 @@ $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 service config set -m '{
               }
           }
       } 
-  ] 
-}'
+]}'
 ```
 
 2. Setup Time-Zone
@@ -281,6 +280,7 @@ Following terms were used:
 
 1. Make light-shell script with control rule logic. Solution is not optimal, may improved by using dht service thresholds and multicast signal handling.
 ```
+
 ## last_dt; ## last_ev; # sdt := sysctime(); 
 (last_ev <= 0) ?? { gpio_set(4, 1); last_ev := 1; last_dt := sdt; print(last_ev) }; 	// set initial state, force power on
 
@@ -288,6 +288,7 @@ Following terms were used:
 ((last_ev != 2) && res && (hmd >= 5000) && (last_dt + 5 < sdt)) ?? { gpio_set(4, 1); last_ev := 2; last_dt := sdt; print(last_ev) }; 	// humidity high threshold
 ((last_ev = 2) && res && (hmd < 4000) && (last_dt + 5 < sdt)) ?? { gpio_set(4, 0); last_ev := 3; last_dt := sdt; print(last_ev) };	// humidity low threshold
 ((last_ev = 1) && (last_dt + 600 < sdt) || (last_ev = 2) && (last_dt + 1200 < sdt)) ?? { gpio_set(4, 0); last_ev := 4; last_dt := sdt; print(last_ev) };	// power off timeout
+
 ```
 
 2. Add peristent named statement `fan_control`
@@ -310,7 +311,8 @@ $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 lsh add -m '{
 
 4. Perform simple tests. 
 4.1. Force turn on when no initial state
-```$ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 lsh run -m '{ "lsh.Statement-Name": "fan_control" }'
+```
+$ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 lsh run -m '{ "lsh.Statement-Name": "fan_control" }'
 {
     "common.Event-Timestamp": "2018.12.07 08:37:26",
     "lsh:common.Service-Message": {

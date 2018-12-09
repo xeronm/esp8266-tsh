@@ -29,7 +29,7 @@
 #define	LSH_SERVICE_ID		5
 #define LSH_SERVICE_NAME	"lwsh"
 
-#define SH_FUNC_NAME_LENGTH	12
+#define SH_FUNC_NAME_LENGTH	16
 #define SH_STATEMENT_NAME_LEN	30
 
 typedef char    sh_stmt_name_t[SH_STATEMENT_NAME_LEN];

@@ -30,7 +30,7 @@
 #define SYSTEM_FDB_FILE_SIZE	64
 #define SYSTEM_FDB_CACHE_BLOCKS	4
 #define TASK_QUEUE_LENGTH	4
-#define AP_SSID_PREFIX		"ESPTSH_"
+#define AP_SSID_PREFIX		"ESP_"
 
 void            system_init (void);
 void            system_shutdown (void);

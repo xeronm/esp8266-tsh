@@ -57,7 +57,7 @@
 
 #define UDPCTL_STORAGE_PAGES		1
 #define UDPCTL_STORAGE_PAGE_BLOCKS	1
-#define UDPCTL_MESSAGE_SIZE		1400	// should less than 1472, seems depends from MTU
+#define UDPCTL_MESSAGE_SIZE		1440	// should less than 1472, seems depends from MTU
 #define UDPCTL_CLIENTS_MAX		4
 
 /*

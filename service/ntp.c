@@ -31,7 +31,7 @@
 #  include "espconn.h"
 #endif
 
-#define NTPv1	1		/* NTPv3 */
+#define NTPv1	1		/* NTPv1 */
 #define NTPv2	2		/* NTPv2 */
 #define NTPv3	3		/* NTPv3 */
 
@@ -77,9 +77,10 @@ typedef struct ntp_conf_s {
 typedef struct ntp_peer_s {
     ipv4_addr_t     ipaddr;
     ntp_peer_state_t state;
-    real32          rtt_mean;
-    real32          rtt_m2;	// Welford variance algorythm
-    uint8           rcnt;
+    sint64          rtt_mean;
+    sint64          rtt_m2;	// Welford variance algorythm
+    uint8           rcnt: 4;
+    uint8           acnt: 4;
     ntp_timestamp_t local_ts;
     ntp_timestamp_t peer_ts;
 } ntp_peer_t;
@@ -200,18 +201,18 @@ ntp_time_from_usec (ntp_timestamp_t * dst, const uint64_t usec)
 LOCAL void      ICACHE_FLASH_ATTR
 tx_timer_set (void)
 {
-#ifdef ARCH_XTENSA
+    #ifdef ARCH_XTENSA
     os_timer_disarm (&sdata->tx_timer);
     os_timer_arm (&sdata->tx_timer, NTP_REQ_TIMEOUT_SEC * MSEC_PER_SEC, true);
-#endif
+    #endif
 }
 
 LOCAL void      ICACHE_FLASH_ATTR
 tx_timer_reset (void)
 {
-#ifdef ARCH_XTENSA
+    #ifdef ARCH_XTENSA
     os_timer_disarm (&sdata->tx_timer);
-#endif
+    #endif
 }
 
 
@@ -232,18 +233,9 @@ ntp_query_done (void)
 
     for (i = 0; i < NTP_MAX_PEERS; i += 1) {
 	ntp_peer_t     *peer = &sdata->peers[i];
-	switch (peer->state) {
-	case NTP_PEER_STATE_SUCCESS:
-	    peer->state = NTP_PEER_STATE_IDLE;
+	if (peer->state == NTP_PEER_STATE_SUCCESS) {
 	    if ((!best_peer) || (best_peer->rtt_m2 > peer->rtt_m2))
 		best_peer = peer;
-	    break;
-	case NTP_PEER_STATE_REQ:
-	case NTP_PEER_STATE_DNS:
-	    peer->state = NTP_PEER_STATE_TIMEOUT;
-	    break;
-	default:
-	    break;
 	}
     }
 
@@ -280,18 +272,17 @@ ntp_peer_send (uint8 peer_idx, ntp_peer_t * peer)
     htobets (packet.transmit_ts);
     os_memcpy (&packet.origin_ts, &packet.transmit_ts, sizeof (ntp_timestamp_t));
 
-#ifdef ARCH_XTENSA
+    #ifdef ARCH_XTENSA
     os_memcpy (sdata->ntpudp.remote_ip, peer->ipaddr.bytes, sizeof (ipv4_addr_t));
     sdata->ntpudp.remote_port = NTP_PORT;
     sint16          cres = espconn_sendto (&sdata->ntpconn, d_pointer_as (uint8, &packet), sizeof (ntp_packet_t));
-#else 
+    #else 
     sint16          cres = 0;
-#endif
+    #endif
 
     if (cres) {
 	peer->state = NTP_PEER_STATE_ERROR;
-	d_log_wprintf (NTP_SERVICE_NAME, "ntp peer #%d:" IPSTR " sent failed:%u", IP2STR (&peer->ipaddr), peer_idx,
-		       cres);
+	d_log_wprintf (NTP_SERVICE_NAME, "ntp peer #%d:" IPSTR " sent failed:%u", peer_idx, IP2STR (&peer->ipaddr), cres);
 	return false;
     }
     else {
@@ -299,6 +290,15 @@ ntp_peer_send (uint8 peer_idx, ntp_peer_t * peer)
 	tx_timer_set ();
 	return true;
     }
+}
+
+LOCAL void      ICACHE_FLASH_ATTR
+ntp_peer_done (ntp_peer_t * peer)
+{
+	ntp_timestamp_t offs;
+	ntp_time_from_usec (&offs, (uint64) (peer->rtt_mean / 2));	// adjust time with RTT median
+	ntp_time_sub (&peer->local_ts, &offs);
+	peer->state = (peer->acnt < NTP_ANS_COUNT_MIN) ? NTP_PEER_STATE_ERROR : NTP_PEER_STATE_SUCCESS;
 }
 
 LOCAL bool      ICACHE_FLASH_ATTR
@@ -314,36 +314,52 @@ ntp_query_next (void)
 	if (!hostname[0])
 	    continue;
 
-	if ((peer->state == NTP_PEER_STATE_IDLE) || (peer->state == NTP_PEER_STATE_NONE)) {
-	    peer->rcnt = 0;
-	    peer->rtt_mean = 0;
-	    peer->rtt_m2 = 0;
+	switch (peer->state) {
+	case NTP_PEER_STATE_SUCCESS:
+	    break;
+	case NTP_PEER_STATE_NONE:
+	    {
+                peer->rcnt = 0;
+                peer->acnt = 0;
+                peer->rtt_mean = 0;
+                peer->rtt_m2 = 0;
 
-#ifdef ARCH_XTENSA
-	    err_t           dnsres =
-		espconn_gethostbyname (&sdata->dnsconn, (char *) &hostname[0], &peer->ipaddr.ip, dns_result);
-	    switch (dnsres) {
-	    case ESPCONN_INPROGRESS:
-		tx_timer_set ();
-		peer->state = NTP_PEER_STATE_DNS;
-		freqsend = true;
-		break;
-	    case ESPCONN_OK:
-		peer->state = NTP_PEER_STATE_DNSANS;
-		break;
-	    default:
-		d_log_wprintf (NTP_SERVICE_NAME, "dns host:%s error:%u", hostname, dnsres);
-		peer->state = NTP_PEER_STATE_ERROR;
-		break;
+                #ifdef ARCH_XTENSA
+                err_t           dnsres = espconn_gethostbyname (&sdata->dnsconn, (char *) &hostname[0], &peer->ipaddr.ip, dns_result);
+                switch (dnsres) {
+                case ESPCONN_INPROGRESS:
+                    tx_timer_set ();
+                    peer->state = NTP_PEER_STATE_DNS;
+                    freqsend = true;
+                    break;
+                case ESPCONN_OK:
+                    peer->state = NTP_PEER_STATE_DNSANS;
+                    break;
+                default:
+                    d_log_wprintf (NTP_SERVICE_NAME, "dns host:%s error:%u", hostname, dnsres);
+                    peer->state = NTP_PEER_STATE_ERROR;
+                    break;
+                }
+                #endif
 	    }
-#endif
-	}
-
-	if ((peer->state == NTP_PEER_STATE_REQ) || (peer->state == NTP_PEER_STATE_DNS))
+	    break;
+	case NTP_PEER_STATE_DNS:
 	    peer->state = NTP_PEER_STATE_TIMEOUT;
-
-	if ((peer->state == NTP_PEER_STATE_DNSANS) && (peer->ipaddr.addr != IPADDR_NONE))
-	    freqsend = ntp_peer_send (i, peer);
+	    break;
+	case NTP_PEER_STATE_REQ:
+	    if (peer->rcnt == NTP_REQ_COUNT) {
+                ntp_peer_done (peer);
+                break;
+            }
+        case NTP_PEER_STATE_DNSANS:
+            if (peer->ipaddr.addr != IPADDR_NONE) {
+	        freqsend = ntp_peer_send (i, peer);
+	        break;
+            }
+        default:
+            peer->state = NTP_PEER_STATE_ERROR;
+            break;
+        }
 
 	if (freqsend)
 	    break;
@@ -395,33 +411,32 @@ ntp_peer_recv (uint8 peer_idx, ntp_peer_t * peer, ntp_packet_t * packet, ntp_tim
     tx_timer_reset ();
 
     if (packet->version != NTPv2) {
-	d_log_wprintf (NTP_SERVICE_NAME, "invalid ntp version: %u", packet->version);
+	d_log_wprintf (NTP_SERVICE_NAME, IPSTR " got invalid ntp version: %u", IP2STR (&peer->ipaddr), packet->version);
 	peer->state = NTP_PEER_STATE_ERROR;
     }
     else {
-	os_memcpy (&peer->peer_ts, &packet->transmit_ts, sizeof (ntp_timestamp_t));
-	os_memcpy (&peer->local_ts, recv_ts, sizeof (ntp_timestamp_t));
-
 	// calculate RTT median and variance
-	uint32          _x = ntp_time_diff_usec (&peer->local_ts, &packet->origin_ts) -
-	    ntp_time_diff_usec (&packet->transmit_ts, &packet->receive_ts);
+	sint64_t        _x = ntp_time_diff_usec (recv_ts, &packet->origin_ts);
+        sint64_t        _y = ntp_time_diff_usec (&packet->transmit_ts, &packet->receive_ts);
 
-	peer->rtt_mean += (_x - peer->rtt_mean) / peer->rcnt;	// mean
-	real32          _d2 = (_x - peer->rtt_mean);
-	peer->rtt_m2 += _d2 * _d2;	// M2
+        if ((_x > 0) || (_y > 0) || (_x > _y)) { // wrong times
+	    os_memcpy (&peer->peer_ts, &packet->transmit_ts, sizeof (ntp_timestamp_t));
+	    os_memcpy (&peer->local_ts, recv_ts, sizeof (ntp_timestamp_t));
+
+	    _x -= _y;
+            peer->acnt ++;
+	    peer->rtt_mean += (_x - peer->rtt_mean) / peer->acnt;
+	    sint64_t        _d2 = _x - peer->rtt_mean;
+	    peer->rtt_m2 += _d2 * _d2;	// M2
+	}
 
 	if (peer->state == NTP_PEER_STATE_REQ) {
-	    if (peer->rcnt == NTP_REQ_COUNT) {
-		ntp_timestamp_t offs;
-		ntp_time_from_usec (&offs, (int) peer->rtt_mean / 2);	// adjust time with RTT median
-
-		ntp_time_sub (&peer->local_ts, &offs);
-
-		peer->state = NTP_PEER_STATE_SUCCESS;
-	    }
+	    if (peer->rcnt == NTP_REQ_COUNT)
+                ntp_peer_done (peer);
 	    else
 		ntp_peer_send (peer_idx, peer);	// next request
 	}
+
     }
 
     if (peer->state != NTP_PEER_STATE_REQ) {
@@ -435,18 +450,18 @@ ntp_recv_cb (void *arg, char *pusrdata, unsigned short length)
     ntp_timestamp_t recv_ts;
     ntp_time (&recv_ts);
 
-#ifdef ARCH_XTENSA
+    #ifdef ARCH_XTENSA
     struct espconn *conn = d_pointer_as (struct espconn, arg);
     remot_info     *con_info;
     espconn_get_connection_info (conn, &con_info, 0);
-#endif
+    #endif
 
     ipv4_addr_t     remote_ipaddr;
-#ifdef ARCH_XTENSA
+    #ifdef ARCH_XTENSA
     os_memcpy (remote_ipaddr.bytes, con_info->remote_ip, sizeof (ipv4_addr_t));
     d_log_dprintf (NTP_SERVICE_NAME, "recv len=%d from " IPSTR ":%d->%d", length, IP2STR (&remote_ipaddr),
 		   sdata->udp.remote_port, sdata->udp.local_port);
-#endif
+    #endif
 
     if (!pusrdata)
 	return;
@@ -512,8 +527,11 @@ ntp_query (ntp_query_cb_func_t cb)
     sdata->tx_done_cb = cb;
 
     int             i;
-    for (i = 0; i < NTP_MAX_PEERS; i += 1)
+    for (i = 0; i < NTP_MAX_PEERS; i += 1) {
 	sdata->peers[i].state = NTP_PEER_STATE_NONE;
+        sdata->peers[i].rcnt = 0;
+        sdata->peers[i].acnt = 0;
+    }	
 
     uint32          rtc_prec = system_rtc_clock_cali_proc ();
     LOG2 (rtc_prec, sdata->precision);
@@ -614,13 +632,15 @@ ntp_on_msg_info (dtlv_ctx_t * msg_out)
 				 || dtlv_avp_encode_octets (msg_out, COMMON_AVP_IPV4_ADDRESS, sizeof (peer->ipaddr),
 							    (char *) &peer->ipaddr.bytes)
 				 || dtlv_avp_encode_uint8 (msg_out, NTP_AVP_PEER_STATE, peer->state)
-				 || dtlv_avp_encode_uint32 (msg_out, NTP_AVP_PEER_RTT_MEAN, (uint32) peer->rtt_mean)
-				 || dtlv_avp_encode_uint32 (msg_out, NTP_AVP_PEER_RTT_VARIANCE,
-							    (uint32) peer->rtt_m2 / peer->rcnt));
+				 || ((peer->state == NTP_PEER_STATE_SUCCESS) ?
+				        (dtlv_avp_encode_uint32 (msg_out, NTP_AVP_PEER_RTT_MEAN, (uint32) peer->rtt_mean) ||
+				         dtlv_avp_encode_uint32 (msg_out, NTP_AVP_PEER_RTT_VARIANCE, (uint32) (peer->rtt_m2 / peer->acnt)))
+				      : false)
+                                 );
 	if (peer->peer_ts.seconds)
 	    d_svcs_check_imdb_error (dtlv_avp_encode_uint32
 				     (msg_out, NTP_AVP_PEER_OFFSET,
-				      (uint32) ntp_time_diff_usec (&peer->local_ts, &peer->peer_ts) / USEC_PER_MSEC));
+				      (uint32) (ntp_time_diff_usec (&peer->local_ts, &peer->peer_ts) / USEC_PER_MSEC)));
 
 	d_svcs_check_imdb_error (dtlv_avp_encode_group_done (msg_out, gavp_in));
     }
@@ -664,7 +684,7 @@ ntp_setup (void)
     if (!lt_set_timezone (sdata->conf.time_zone))
 	d_log_eprintf (NTP_SERVICE_NAME, "invalid timezone: %d", sdata->conf.time_zone);
 
-#ifdef ARCH_XTENSA
+    #ifdef ARCH_XTENSA
     if (sdata->ntpudp.local_port)
         os_conn_free (&sdata->ntpconn);
 
@@ -687,7 +707,7 @@ ntp_setup (void)
     d_log_iprintf (NTP_SERVICE_NAME, "poll timer: %u min", sdata->conf.poll_timeout);
     os_timer_disarm (&sdata->poll_timer);
     os_timer_arm (&sdata->poll_timer, sdata->conf.poll_timeout * MSEC_PER_MIN, true);
-#endif
+    #endif
 }
 
 svcs_errcode_t  ICACHE_FLASH_ATTR

@@ -578,7 +578,7 @@ sched_entry_add (const char * entry_name, bool persistent, const char * sztsentr
 
         if (imdb_res == IMDB_ERR_SUCCESS) {
             size_t slen = d_align(d_avp_full_length(os_strlen(sztsentry) + 1)) 
-                        + d_align(d_avp_full_length(sizeof(sh_stmt_name_t) + 1))
+                        + d_align(d_avp_full_length(MIN(sizeof(sh_stmt_name_t), os_strlen(stmt_name)) + 1))
                         + d_align(d_avp_full_length(varlen));
             imdb_errcode_t imdb_res = imdb_clsobj_insert (sdata->svcres->hfdb, sdata->hentry_src, (void **) &entry_src, sizeof (sched_entry_source_t) + slen);
             if (imdb_res == IMDB_ERR_SUCCESS) {
@@ -591,6 +591,7 @@ sched_entry_add (const char * entry_name, bool persistent, const char * sztsentr
                     || dtlv_avp_encode_char (&ctx, SCHED_AVP_SCHEDULE_STRING, sztsentry)
                     || dtlv_avp_encode_nchar (&ctx, SCHED_AVP_STMT_NAME, sizeof (sh_stmt_name_t), stmt_name)
                     || dtlv_avp_encode_octets (&ctx, SCHED_AVP_STMT_ARGUMENTS, varlen, vardata);
+                entry_src->varlen = (imdb_res == IMDB_ERR_SUCCESS) ? ctx.datalen : 0;
             }
             else
                 d_log_eprintf (LSH_SERVICE_NAME, "source \"%s\" store failed: %u", stmt_name, imdb_res);
@@ -756,7 +757,7 @@ sched_on_message (service_ident_t orig_id,
             dtlv_seq_decode_group (SCHED_AVP_STMT_ARGUMENTS, vardata, varlen);
             dtlv_seq_decode_end (msg_in);
 
-	    if (!entry_name || !stmt_name || !sztsentry)
+	    if (!entry_name || !stmt_name || !sztsentry || !os_strlen(entry_name) || !os_strlen(stmt_name) || !os_strlen(sztsentry))
 		return SVCS_INVALID_MESSAGE;
 
 	    sched_errcode_t sres = sched_entry_add (entry_name, persistent, sztsentry, stmt_name, vardata, varlen);
@@ -861,12 +862,12 @@ sched_forall_load (imdb_fetch_obj_t *fobj, void *data)
 
     dtlv_ctx_init_decode (&ctx, entry_src->vardata, entry_src->varlen);
     dtlv_seq_decode_begin (&ctx, SCHED_SERVICE_ID);
-    dtlv_seq_decode_ptr (SCHED_AVP_STMT_NAME, stmt_name, char);
-    dtlv_seq_decode_ptr (SCHED_AVP_SCHEDULE_STRING, sztsentry, char);
+    dtlv_seq_decode_ptr (SCHED_AVP_STMT_NAME, stmt_name, const char);
+    dtlv_seq_decode_ptr (SCHED_AVP_SCHEDULE_STRING, sztsentry, const char);
     dtlv_seq_decode_group (SCHED_AVP_STMT_ARGUMENTS, vardata, varlen);
     dtlv_seq_decode_end (&ctx);
 
-    if (sztsentry && stmt_name) {
+    if (sztsentry && stmt_name && os_strlen(sztsentry) && os_strlen(stmt_name)) {
         sched_entry_t *entry;
         sched_errcode_t res = internal_entry_add ( (const char *) entry_src->name, sztsentry, stmt_name, vardata, varlen, &entry);
         if (res != SCHED_ERR_SUCCESS)
