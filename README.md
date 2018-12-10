@@ -306,7 +306,7 @@ $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 lsh add -m '{
 $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 lsh add -m '{
   "lsh.Statement-Name": "fan_force_on",
   "lsh.Persistent-Flag": 1,
-  "lsh.Statement-Text": "## last_ev := 1; ## last_dt = sysctime();\ngpio_set(0, 0); print(last_ev)"
+  "lsh.Statement-Text": "## last_ev; ((last_ev != 1) && (last_ev != 2)) ?? { last_ev := 1; ## last_dt = sysctime(); gpio_set(0, 0); print(last_ev) }"
 }'
 ```
 
