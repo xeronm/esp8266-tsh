@@ -1,10 +1,26 @@
-/* Copyright (c) 2018 by Denis Muratov <xeronm@gmail.com>. All rights reserved
+/* 
+ * ESP8266 UDP Cotrol Protocol Service
+ * Copyright (c) 2016-2018 Denis Muratov <xeronm@gmail.com>.
+ * https://dtec.pro/gitbucket/git/esp8266/esp8266-tsh.git
  *
- *  FileName: udpctl.c
- *  Source: https://dtec.pro/gitbucket/git/esp8266/esp8266_lsh.git
+ * This file is part of ESP8266 Things Shell.
  *
- *  Description: UDP Cotrol Protocol Support
+ * ESP8266 Things Shell is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *
+ * ESP8266 Things Shell is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with ESP8266 Things Shell.  If not, see <https://www.gnu.org/licenses/>.
+ *
+ */
+
+/*
  *   Message Flow:
  *	Auth Request #0:
  *		Auth0 := hmac(Random)
@@ -66,7 +82,7 @@
 
 #define UDPCTL_SERVICE_ID	4
 #define UDPCTL_SERVICE_NAME	"udpctl"
-#define UDPCTL_SECRET_LEN	32	//
+#define UDPCTL_SECRET_LEN	32      //
 
 #define UDPCTL_PROTOCOL_VERSION		0x0100
 
@@ -91,15 +107,15 @@ typedef struct udpctl_packet_s {
 
 typedef struct udpctl_packet_sec_s {
     udpctl_packet_t base;
-    udpctl_digest_t digest;	// 32 bytes
+    udpctl_digest_t digest;     // 32 bytes
 } udpctl_packet_sec_t;
 
 typedef struct udpctl_packet_auth_s {
     udpctl_packet_sec_t base_sec;
-    udpctl_digest_t auth;	// 32 bytes
+    udpctl_digest_t auth;       // 32 bytes
 } udpctl_packet_auth_t;
 
-typedef enum PACKED udpctl_clnt_state_e {
+typedef enum udpctl_clnt_state_e {
     UCTL_CLNT_STATE_NONE = 0,
     UCTL_CLNT_STATE_FAIL,
     UCTL_CLNT_STATE_TIMEOUT,
@@ -107,7 +123,7 @@ typedef enum PACKED udpctl_clnt_state_e {
     UCTL_CLNT_STATE_OPEN,
 } udpctl_clnt_state_t;
 
-typedef enum PACKED udpctl_errcode_e {
+typedef enum udpctl_errcode_e {
     UDPCTL_ERR_SUCCESS = 0,
     UDPCTL_INTERNAL_ERROR = 1,
     UDPCTL_SERVER_SECURED = 2,
@@ -123,14 +139,15 @@ typedef enum PACKED udpctl_errcode_e {
     UDPCTL_DECODING_ERROR = 12,
 } udpctl_errcode_t;
 
-typedef enum PACKED udpctl_cmd_code_e {
+typedef enum udpctl_cmd_code_e {
     UCTL_CMD_CODE_AUTH = 1,
     UCTL_CMD_CODE_TERMINATE = 2,
     UCTL_CMD_CODE_SRVMSG = 3,
 } udpctl_cmd_code_t;
 
-typedef enum PACKED udpctl_avp_code_e {
+typedef enum udpctl_avp_code_e {
     UDPCTL_AVP_PROTOCOL = 100,
+    UDPCTL_AVP_MULTICAST_ADDR = 101,
     UDPCTL_AVP_IDLE_TIMEOUT = 102,
     UDPCTL_AVP_AUTH_TIMEOUT = 103,
     UDPCTL_AVP_RECYCLE_TIMEOUT = 104,
@@ -140,9 +157,10 @@ typedef enum PACKED udpctl_avp_code_e {
     UDPCTL_AVP_CLIENT_STATE = 108,
     UDPCTL_AVP_CLIENT_FIRST_TIME = 109,
     UDPCTL_AVP_CLIENT_LAST_TIME = 110,
+    UDPCTL_AVP_SOFTAP_IDLE_TIMEOUT = 111,
 } udpctl_avp_code_t;
 
-typedef enum PACKED udpctl_result_code_e {
+typedef enum udpctl_result_code_e {
     RESULT_CODE_SUCCESS = 1,
     RESULT_CODE_COMMAND_ERROR = 2,
     RESULT_CODE_SERVICE_ERROR = 3,
@@ -162,17 +180,17 @@ typedef struct udpctl_client_s {
 // used by services
 svcs_errcode_t  udpctl_service_install ();
 svcs_errcode_t  udpctl_service_uninstall ();
-svcs_errcode_t  udpctl_on_start (imdb_hndlr_t himdb, imdb_hndlr_t hdata, dtlv_ctx_t * conf);
+svcs_errcode_t  udpctl_on_start (const svcs_resource_t * svcres, dtlv_ctx_t * conf);
 svcs_errcode_t  udpctl_on_stop ();
 svcs_errcode_t  udpctl_on_cfgupd (dtlv_ctx_t * conf);
 
 svcs_errcode_t  udpctl_on_message (service_ident_t orig_id,
-				   service_msgtype_t msgtype, void *ctxdata, dtlv_ctx_t * msg_in, dtlv_ctx_t * msg_out);
+                                   service_msgtype_t msgtype, void *ctxdata, dtlv_ctx_t * msg_in, dtlv_ctx_t * msg_out);
 
 
 udpctl_errcode_t udpctl_sync_request (ipv4_addr_t * addr, ip_port_t * port,
-				      char *data_in, packet_size_t length_in, char *data_out,
-				      packet_size_t * length_out);
+                                      char *data_in, packet_size_t length_in, char *data_out,
+                                      packet_size_t * length_out);
 
 #define d_udpctl_check_udpctl_error(ret) \
 	{ \

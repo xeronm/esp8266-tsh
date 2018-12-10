@@ -1,20 +1,24 @@
-/* Copyright (c) 2018 by Denis Muratov <xeronm@gmail.com>. All rights reserved
-
-   FileName: utils.c
-   Source: https://dtec.pro/gitbucket/git/esp8266/esp8266_lsh.git
-
-   Description: Utility auxiliary function and defines
-
-*/
-/*
-	API Functions:
-		parse_uint	- parse unsigned int from string
-		estlen_qstr	- estimate quoted string length, for accurate memory allocation
-		parse_qstr	- parse quoted string from string
-		estlen_token	- estimate token length, for accurate memory allocation
-		parse_token	- parse token from string
-
-*/
+/* 
+ * ESP8266 Auxiliary Function and Defines
+ * Copyright (c) 2018 Denis Muratov <xeronm@gmail.com>.
+ * https://dtec.pro/gitbucket/git/esp8266/esp8266-tsh.git
+ *
+ * This file is part of ESP8266 Things Shell.
+ *
+ * ESP8266 Things Shell is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * ESP8266 Things Shell is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with ESP8266 Things Shell.  If not, see <https://www.gnu.org/licenses/>.
+ *
+ */
 
 #ifndef UTILS_H_
 #define UTILS_H_
@@ -56,9 +60,9 @@
 #define d_pointer_equal(x, y)		( (void*)x == (void*)y )
 
 // BIT buffer operations
-#define	d_bitbuf_get(buf, n)		( ((buf)[(n) >> 3] >> ((n) & 7)) & 0b1 )
-#define	d_bitbuf_set(buf, n)		( (buf)[(n) >> 3] |= (1 << ((n) & 7)) )
-#define	d_bitbuf_clear(buf, n)		( (buf)[(n) >> 3] &= ~(1 << ((n) & 7)) )
+#define	d_bitbuf_get(buf, n)		( ((buf)[(n) >> 3] >> (7-((n) & 7))) & 0b1 )
+#define	d_bitbuf_set(buf, n)		( (buf)[(n) >> 3] |= (1 << (7-((n) & 7))) )
+#define	d_bitbuf_clear(buf, n)		( (buf)[(n) >> 3] &= ~(1 << (7-((n) & 7))) )
 #define d_bitbuf_size(size)		(((size) + 7) >> 3)
 #define	d_bitbuf_rset(buf, s, e)	\
 	{ \
@@ -82,6 +86,10 @@
 // 4 bytes allign
 #define d_align_32(x) \
 	(((x) + 0b11) & (uint32)(~0b11))
+
+// 8 bytes allign
+#define d_align_64(x) \
+	(((x) + 0b111) & (uint64)(~0b111))
 
 #define d_align d_align_32
 
@@ -109,7 +117,9 @@
 
 //
 #define d_char_is_space(ptr)	(*(ptr) == ' ' || *(ptr) == '\t')
+#define d_char_is_space2(ptr)	(*(ptr) == ' ' || *(ptr) == '\t' || *(ptr) == '\n')
 #define d_skip_space(ptr)	while d_char_is_space(ptr) { (ptr)++; }
+#define d_skip_space2(ptr)	while d_char_is_space2(ptr) { (ptr)++; }
 #define d_skip_not_space(ptr)	while ((! d_char_is_space(ptr)) && (*(ptr) != '\0')) { (ptr)++; }
 #define d_char_is_digit(ptr)	((*(ptr) >= '0') && (*(ptr) <= '9'))
 #define d_char_is_letter(ptr)	( ((*(ptr) >= 'a') && (*(ptr) <= 'z')) || ((*(ptr) >= 'A') && (*(ptr) <= 'Z')) )
@@ -138,11 +148,11 @@
 	}
 
 // string functions
-bool            parse_uint (char **szstr, unsigned int *num);
-bool            estlen_qstr (char **szstr, size_t * len);
-bool            parse_qstr (char **szstr, char *ch);
-bool            estlen_token (char **szstr, size_t * len);
-bool            parse_token (char **szstr, char *token);
+bool            parse_uint (const char **szstr, unsigned int *num);
+bool            estlen_qstr (const char *szstr, size_t * len);
+bool            parse_qstr (const char **szstr, char *ch);
+bool            estlen_token (const char *szstr, size_t * len);
+bool            parse_token (const char **szstr, char *token);
 
 size_t          buf2hex (char *dst, const char *src, const size_t length);
 size_t          hex2buf (char *dst, const size_t length, const char *src);

@@ -10,13 +10,13 @@
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Foobar is distributed in the hope that it will be useful,
+ * ESP8266 Things Shell is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Foobar.  If not, see <https://www.gnu.org/licenses/>.
+ * along with ESP8266 Things Shell.  If not, see <https://www.gnu.org/licenses/>.
  *
  */
 
@@ -29,7 +29,7 @@
 #define	LSH_SERVICE_ID		5
 #define LSH_SERVICE_NAME	"lwsh"
 
-#define SH_FUNC_NAME_LENGTH	12
+#define SH_FUNC_NAME_LENGTH	16
 #define SH_STATEMENT_NAME_LEN	30
 
 typedef char    sh_stmt_name_t[SH_STATEMENT_NAME_LEN];
@@ -39,7 +39,9 @@ typedef char    sh_func_name_t[SH_FUNC_NAME_LENGTH];
 typedef uint8   arg_count_t;
 typedef uint16  bytecode_size_t;
 
-typedef enum PACKED sh_errcode_e {
+#define SH_BYTECODE_SIZE_MAX	0xFFFF
+
+typedef enum sh_errcode_e {
     SH_ERR_SUCCESS = 0,
     SH_INTERNAL_ERROR = 1,
     SH_INVALID_HNDLR = 2,
@@ -59,32 +61,35 @@ typedef enum PACKED sh_errcode_e {
     SH_ALLOCATION_ERROR = 16,
     SH_STMT_EXISTS = 17,
     SH_STMT_NOT_EXISTS = 18,
+    SH_FUNC_ERROR = 19,
+    SH_STMT_SOURCE_NOT_EXISTS = 20,
 } sh_errcode_t;
 
-typedef enum PACKED sh_msgtype_e {
+typedef enum sh_msgtype_e {
     SH_MSGTYPE_STMT_ADD = 10,
     SH_MSGTYPE_STMT_REMOVE = 11,
     SH_MSGTYPE_STMT_RUN = 12,
     SH_MSGTYPE_STMT_DUMP = 13,
+    SH_MSGTYPE_STMT_SOURCE = 14,
+    SH_MSGTYPE_STMT_LOAD = 15,
+    SH_MSGTYPE_STMT_LIST = 16,
 } sh_msgtype_t;
 
-typedef enum PACKED sh_avp_code_e {
+typedef enum sh_avp_code_e {
     SH_AVP_STATEMENT = 100,
-    SH_AVP_STMT_OBJSIZE = 101,
     SH_AVP_STMT_NAME = 102,
     SH_AVP_STMT_TEXT = 103,
     SH_AVP_STMT_CODE = 104,
     SH_AVP_STMT_PARSE_TIME = 105,
     SH_AVP_STMT_ARGUMENTS = 106,
+    SH_AVP_PERSISTENT = 107,
+    SH_AVP_STATEMENT_SOURCE = 108,
+    SH_AVP_FUNCTION_NAME = 110,
+    SH_AVP_STMT_EXITCODE = 111,
+    SH_AVP_STMT_EXITADDR = 112,
+    SH_AVP_STMT_ADDR_START = 113,
+    SH_AVP_STMT_ADDR_STOP = 114,
 } sh_avp_code_t;
-
-typedef struct sh_eval_ctx_s {
-    sh_hndlr_t      hstmt;
-    bool            opt_only;
-    uint16          depth;
-    sh_errcode_t    errcode;
-    char            errmsg[80];
-} sh_eval_ctx_t;
 
 typedef struct sh_stmt_info_s {
     sh_stmt_name_t  name;
@@ -92,16 +97,32 @@ typedef struct sh_stmt_info_s {
     obj_size_t      length;
 } sh_stmt_info_t;
 
+typedef struct sh_stmt_source_s {
+    sh_stmt_name_t  name;
+    lt_time_t       utime;
+    size_t          varlen;
+    ALIGN_DATA char vardata[];
+} sh_stmt_source_t;
+
+typedef struct sh_eval_ctx_s {
+    sh_stmt_info_t *stmt_info;
+    bytecode_size_t addr;
+    uint8           exitcode;
+    sh_errcode_t    errcode;
+    char            errmsg[80];
+} sh_eval_ctx_t;
+
 typedef struct sh_bc_arg_s {
     union sh_bc_arg_u {
-	bytecode_size_t dlength;
-	void           *ptr;
-	uint32          value;
-    }               arg;
-    _Alignas(uint32) char data[];
+        bytecode_size_t dlength;
+        size_t          vptr;
+        void           *ptr;
+        uint32          value;
+    } arg;
+    ALIGN_DATA char data[];
 } sh_bc_arg_t;
 
-typedef enum PACKED sh_bc_arg_type_e {
+typedef enum sh_bc_arg_type_e {
     SH_BC_ARG_NONE,
     SH_BC_ARG_INT,
     SH_BC_ARG_CHAR,
@@ -110,9 +131,10 @@ typedef enum PACKED sh_bc_arg_type_e {
     SH_BC_ARG_GLOBAL,
 } sh_bc_arg_type_t;
 
-sh_bc_arg_type_t sh_pop_bcarg_type(uint16 * mask, sh_bc_arg_t * bc_arg);
+sh_bc_arg_type_t sh_pop_bcarg_type (uint16 * mask, sh_bc_arg_t * bc_arg);
 
-typedef void    (*sh_func_t) (sh_bc_arg_t * ret_arg, const arg_count_t arg_count, sh_bc_arg_type_t arg_type[], sh_bc_arg_t * bc_args[]);
+typedef void    (*sh_func_t) (sh_eval_ctx_t * evctx, sh_bc_arg_t * ret_arg, const arg_count_t arg_count,
+                              sh_bc_arg_type_t arg_type[], sh_bc_arg_t * bc_args[]);
 
 /*
 External function definition
@@ -129,30 +151,42 @@ typedef struct sh_func_entry_s {
     uint8           reserved:6;
     sh_func_name_t  func_name;
     union sh_func_u {
-	sh_func_t       func;
-	sh_hndlr_t      hstmt;
-	void           *ptr;
+        sh_func_t       func;
+        sh_hndlr_t      hstmt;
+        void           *ptr;
     } func;
 } sh_func_entry_t;
 
-sh_errcode_t    sh_func_get (char *func_name, sh_func_entry_t ** entry);
+sh_errcode_t    sh_func_get (const char *func_name, sh_func_entry_t ** entry);
 sh_errcode_t    sh_func_register (sh_func_entry_t * func_entry);
 
-sh_errcode_t    stmt_parse (char * szstr, char * stmt_name, sh_hndlr_t * hstmt);
-sh_errcode_t    stmt_dump (const sh_hndlr_t hstmt, char *buf, size_t len, bool resolve_glob);
+sh_errcode_t    stmt_parse (const char *szstr, const char *stmt_name, sh_hndlr_t * hstmt);
+sh_errcode_t    stmt_dump (const sh_hndlr_t hstmt, char *buf, size_t len, bool resolve_glob, bytecode_size_t addr_start,
+                           bytecode_size_t addr_stop);
 sh_errcode_t    stmt_info (const sh_hndlr_t hstmt, sh_stmt_info_t * info);
 sh_errcode_t    stmt_eval (const sh_hndlr_t hstmt, sh_eval_ctx_t * ctx);
 sh_errcode_t    stmt_free (const sh_hndlr_t hstmt);
 
-sh_errcode_t    stmt_get (char * stmt_name, sh_hndlr_t * hstmt);
-sh_errcode_t    stmt_get2 (sh_stmt_name_t * stmt_name, sh_hndlr_t * hstmt);
+sh_errcode_t    stmt_get (const char *stmt_name, sh_hndlr_t * hstmt);
+sh_errcode_t    stmt_src_get (const char *stmt_name, sh_stmt_source_t ** stmt_src);
+// get stmt by name, if not exists try to load from source
+sh_errcode_t    stmt_get_ext (const char *stmt_name, sh_hndlr_t * hstmt);
+
+// used for sh_stmt_name_t stmt_name
+#define stmt_get2(stmt_name, hstmt)		stmt_get( (char *) (stmt_name), (hstmt))
+#define stmt_src_get2(stmt_name, stmt_src)	stmt_src_get( (char *) (stmt_name), (stmt_src))
+#define stmt_get_ext2(stmt_name, hstmt)		stmt_get_ext( (char *) (stmt_name), (hstmt))
+
 
 // used by services
 svcs_errcode_t  lsh_service_install (void);
 svcs_errcode_t  lsh_service_uninstall (void);
-svcs_errcode_t  lsh_on_start (imdb_hndlr_t hmdb, imdb_hndlr_t hdata, dtlv_ctx_t * conf);
+svcs_errcode_t  lsh_on_start (const svcs_resource_t * svcres, dtlv_ctx_t * conf);
 svcs_errcode_t  lsh_on_stop (void);
 
+
+#define d_sh_check_dtlv_error(ret) \
+	if ((ret) != DTLV_ERR_SUCCESS) return SH_INTERNAL_ERROR;
 
 #define d_sh_check_error(ret) \
 	{ \

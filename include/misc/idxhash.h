@@ -24,15 +24,54 @@
  * TODO: Add remove support
  */
 
+/*
+Buffer format:
+
+	+-------------+---------------+-----+-----------------+
+	| Root Bucket | Overflow Area | ... | Siblings Bucket |
+	+-------------+---------------+-----+-----------------+
+
+        TODO: Siblings Bucket not realized
+
+Inline key and value Entry format:
+	+-------------+-----------+-------------+
+	| Next Entry  |   Value   |  Entry-Key  |
+	+-------------+-----------+-------------+
+*/
+
 #ifndef __IDXHASH_H__
 #define __IDXHASH_H__	1
 
 #include "sysinit.h"
 
 typedef void   *ih_hndlr_t;
+typedef uint8   ih_size_t;
 
-uint8           ih_hash8 (char *buf, size_t len, uint8 init);
-uint16          ih_hash16 (char *buf, size_t len, uint8 init);
+#define IH_SIZE_MASK	0xFF
+
+typedef void    (*ih_forall_func) (const char *key, ih_size_t keylen, const char *value, ih_size_t valuelen,
+                                   void *data);
+
+uint8           ih_hash8 (const char *buf, size_t len, uint8 init);
+uint16          ih_hash16 (const char *buf, size_t len, uint8 init);
+
+typedef size_t  ih_entry_ptr_t;
+
+typedef struct ih_header8_s {
+    uint8           bucket_size;        // in values
+    ih_size_t       key_length; // Key length stored in Hash-Map (0 - null term, 1 - variable, n - fixed length in bytes)
+    ih_size_t       value_length;       // Value length stored in Hash-Map (0 - null term, 1 - variable, n - fixed length in bytes)
+    ih_entry_ptr_t  overflow_hwm;
+    ih_entry_ptr_t  overflow_pos;
+    ih_entry_ptr_t  free_slot;  // pointer to free list
+} ih_header8_t;
+
+#define d_hash8_fixedmap_size(keylen, vallen, bcount, icount) \
+	(sizeof (ih_header8_t) + \
+	 (bcount) * sizeof (ih_entry_ptr_t) + \
+	 (d_align (sizeof (ih_entry_ptr_t) + (keylen) + (vallen))) * (MAX(icount* 4 / 3, 8)) )
+
+#define d_ih_get_varlength(vptr)	(*((size_t *) ((char *)(vptr) - sizeof (size_t)) ))
 
 typedef enum ih_errcode_e {
     IH_ERR_SUCCESS = 0,
@@ -42,13 +81,39 @@ typedef enum ih_errcode_e {
     IH_NULL_ENTRY = 4,
 } ih_errcode_t;
 
-typedef char   *(*ih_get_entry_func) (char *value);	// not used
+/*
+ * [public] Create Hash-Map Index with inline stored keys and fixed value length
+ * - buf: buffer for index
+ * - length: buffer length
+ * - bucket_size: hash bucket size
+ * - key_length: Key length stored in Hash-Map (0 - null term, 1 - variable, n - fixed length in bytes)
+ * - value_length: Value length stored in Hash-Map (0 - null term, 1 - variable, n - fixed length in bytes)
+ */
+ih_errcode_t    ih_init8 (char *buf, size_t length, uint8 bucket_size, ih_size_t key_length, ih_size_t value_length,
+                          ih_hndlr_t * hndlr);
 
-ih_errcode_t    ih_init8 (char *buf, size_t length, uint8 bucket_size, uint8 depth, bool key_nullterm,
-			  uint8 value_length, ih_hndlr_t * hndlr);
-ih_errcode_t    ih_hash8_add (ih_hndlr_t hndlr, char *entrykey, size_t len, char **value);
-ih_errcode_t    ih_hash8_search (ih_hndlr_t hndlr, char *entrykey, size_t len, char **value);
-char           *ih_hash8_v2key (ih_hndlr_t hndlr, char *value);
+/*
+ * [public] Add Key-Value to Hash-Map
+ * - hndlr: handler to Hash-Map
+ * - entrykey: entry key
+ * - len: entry key length (0 - when null-terminated string or fixed-length)
+ * - value: results pointer to entry value buffer
+ * - valuelen: entry value length (0 - when null-terminated string or fixed-length)
+ */
+ih_errcode_t    ih_hash8_add (ih_hndlr_t hndlr, const char *entrykey, ih_size_t keylen, char **value,
+                              ih_size_t valuelen);
+ih_errcode_t    ih_hash8_search (ih_hndlr_t hndlr, const char *entrykey, ih_size_t keylen, char **value);
+ih_errcode_t    ih_hash8_remove (ih_hndlr_t hndlr, const char *entrykey, ih_size_t keylen);
+
+ih_errcode_t    ih_hash8_forall (const ih_hndlr_t hndlr, const ih_forall_func cb_func, void *data);
+
+/*
+ * [public] Get pointer to inline stored key (not aligned)
+ * - hndlr: handler to Hash-Map
+ * - value: pointer to inlined stored value
+ * - return: results pointer to inline stored key
+ */
+const char     *ih_hash8_v2key (ih_hndlr_t hndlr, const char *value);
 
 
 #endif

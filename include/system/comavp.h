@@ -11,7 +11,7 @@
 #ifndef _COMAVP_H_
 #define _COMAVP_H_ 1
 
-typedef enum PACKED common_avp_code_e {
+typedef enum common_avp_code_e {
     COMMON_AVP_APP_PRODUCT = 1,
     COMMON_AVP_APP_VERSION = 2,
     COMMON_AVP_RESULT_CODE = 3,
@@ -28,6 +28,10 @@ typedef enum PACKED common_avp_code_e {
     COMMON_AVP_TIME_ZONE = 14,
     COMMON_AVP_SERVICE_NAME = 15,
     COMMON_AVP_PEREPHERIAL_GPIO_ID = 16,
+    COMMON_AVP_UPDATE_TIMESTAMP = 17,
+    COMMON_AVP_OBJECT_SIZE = 18,
+    COMMON_AVP_MULTICAST_SIGNAL = 19,
+    COMMON_AVP_SYSTEM_DESCRIPTION = 20,
 } common_avp_code_t;
 
 #endif

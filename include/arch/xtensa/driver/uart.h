@@ -29,14 +29,14 @@
 #include "eagle_soc.h"
 #include "c_types.h"
 
-#define UART_TX_BUFFER_SIZE 256	//Ring buffer length of tx buffer
-#define UART_RX_BUFFER_SIZE 256	//Ring buffer length of rx buffer
+#define UART_TX_BUFFER_SIZE 256 //Ring buffer length of tx buffer
+#define UART_RX_BUFFER_SIZE 256 //Ring buffer length of rx buffer
 
-#define UART_BUFF_EN  0		//use uart buffer  , FOR UART0
-#define UART_SELFTEST  0	//set 1:enable the loop test demo for uart buffer, FOR UART0
+#define UART_BUFF_EN  0         //use uart buffer  , FOR UART0
+#define UART_SELFTEST  0        //set 1:enable the loop test demo for uart buffer, FOR UART0
 
-#define UART_HW_RTS   0		//set 1: enable uart hw flow control RTS, PIN MTDO, FOR UART0
-#define UART_HW_CTS  0		//set1: enable uart hw flow contrl CTS , PIN MTCK, FOR UART0
+#define UART_HW_RTS   0         //set 1: enable uart hw flow control RTS, PIN MTDO, FOR UART0
+#define UART_HW_CTS  0          //set1: enable uart hw flow contrl CTS , PIN MTCK, FOR UART0
 
 
 
@@ -121,7 +121,7 @@ typedef struct {
     uint8          *pRcvMsgBuff;
     uint8          *pWritePos;
     uint8          *pReadPos;
-    uint8           TrigLvl;	//JLU: may need to pad
+    uint8           TrigLvl;    //JLU: may need to pad
     RcvMsgBuffState BuffState;
 } RcvMsgBuff;
 
@@ -149,7 +149,7 @@ typedef struct {
     TrxMsgBuff      trx_buff;
     RcvMsgState     rcv_state;
     int             received;
-    int             buff_uart_no;	//indicate which uart use tx/rx buffer
+    int             buff_uart_no;       //indicate which uart use tx/rx buffer
 } UartDevice;
 
 void            uart_init (UartBautRate uart0_br, UartBautRate uart1_br);
@@ -157,7 +157,7 @@ void            uart0_sendStr (const char *str);
 
 
 ///////////////////////////////////////
-#define UART_FIFO_LEN  128	//define the tx fifo length
+#define UART_FIFO_LEN  128      //define the tx fifo length
 #define UART_TX_EMPTY_THRESH_VAL 0x10
 
 
@@ -167,7 +167,7 @@ struct UartBuffer {
     uint8          *pInPos;
     uint8          *pOutPos;
     STATUS          BuffState;
-    uint16          Space;	//remanent space of the buffer
+    uint16          Space;      //remanent space of the buffer
     uint8           TcpControl;
     struct UartBuffer *nextBuff;
 };
@@ -178,7 +178,7 @@ struct UartRxBuff {
     uint8          *pWritePos;
     uint8          *pReadPos;
     STATUS          RxBuffState;
-    uint32          Space;	//remanent space of the buffer
+    uint32          Space;      //remanent space of the buffer
 };
 
 typedef enum {
@@ -217,7 +217,7 @@ void            UART_SetLineInverse (uint8 uart_no, UART_LineLevelInverse invers
 void            UART_SetParity (uint8 uart_no, UartParityMode Parity_mode);
 void            UART_SetBaudrate (uint8 uart_no, uint32 baud_rate);
 void            UART_SetFlowCtrl (uint8 uart_no, UART_HwFlowCtrl flow_ctrl, uint8 rx_thresh);
-void            UART_WaitTxFifoEmpty (uint8 uart_no, uint32 time_out_us);	//do not use if tx flow control enabled
+void            UART_WaitTxFifoEmpty (uint8 uart_no, uint32 time_out_us);       //do not use if tx flow control enabled
 void            UART_ResetFifo (uint8 uart_no);
 void            UART_ClearIntrStatus (uint8 uart_no, uint32 clr_mask);
 void            UART_SetIntrEna (uint8 uart_no, uint32 ena_mask);

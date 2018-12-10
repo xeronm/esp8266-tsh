@@ -1,6 +1,6 @@
 /* 
  * ESP8266 Administation service
- * Copyright (c) 2018 Denis Muratov <xeronm@gmail.com>.
+ * Copyright (c) 2016-2018 Denis Muratov <xeronm@gmail.com>.
  * https://dtec.pro/gitbucket/git/esp8266/esp8266-tsh.git
  *
  * This file is part of ESP8266 Things Shell.
@@ -10,13 +10,13 @@
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Foobar is distributed in the hope that it will be useful,
+ * ESP8266 Things Shell is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Foobar.  If not, see <https://www.gnu.org/licenses/>.
+ * along with ESP8266 Things Shell.  If not, see <https://www.gnu.org/licenses/>.
  *
  */
 
@@ -28,31 +28,37 @@
 #include "proto/dtlv.h"
 
 #define ESPADMIN_DEFAULT_WIFI_MODE		STATIONAP_MODE
-#define ESPADMIN_DEFAULT_WIFI_ST_SSID		"DMHOME"
-#define ESPADMIN_DEFAULT_WIFI_ST_PASSWORD	"d7bfeb9a3b2111e893fbc8f7330dd8c8"
+#define ESPADMIN_DEFAULT_WIFI_SLEEP_TYPE	MODEM_SLEEP_T
+#define ESPADMIN_DEFAULT_WIFI_ST_SSID		"ESPTSH"
+#define ESPADMIN_DEFAULT_WIFI_ST_PASSWORD	"defaultpassword"
 #define ESPADMIN_DEFAULT_WIFI_AUTO_CONNECT	1
 #undef ESPADMIN_DEFAULT_WIFI_AP_PASSWORD
 #define ESPADMIN_DEFAULT_WIFI_AP_HIDDEN		1
 #define ESPADMIN_DEFAULT_WIFI_AP_AUTH_MODE	AUTH_WPA_WPA2_PSK
 
+#define VERSION_BUFFER_SIZE	30
+
 #define ESPADMIN_SERVICE_ID		3
 #define ESPADMIN_SERVICE_NAME		"espadmin"
 
-typedef enum PACKED espadmin_msgtype_e {
-    ESPADMIN_MSGTYPE_FW_OTA_INIT = 10,
-    ESPADMIN_MSGTYPE_FW_OTA_UPLOAD = 11,
-    ESPADMIN_MSGTYPE_RESTART = 12,
-    ESPADMIN_MSGTYPE_FW_VERIFY = 13,
+typedef enum espadmin_msgtype_e {
+    ESPADMIN_MSGTYPE_RESTART = 10,
+    ESPADMIN_MSGTYPE_FDB_TRUNC = 11,
+    ESPADMIN_MSGTYPE_FW_OTA_INIT = 12,
+    ESPADMIN_MSGTYPE_FW_OTA_UPLOAD = 13,
     ESPADMIN_MSGTYPE_FW_OTA_DONE = 14,
+    ESPADMIN_MSGTYPE_FW_OTA_ABORT = 15,
+    ESPADMIN_MSGTYPE_FW_VERIFY = 16,
 } espadmin_msgtype_t;
 
-typedef enum PACKED espadmin_avp_code_e {
+typedef enum espadmin_avp_code_e {
     ESPADMIN_AVP_SYSTEM = 102,
     ESPADMIN_AVP_WIRELESS = 103,
     ESPADMIN_AVP_FIRMWARE = 104,
     ESPADMIN_AVP_IMDB = 105,
     ESPADMIN_AVP_WIFI_STATION = 106,
     ESPADMIN_AVP_WIFI_SOFTAP = 107,
+    ESPADMIN_AVP_FDB = 108,
     // System
     ESPADMIN_AVP_SYS_SDKVERSION = 111,
     ESPADMIN_AVP_SYS_UPTIME = 112,
@@ -76,6 +82,8 @@ typedef enum PACKED espadmin_avp_code_e {
     // OTA Update
     ESPADMIN_AVP_FW_INIT_DIGEST = 131,
     ESPADMIN_AVP_FW_INFO = 132,
+    ESPADMIN_AVP_FW_USER_DATA_ADDR = 133,
+    ESPADMIN_AVP_FW_USER_DATA_SIZE = 134,
     // IMDB
     ESPADMIN_AVP_IMDB_BLOCK_SIZE = 135,
     ESPADMIN_AVP_IMDB_CLASS = 136,
@@ -85,6 +93,7 @@ typedef enum PACKED espadmin_avp_code_e {
     ESPADMIN_AVP_IMDB_BLOCK_COUNT = 140,
     ESPADMIN_AVP_IMDB_FREE_SLOTS = 141,
     ESPADMIN_AVP_IMDB_FREE_SIZE = 142,
+    ESPADMIN_AVP_IMDB_MEM_USED = 143,
     // Wireless
     ESPADMIN_AVP_WIFI_OPMODE = 145,
     ESPADMIN_AVP_WIFI_SSID = 146,
@@ -97,10 +106,17 @@ typedef enum PACKED espadmin_avp_code_e {
     ESPADMIN_AVP_OTA_STATE = 165,
     ESPADMIN_AVP_OTA_BIN_DATA = 166,
     ESPADMIN_AVP_OTA_CURRENT_ADDR = 167,
-
+    // 
+    ESPADMIN_AVP_FW_BIN_DATE = 180,
+    //
+    ESPADMIN_AVP_FDB_INFO = 190,
+    ESPADMIN_AVP_FDB_DATA_ADDR = 191,
+    ESPADMIN_AVP_FDB_DATA_SIZE = 192,
+    ESPADMIN_AVP_FDB_FILE_SIZE = 193,
+    ESPADMIN_AVP_FDB_FILE_HWM = 194,
 } espadmin_avp_code_t;
 
-typedef enum PACKED ota_upgrade_sate_e {
+typedef enum ota_upgrade_sate_e {
     OTA_UPGRADE_NONE = 0,
     OTA_UPGRADE_ERROR = 1,
     OTA_UPGRADE_ERASING = 2,
@@ -114,10 +130,10 @@ typedef enum PACKED ota_upgrade_sate_e {
 // used by services
 svcs_errcode_t  espadmin_service_install (void);
 svcs_errcode_t  espadmin_service_uninstall (void);
-svcs_errcode_t  espadmin_on_start (imdb_hndlr_t hmdb, imdb_hndlr_t hdata, dtlv_ctx_t * conf);
+svcs_errcode_t  espadmin_on_start (const svcs_resource_t * svcres, dtlv_ctx_t * conf);
 svcs_errcode_t  espadmin_on_stop (void);
 svcs_errcode_t  espadmin_on_message (service_ident_t orig_id, service_msgtype_t msgtype, void *ctxdata,
-				     dtlv_ctx_t * msg_in, dtlv_ctx_t * msg_out);
+                                     dtlv_ctx_t * msg_in, dtlv_ctx_t * msg_out);
 svcs_errcode_t  espadmin_on_cfgupd (dtlv_ctx_t * conf);
 
 

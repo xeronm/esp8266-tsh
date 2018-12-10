@@ -10,25 +10,15 @@
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Foobar is distributed in the hope that it will be useful,
+ * ESP8266 Things Shell is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Foobar.  If not, see <https://www.gnu.org/licenses/>.
+ * along with ESP8266 Things Shell.  If not, see <https://www.gnu.org/licenses/>.
  *
  */
-
-/*
-	API Functions:
-		parse_uint	- parse unsigned int from string
-		estlen_qstr	- estimate quoted string length, for accurate memory allocation
-		parse_qstr	- parse quoted string from string
-		estlen_token	- estimate token length, for accurate memory allocation
-		parse_token	- parse token from string
-
-*/
 
 #include "sysinit.h"
 #include "core/utils.h"
@@ -38,31 +28,31 @@ static char     sz_hex_map[16] = "0123456789abcdef";
 
 
 bool            ICACHE_FLASH_ATTR
-parse_hex (char ch, char *num)
+parse_hex (const char ch, char *num)
 {
     if ((ch >= '0') && (ch <= 'F')) {
-	*num += (ch - '0');
+        *num += (ch - '0');
     }
     else if ((ch >= 'a') && (ch <= 'f')) {
-	*num += (ch - 'a' + 10);
+        *num += (ch - 'a' + 10);
     }
     else
-	return false;
+        return false;
     return true;
 }
 
 bool            ICACHE_FLASH_ATTR
-parse_uint (char **szstr, unsigned int *num)
+parse_uint (const char **szstr, unsigned int *num)
 {
-    char           *ptr = *szstr;
+    const char     *ptr = *szstr;
     unsigned int    _num = 0;
     unsigned short  _digit = 0;
     while d_char_is_digit
-	(ptr) {
-	_num = _num * 10 + (*ptr - '0');
-	_digit++;
-	ptr++;
-	}
+        (ptr) {
+        _num = _num * 10 + (*ptr - '0');
+        _digit++;
+        ptr++;
+        }
 
     *szstr = ptr;
     *num = _num;
@@ -71,28 +61,28 @@ parse_uint (char **szstr, unsigned int *num)
 
 // estimate quoted string length, for accurate memory allocation
 bool            ICACHE_FLASH_ATTR
-estlen_qstr (char **szstr, size_t * len)
+estlen_qstr (const char *szstr, size_t * len)
 {
-    char           *ptr = *szstr;
+    const char     *ptr = szstr;
     if (!d_char_is_quote (ptr))
-	return false;
+        return false;
     char            qterm = *ptr;
-    ptr++;			// skip opening quote
+    ptr++;                      // skip opening quote
     bool            fescape = false;
     size_t          _len = 0;
     while ((fescape || *ptr != qterm) && (*ptr != '\0')) {
-	if (*ptr == '\\') {
-	    fescape = true;
-	}
-	else {
-	    _len++;
-	    fescape = false;
-	}
-	ptr++;
+        if (*ptr == '\\') {
+            fescape = true;
+        }
+        else {
+            _len++;
+            fescape = false;
+        }
+        ptr++;
     }
 
     if (*ptr == '\0')
-	return false;
+        return false;
 
     *len = _len;
     return true;
@@ -102,52 +92,52 @@ estlen_qstr (char **szstr, size_t * len)
 [public] Parse quoted string with escape characters
 */
 bool            ICACHE_FLASH_ATTR
-parse_qstr (char **szstr, char *ch)
+parse_qstr (const char **szstr, char *ch)
 {
-    char           *ptr = *szstr;
+    const char     *ptr = *szstr;
     char           *chptr = ch;
     if (!d_char_is_quote (ptr)) {
-	*chptr = '\0';
-	return false;
+        *chptr = '\0';
+        return false;
     }
 
     char            qterm = *ptr;
-    ptr++;			// skip opening quote
+    ptr++;                      // skip opening quote
     bool            fescape = false;
     while ((fescape || *ptr != qterm) && (*ptr != '\0')) {
-	if (*ptr == '\\') {
-	    fescape = true;
-	}
-	else {
-	    *chptr = *ptr;
-	    if (fescape) {
-		switch (*chptr) {
-		case 'r':
-		    *chptr = '\r';
-		    break;
-		case 't':
-		    *chptr = '\t';
-		    break;
-		case 'n':
-		    *chptr = '\n';
-		    break;
-		default:
-		    break;
-		}
-	    }
-	    chptr++;
-	    fescape = false;
-	}
-	ptr++;
+        if (*ptr == '\\') {
+            fescape = true;
+        }
+        else {
+            *chptr = *ptr;
+            if (fescape) {
+                switch (*chptr) {
+                case 'r':
+                    *chptr = '\r';
+                    break;
+                case 't':
+                    *chptr = '\t';
+                    break;
+                case 'n':
+                    *chptr = '\n';
+                    break;
+                default:
+                    break;
+                }
+            }
+            chptr++;
+            fescape = false;
+        }
+        ptr++;
     }
     *chptr = '\0';
     *szstr = ptr;
 
     if (*ptr == '\0') {
-	return false;
+        return false;
     }
     else {
-	*szstr += 1;
+        *szstr += 1;
     }
 
     return true;
@@ -157,19 +147,19 @@ parse_qstr (char **szstr, char *ch)
 [public] Estimate token length, for accurate memory allocation
 */
 bool            ICACHE_FLASH_ATTR
-estlen_token (char **szstr, size_t * len)
+estlen_token (const char *szstr, size_t * len)
 {
-    char           *ptr = *szstr;
+    const char     *ptr = szstr;
     // first character can't be a digit
     if (!d_char_is_token1 (ptr))
-	return false;
+        return false;
 
     while d_char_is_token
-	(ptr) ptr++;
+        (ptr) ptr++;
 
     if (!d_char_is_tokend (ptr))
-	return false;
-    *len = (ptr - *szstr);
+        return false;
+    *len = (ptr - szstr);
     return true;
 }
 
@@ -177,27 +167,27 @@ estlen_token (char **szstr, size_t * len)
 * [public] Pasrse token string
 */
 bool            ICACHE_FLASH_ATTR
-parse_token (char **szstr, char *token)
+parse_token (const char **szstr, char *token)
 {
-    char           *ptr = *szstr;
+    const char     *ptr = *szstr;
     char           *tptr = token;
     // first character can't be a digit
     if (!d_char_is_token1 (ptr)) {
-	*tptr = '\0';
-	return false;
+        *tptr = '\0';
+        return false;
     }
 
     while (d_char_is_token (ptr)) {
-	*tptr = *ptr;
-	ptr++;
-	tptr++;
+        *tptr = *ptr;
+        ptr++;
+        tptr++;
     }
 
     *tptr = '\0';
     *szstr = ptr;
 
     if (!d_char_is_tokend (ptr))
-	return false;
+        return false;
 
     return true;
 }
@@ -210,12 +200,12 @@ buf2hex (char *dst, const char *src, const size_t length)
 {
     size_t          i;
     for (i = 0; i < length; i += 1) {
-	uint8           ch = (uint8) * src;
-	*dst = sz_hex_map[(ch >> 4) & 0xF];
-	dst += 1;
-	*dst = sz_hex_map[ch & 0xF];
-	dst += 1;
-	src += 1;
+        uint8           ch = (uint8) * src;
+        *dst = sz_hex_map[(ch >> 4) & 0xF];
+        dst += 1;
+        *dst = sz_hex_map[ch & 0xF];
+        dst += 1;
+        src += 1;
     }
     *dst = 0x0;
 
@@ -230,24 +220,24 @@ hex2buf (char *dst, const size_t length, const char *src)
 {
     size_t          slen = os_strlen (src);
     if (slen % 2 != 0)
-	return 0;
+        return 0;
 
     size_t          i;
     char            num;
     for (i = 0; i < slen / 2; i += 1) {
-	num = 0;
-	// first digit
-	if (!parse_hex (*src, &num))
-	    return 0;
-	src += 1;
-	num *= 16;
-	// second digit
-	if (!parse_hex (*src, &num))
-	    return 0;
-	src += 1;
+        num = 0;
+        // first digit
+        if (!parse_hex (*src, &num))
+            return 0;
+        src += 1;
+        num *= 16;
+        // second digit
+        if (!parse_hex (*src, &num))
+            return 0;
+        src += 1;
 
-	*dst = num;
-	dst++;
+        *dst = num;
+        dst++;
     }
     *dst = 0x0;
 
@@ -262,21 +252,21 @@ printb (const char *src, const size_t length)
 
     _len = os_printf ("\t<ptr:%p, len:%u>" LINE_END, src, length);
     for (i = 0; i < length; i += 1) {
-	uint8           ch = (uint8) * src;
-	if (i % 16 == 0) {
-	    if (i == 0) {
-		_len += os_printf ("\t%04x: ", i);
-	    }
-	    else {
-		_len += os_printf (LINE_END "\t%04x: ", i);
-	    }
-	}
-	else if (i % 4 == 0) {
-	    _len += os_printf (" ");
-	}
+        uint8           ch = (uint8) * src;
+        if (i % 16 == 0) {
+            if (i == 0) {
+                _len += os_printf ("\t%04x: ", i);
+            }
+            else {
+                _len += os_printf (LINE_END "\t%04x: ", i);
+            }
+        }
+        else if (i % 4 == 0) {
+            _len += os_printf (" ");
+        }
 
-	_len += os_printf ("%02x", ch);
-	src++;
+        _len += os_printf ("%02x", ch);
+        src++;
     }
 
     return _len;
@@ -287,33 +277,33 @@ sprintb (char *dst, const size_t dlen, const char *src, const size_t length)
 {
     size_t          i;
     char           *_dst = dst;
-    char           *_dst_max = dst + dlen - 16;	// 16 for <cutted>
+    char           *_dst_max = dst + dlen - 16; // 16 for <cutted>
 
     _dst += os_sprintf (_dst, "\t<ptr:%p, len:%u>" LINE_END, src, length);
     for (i = 0; i < length; i += 1) {
-	uint8           ch = (uint8) * src;
-	if (_dst >= _dst_max) {
-	    _dst += os_sprintf (_dst, " <cut>");
-	    break;
-	}
-	if (i % 16 == 0) {
-	    if (i == 0) {
-		_dst += os_sprintf (_dst, "\t%04x: ", i);
-	    }
-	    else {
-		_dst += os_sprintf (_dst, LINE_END "\t%04x: ", i);
-	    }
-	}
-	else if (i % 4 == 0) {
-	    *_dst = 32;
-	    _dst++;
-	}
+        uint8           ch = (uint8) * src;
+        if (_dst >= _dst_max) {
+            _dst += os_sprintf (_dst, " <cut>");
+            break;
+        }
+        if (i % 16 == 0) {
+            if (i == 0) {
+                _dst += os_sprintf (_dst, "\t%04x: ", i);
+            }
+            else {
+                _dst += os_sprintf (_dst, LINE_END "\t%04x: ", i);
+            }
+        }
+        else if (i % 4 == 0) {
+            *_dst = 32;
+            _dst++;
+        }
 
-	*_dst = sz_hex_map[(ch >> 4) & 0xF];
-	_dst++;
-	*_dst = sz_hex_map[ch & 0xF];
-	_dst++;
-	src++;
+        *_dst = sz_hex_map[(ch >> 4) & 0xF];
+        _dst++;
+        *_dst = sz_hex_map[ch & 0xF];
+        _dst++;
+        src++;
     }
     *_dst = 0x0;
 
@@ -326,8 +316,8 @@ log2x (unsigned long x)
     unsigned long   n = x;
     unsigned long   y = 0;
     while (n > 0) {
-	n = n << 1;
-	y += 1;
+        n = n << 1;
+        y += 1;
     }
     return y;
 }
@@ -339,7 +329,7 @@ csnprintf (char *buf, size_t len, const char *fmt, ...)
     va_start (al, fmt);
     size_t          _len = os_vsnprintf (buf, len - 1, fmt, al);
     if (_len >= len) {
-	d_log_wprintf ("", "csnprintf buffer overflow: %lu", _len);
+        d_log_wprintf ("", "csnprintf buffer overflow: %lu", _len);
     }
     va_end (al);
 
@@ -352,11 +342,11 @@ bufcc (char *dst, char *src, size_t maxlen)
 {
     size_t          _slen = MIN (maxlen, os_strlen (src));
     if (os_strncmp (dst, src, _slen) != 0) {
-	os_memcpy (dst, src, _slen);
-	if (maxlen > _slen) {
-	    os_memset (dst + _slen, 0, maxlen - _slen);
-	}
-	return true;
+        os_memcpy (dst, src, _slen);
+        if (maxlen > _slen) {
+            os_memset (dst + _slen, 0, maxlen - _slen);
+        }
+        return true;
     }
 
     return false;

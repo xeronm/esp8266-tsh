@@ -15,10 +15,10 @@
 
 #define	FWUPG_SUB_SERVICE_NAME	".fwupg"
 
-#define FWUPG_IDLE_TIMEOUT_SEC		60	// seconds
-#define FWUPG_REBOOT_TIMEOUT_SEC	1	// seconds
+#define FWUPG_IDLE_TIMEOUT_SEC		60      // seconds
+#define FWUPG_REBOOT_TIMEOUT_SEC	1       // seconds
 
-#define FWUPG_BIN_CHECKSUM_SIZE		1	//
+#define FWUPG_BIN_CHECKSUM_SIZE		1       //
 
 typedef digest256_t firmware_digest_t;
 
@@ -48,19 +48,20 @@ typedef enum __packed upgrade_sate_e {
 typedef struct firmware_info_s {
     char            product[40];
     union version {
-	struct version_comp {
-	    uint8           major;
-	    uint8           minor;
-	    uint16          patch;
-	} comp;
-	uint32          raw;
+        struct version_comp {
+            uint8           major;
+            uint8           minor;
+            uint16          patch;
+        } comp;
+        uint32          raw;
     } version;
     char            ver_suffix[8];
     uint32          build;
-    uint16          flash_comp;	// bit-mask of flash_size_map compartibility
+    uint16          flash_comp; // bit-mask of flash_size_map compartibility
     uint32          release_date;
-    uint32          digest_pos;
-    uint32          binsize;	// binary size
+    uint32          digest_pos; // written by digest.py: digest position in binary file
+    uint32          binsize;    // written by digest.py: binary size
+    uint32          bindate;    // written by digest.py: bin make POSIX Timestamp
     firmware_digest_t digest;
 } firmware_info_t;
 
@@ -76,6 +77,7 @@ typedef struct upgrade_info_s {
 upgrade_err_t   fwupdate_init (firmware_info_t * fwinfo, firmware_digest_t * init_digest);
 upgrade_err_t   fwupdate_upload (uint8 * data, size_t length);
 upgrade_err_t   fwupdate_done (void);
+upgrade_err_t   fwupdate_abort (void);
 
 upgrade_err_t   fw_verify (firmware_info_t * fwinfo, firmware_digest_t * init_digest);
 

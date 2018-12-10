@@ -1,16 +1,29 @@
-/******************************************************************************
- * Copyright (c) 2015 by Denis Muratov <xeronm@gmail.com>. All rights reserved
+/* 
+ * ESP8266 In-Memory Database
+ * Copyright (c) 2018 Denis Muratov <xeronm@gmail.com>.
+ * https://dtec.pro/gitbucket/git/esp8266/esp8266-tsh.git
  *
- * FileName: imdb.h
+ * This file is part of ESP8266 Things Shell.
  *
- * Description: Light weight time-conversion utility
+ * ESP8266 Things Shell is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *
- * API
+ * ESP8266 Things Shell is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- * Modification history:
- *     2016/06/01, v1.0 create this file.
- *     2017/11/07, v1.1 added: recycle storage, query.
- *******************************************************************************/
+ * You should have received a copy of the GNU General Public License
+ * along with ESP8266 Things Shell.  If not, see <https://www.gnu.org/licenses/>.
+ *
+ */
+
+
+/*
+ * TODO: Should make hash-map storage and replace some heap storage, for example: functions, configurations, etc.
+ */
 
 #ifndef _IMDB_H_
 #define _IMDB_H_ 1
@@ -21,14 +34,13 @@
 
 typedef void   *imdb_hndlr_t;
 
-typedef enum PACKED imdb_block_crc_s {
-    BLOCK_CRC_NONE = 0,
-    BLOCK_CRC_META = 1,
-    BLOCK_CRC_WRITE = 2,
-    BLOCK_CRC_ALL = 3
+typedef enum imdb_block_crc_s {
+    BLOCK_CRC_NONE = 0,         // validate CRC only for media I/O
+    BLOCK_CRC_META = 1,         // validate CRC for media I/O and for Metadata RW operations
+    BLOCK_CRC_ALL = 2           // validate CRC for media I/O and for all RW operations, requires implicit object write call
 } imdb_block_crc_t;
 
-typedef enum PACKED imdb_errcode_e {
+typedef enum imdb_errcode_e {
     IMDB_ERR_SUCCESS = 0,
     IMDB_INTERNAL_ERROR = 1,
     IMDB_NOMEM = 2,
@@ -41,9 +53,15 @@ typedef enum PACKED imdb_errcode_e {
     IMDB_CURSOR_NO_DATA_FOUND = 9,
     IMDB_CURSOR_BREAK = 10,
     IMDB_CURSOR_FORALL_FUNC = 11,
+    IMDB_FILE_READ_ERROR = 12,
+    IMDB_FILE_WRITE_ERROR = 13,
+    IMDB_FILE_CRC_ERROR = 14,
+    IMDB_FILE_LOCK_ERROR = 15,
+    IMDB_CACHE_CAPACITY = 16,
+    IMDB_BLOCK_ACCESS = 17,
 } imdb_errcode_t;
 
-typedef enum PACKED imdb_access_path_s {
+typedef enum imdb_access_path_s {
     PATH_NONE = 0,
     PATH_FULL_SCAN = 1,
     PATH_RECYCLE_SCAN = 2,
@@ -51,18 +69,24 @@ typedef enum PACKED imdb_access_path_s {
 } imdb_access_path_t;
 
 
-#define IMDB_BLOCK_UNIT_ALIGN	2	// 4 byte aligment
-#define IMDB_CLASS_NAME_LEN	16	//
+#define IMDB_BLOCK_UNIT_ALIGN	2       // 4 byte aligment
+#define IMDB_CLASS_NAME_LEN	16      //
+#define IMDB_BLOCK_CRC
+#define IMDB_BLOCK_CRC_DEFAULT	0xFFFF
 
-typedef uint16  obj_size_t;	// aligned by IMDB_BLOCK_UNIT_ALIGN
-typedef uint16  block_size_t;	// aligned by IMDB_BLOCK_UNIT_ALIGN
+#define IMDB_FILE_HEADER_VERSION	1
+
+typedef uint16  obj_size_t;     // aligned by IMDB_BLOCK_UNIT_ALIGN
+typedef uint16  block_size_t;   // aligned by IMDB_BLOCK_UNIT_ALIGN
 
 #ifdef IMDB_SMALL_RAM
-typedef uint8   page_blocks_t;	// 
-typedef uint8   class_pages_t;	// 
+typedef uint8   page_blocks_t;  // 
+typedef uint8   class_pages_t;  // 
+typedef uint16  stat_count_t;
 #else
-typedef uint16  page_blocks_t;	// 
-typedef uint32  class_pages_t;	// 
+typedef uint16  page_blocks_t;  // 
+typedef uint32  class_pages_t;  // 
+typedef uint32  stat_count_t;
 #endif
 
 typedef char    class_name_t[IMDB_CLASS_NAME_LEN];
@@ -83,26 +107,36 @@ typedef char    class_name_t[IMDB_CLASS_NAME_LEN];
 typedef struct imdb_stat_s {
     size_t          mem_alloc;
     size_t          mem_free;
-    uint32          page_alloc;
-    uint32          page_free;
-    uint32          block_alloc;
-    uint32          block_init;
-    uint32          block_recycle;
-    uint32          slot_free;
-    uint32          slot_data;
-    uint32          slot_split;
-    uint32          slot_coalesce;
-    uint32          slot_skipscan;
+    stat_count_t    header_read;
+    stat_count_t    header_write;
+    stat_count_t    block_read;
+    stat_count_t    block_write;
+    stat_count_t    page_alloc;
+    stat_count_t    page_free;
+    stat_count_t    block_alloc;
+    stat_count_t    block_init;
+    stat_count_t    block_recycle;
+    stat_count_t    slot_free;
+    stat_count_t    slot_data;
+    stat_count_t    slot_split;
+    stat_count_t    slot_coalesce;
+    stat_count_t    slot_skipscan;
 } imdb_stat_t;
 
 /*
  * imdb general storage definition
  *   - block_size: block size in bytes
  *   - block_crc: block CRC mode
+ *   - opt_media: use media storage
+ *   - buffer_size: buffer cache size in blocks when use media storage
  */
 typedef struct imdb_def_s {
     block_size_t    block_size;
-    imdb_block_crc_t block_crc;
+    imdb_block_crc_t block_crc:7;
+    bool            opt_media:1;
+    uint32          buffer_size;        //
+    uint32          file_size;  // file size in blocks
+    imdb_hndlr_t    hcur;       // handler to cursor
 } imdb_def_t;
 
 /*
@@ -140,9 +174,9 @@ typedef struct imdb_class_def_s {
     bool            opt_tx_control:1;
     uint8           pct_free:5;
     class_pages_t   pages_max;
-    page_blocks_t   init_blocks;
+    //page_blocks_t   init_blocks;
     page_blocks_t   page_blocks;
-    obj_size_t      obj_size;	// fixed part size
+    obj_size_t      obj_size;   // fixed part size
 } imdb_class_def_t;
 
 
@@ -173,36 +207,63 @@ typedef struct imdb_class_info_s {
 } imdb_class_info_t;
 
 typedef struct imdb_rowid_s {
-    class_pages_t   page_id;	// page index
-    page_blocks_t   block_id;	// block index in page
-    uint8           reserved:2;	// reserved
-    uint16          slot_offset:14;	// slot offset in block
+    size_t          block_id;   // block rawid
+    uint8           ds_type:2;  // data slot type
+    uint16          slot_offset:14;     // slot offset in block
 } imdb_rowid_t;
+
+typedef struct imdb_fetch_obj_s {
+    imdb_rowid_t    rowid;
+    void           *dataptr;
+} imdb_fetch_obj_t;
 
 imdb_errcode_t  imdb_init (imdb_def_t * imdb_def, imdb_hndlr_t * himdb);
 imdb_errcode_t  imdb_done (imdb_hndlr_t hmdb);
 imdb_errcode_t  imdb_info (imdb_hndlr_t hmdb, imdb_info_t * imdb_info, imdb_class_info_t info_array[], uint8 array_len);
+imdb_errcode_t  imdb_flush (imdb_hndlr_t hmdb);
 
+imdb_errcode_t  imdb_class_find (imdb_hndlr_t hmdb, const char *name, imdb_hndlr_t * hclass);
 imdb_errcode_t  imdb_class_create (imdb_hndlr_t hmdb, imdb_class_def_t * class_def, imdb_hndlr_t * hclass);
-imdb_errcode_t  imdb_class_destroy (imdb_hndlr_t hclass);
-imdb_errcode_t  imdb_class_info (imdb_hndlr_t hclass, imdb_class_info_t * class_info);
+imdb_errcode_t  imdb_class_destroy (imdb_hndlr_t hmdb, imdb_hndlr_t hclass);
+imdb_errcode_t  imdb_class_info (imdb_hndlr_t hmdb, imdb_hndlr_t hclass, imdb_class_info_t * class_info);
 
-imdb_errcode_t  imdb_clsobj_insert (imdb_hndlr_t hclass, void **ptr, size_t length);
-imdb_errcode_t  imdb_clsobj_delete (imdb_hndlr_t hclass, void *ptr);
-imdb_errcode_t  imdb_clsobj_resize (imdb_hndlr_t hclass, void *ptr_old, void **ptr, size_t length);
-imdb_errcode_t  imdb_clsobj_length (imdb_hndlr_t hclass, void *ptr, size_t * length);
+imdb_errcode_t  imdb_clsobj_insert (imdb_hndlr_t hmdb, imdb_hndlr_t hclass, void **ptr, size_t length);
+imdb_errcode_t  imdb_clsobj_delete (imdb_hndlr_t hmdb, imdb_hndlr_t hclass, void *ptr);
+imdb_errcode_t  imdb_clsobj_resize (imdb_hndlr_t hmdb, imdb_hndlr_t hclass, void *ptr_old, void **ptr, size_t length);
+imdb_errcode_t  imdb_clsobj_length (imdb_hndlr_t hmdb, imdb_hndlr_t hclass, void *ptr, size_t * length);
 
-imdb_errcode_t  imdb_class_query (imdb_hndlr_t hclass, imdb_access_path_t path, imdb_hndlr_t * hcur);
-imdb_errcode_t  imdb_class_fetch (imdb_hndlr_t hcur, uint16 count, uint16 * rowcount, void *ptr[]);
+imdb_errcode_t  imdb_clsobj_update_init (imdb_hndlr_t hmdb, imdb_rowid_t * rowid, void **ptr);
+imdb_errcode_t  imdb_clsobj_update (imdb_hndlr_t hmdb, imdb_rowid_t * rowid, void **ptr);
+
+imdb_errcode_t  imdb_class_query (imdb_hndlr_t hmdb, imdb_hndlr_t hclass, imdb_access_path_t path, imdb_hndlr_t * hcur);
+imdb_errcode_t  imdb_class_fetch (imdb_hndlr_t hcur, uint16 count, uint16 * rowcount, imdb_fetch_obj_t fobj[]);
 imdb_errcode_t  imdb_class_close (imdb_hndlr_t hcur);
 
-typedef         imdb_errcode_t (*imdb_forall_func) (void *ptr, void *data);
-imdb_errcode_t  imdb_class_forall (imdb_hndlr_t hcur, void *data, imdb_forall_func forall_func);
+typedef         imdb_errcode_t (*imdb_forall_func) (imdb_fetch_obj_t * fobj, void *data);
+imdb_errcode_t  imdb_class_forall (imdb_hndlr_t hmdb, imdb_hndlr_t hclass, void *data, imdb_forall_func forall_func);
 
 // forall helpers
-imdb_errcode_t  forall_count (void *ptr, void *data);
+imdb_errcode_t  imdb_forall_count (imdb_fetch_obj_t * fobj, void *data);
 
+
+typedef struct imdb_file_s {
+    uint16          version;
+    uint16          crc16;
+    uint32          scn;
+    block_size_t    block_size;
+    size_t          class_last;
+    size_t          file_size;
+    size_t          file_hwm;
+} imdb_file_t;
+
+imdb_errcode_t  fdb_header_read (imdb_file_t * hdr_file);
 
 #define d_imdb_check_hndlr(hndlr) 	if (!(hndlr)) { return IMDB_INVALID_HNDLR; }
+
+#define d_imdb_check_error(ret) \
+	{ \
+		imdb_errcode_t r = (ret); \
+		if (r != IMDB_ERR_SUCCESS) return r; \
+	}
 
 #endif /* _IMDB_H_ */

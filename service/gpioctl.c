@@ -10,7 +10,7 @@
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Foobar is distributed in the hope that it will be useful,
+ * ESP8266 Things Shell is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
@@ -21,23 +21,27 @@
  */
 
 #include "sysinit.h"
+#ifdef ARCH_XTENSA
 #include "gpio.h"
 #include "eagle_soc.h"
+#endif
 #include "core/logging.h"
 #include "system/services.h"
 #include "system/comavp.h"
 #include "service/gpioctl.h"
+#include "service/lsh.h"
 
 typedef struct gpio_data_s {
-    imdb_hndlr_t    hdata;
+    const svcs_resource_t *svcres;
 
     gpio_use_t      gpio[GPIO_PIN_COUNT];
 } gpio_data_t;
 
 LOCAL gpio_data_t *sdata = NULL;
 
+#ifdef ARCH_XTENSA
 // global interrupt handler
-LOCAL void
+LOCAL void      ICACHE_FLASH_ATTR
 gpio_intr_handler (void *args)
 {
     uint32          gpio_status;
@@ -47,9 +51,9 @@ gpio_intr_handler (void *args)
 
     int             i;
     for (i = 0; i < GPIO_PIN_COUNT; i++) {
-	if ((sdata->gpio[i].intr_cb != NULL) && (gpio_status & BIT (i))) {
-	    sdata->gpio[i].intr_cb (i, GPIO_INPUT_GET (GPIO_ID_PIN (i)));
-	}
+        if ((sdata->gpio[i].intr_cb != NULL) && (gpio_status & BIT (i))) {
+            sdata->gpio[i].intr_cb (i, GPIO_INPUT_GET (GPIO_ID_PIN (i)));
+        }
     }
 
     //clear interrupt status
@@ -57,6 +61,7 @@ gpio_intr_handler (void *args)
 
     ETS_GPIO_INTR_ENABLE ();
 }
+#endif
 
 // check that at least one GPIO has a interrupt callback
 LOCAL bool      ICACHE_FLASH_ATTR
@@ -64,8 +69,8 @@ gpio_has_intr (void)
 {
     int             i;
     for (i = 0; i < GPIO_PIN_COUNT; i++) {
-	if (sdata->gpio[i].intr_cb != NULL)
-	    return true;
+        if (sdata->gpio[i].intr_cb != NULL)
+            return true;
     }
 
     return false;
@@ -75,14 +80,16 @@ gpio_has_intr (void)
 LOCAL gpio_result_t ICACHE_FLASH_ATTR
 gpio_common_check (uint8 gpio_id)
 {
+#ifdef ARCH_XTENSA
     if (!GPIO_ID_IS_PIN_REGISTER (gpio_id)) {
-	d_log_eprintf (GPIO_SERVICE_NAME, "unregistered gpio_id:%u", gpio_id);
-	return GPIO_RESULT_INVALID_GPIOID;
+        d_log_eprintf (GPIO_SERVICE_NAME, "unregistered gpio_id:%u", gpio_id);
+        return GPIO_RESULT_INVALID_GPIOID;
     }
+#endif
 
     if ((gpio_layout[gpio_id].addr == 0) || (!gpio_layout[gpio_id].available)) {
-	d_log_eprintf (GPIO_SERVICE_NAME, "unusable gpio_id:%u, addr:%p", gpio_id, gpio_layout[gpio_id].addr);
-	return GPIO_RESULT_NOT_USABLE;
+        d_log_eprintf (GPIO_SERVICE_NAME, "unusable gpio_id:%u, addr:%p", gpio_id, gpio_layout[gpio_id].addr);
+        return GPIO_RESULT_NOT_USABLE;
     }
 
     return GPIO_RESULT_SUCCESS;
@@ -96,47 +103,53 @@ gpio_result_t   ICACHE_FLASH_ATTR
 gpio_acquire (uint8 gpio_id, bool pullup, gpio_cb_func_t intr_cb)
 {
     if (!sdata)
-	return SVCS_NOT_RUN;
+        return SVCS_NOT_RUN;
 
     gpio_result_t   res = gpio_common_check (gpio_id);
     if (res != GPIO_RESULT_SUCCESS)
-	return res;
+        return res;
 
     gpio_use_t     *gpio_use = &sdata->gpio[gpio_id];
 
     if (gpio_use->in_use) {
-	d_log_wprintf (GPIO_SERVICE_NAME, "acquire inuse gpio_id:%u", gpio_id);
-	return GPIO_RESULT_INUSE;
+        d_log_wprintf (GPIO_SERVICE_NAME, "acquire inuse gpio_id:%u", gpio_id);
+        return GPIO_RESULT_INUSE;
     }
 
+#ifdef ARCH_XTENSA
     if (intr_cb != NULL) {
-	if (!gpio_has_intr ()) {
-	    ETS_GPIO_INTR_ATTACH (gpio_intr_handler, NULL);
+        if (!gpio_has_intr ()) {
+            ETS_GPIO_INTR_ATTACH (gpio_intr_handler, NULL);
 
-	    // initial cleanup state
-	    uint32          gpio_status = GPIO_REG_READ (GPIO_STATUS_ADDRESS);
-	    GPIO_REG_WRITE (GPIO_STATUS_W1TC_ADDRESS, gpio_status);
-	}
+            // initial cleanup state
+            uint32          gpio_status = GPIO_REG_READ (GPIO_STATUS_ADDRESS);
+            GPIO_REG_WRITE (GPIO_STATUS_W1TC_ADDRESS, gpio_status);
+        }
 
-	ETS_GPIO_INTR_DISABLE ();
-	//clear status
-	GPIO_REG_WRITE (GPIO_STATUS_W1TC_ADDRESS, BIT (gpio_id));
-	ETS_GPIO_INTR_ENABLE ();
+        ETS_GPIO_INTR_DISABLE ();
+        //clear status
+        GPIO_REG_WRITE (GPIO_STATUS_W1TC_ADDRESS, BIT (gpio_id));
+        ETS_GPIO_INTR_ENABLE ();
     }
+#endif
 
     gpio_use->in_use = true;
     gpio_use->intr_cb = intr_cb;
     gpio_use->func = gpio_layout[gpio_id].func;
     uint32          addr = gpio_layout[gpio_id].addr;
 
+#ifdef ARCH_XTENSA
     PIN_FUNC_SELECT (addr, gpio_use->func);
 
     if (pullup) {
-	PIN_PULLUP_EN (addr);
+        PIN_PULLUP_EN (addr);
     }
     else {
-	PIN_PULLUP_DIS (addr);
+        PIN_PULLUP_DIS (addr);
     }
+#endif
+    d_log_iprintf (GPIO_SERVICE_NAME, "acquire gpio_id:%u, addr:%p,func:%u,pull:%u", gpio_id, addr, gpio_use->func,
+                   pullup);
 
     return GPIO_RESULT_SUCCESS;
 }
@@ -148,30 +161,34 @@ gpio_result_t   ICACHE_FLASH_ATTR
 gpio_release (uint8 gpio_id)
 {
     if (!sdata)
-	return SVCS_NOT_RUN;
+        return SVCS_NOT_RUN;
 
     gpio_result_t   res = gpio_common_check (gpio_id);
     if (res != GPIO_RESULT_SUCCESS)
-	return res;
+        return res;
 
     gpio_use_t     *gpio_use = &sdata->gpio[gpio_id];
 
     if (!gpio_use->in_use) {
-	d_log_wprintf (GPIO_SERVICE_NAME, "release not used gpio_id:%u", gpio_id);
-	return GPIO_RESULT_NOT_USED;
+        d_log_wprintf (GPIO_SERVICE_NAME, "release not used gpio_id:%u", gpio_id);
+        return GPIO_RESULT_NOT_USED;
     }
 
+    d_log_iprintf (GPIO_SERVICE_NAME, "release gpio_id:%u", gpio_id);
+
+#ifdef ARCH_XTENSA
     if (gpio_use->intr_cb) {
-	ETS_GPIO_INTR_DISABLE ();
-	//clear status
-	GPIO_REG_WRITE (GPIO_STATUS_W1TC_ADDRESS, BIT (gpio_id));
-	// disable interrupt
-	gpio_pin_intr_state_set (GPIO_ID_PIN (gpio_id), GPIO_PIN_INTR_DISABLE);
+        ETS_GPIO_INTR_DISABLE ();
+        //clear status
+        GPIO_REG_WRITE (GPIO_STATUS_W1TC_ADDRESS, BIT (gpio_id));
+        // disable interrupt
+        gpio_pin_intr_state_set (GPIO_ID_PIN (gpio_id), GPIO_PIN_INTR_DISABLE);
 
-	if (gpio_has_intr ()) {
-	    ETS_GPIO_INTR_ENABLE ();
-	}
+        if (gpio_has_intr ()) {
+            ETS_GPIO_INTR_ENABLE ();
+        }
     }
+#endif
     os_memset (gpio_use, 0, sizeof (gpio_use_t));
 
     //PIN_FUNC_SELECT(gpio_def->addr, gpio_def->src_func);  
@@ -179,16 +196,127 @@ gpio_release (uint8 gpio_id)
     return GPIO_RESULT_SUCCESS;
 }
 
+
+
+/*
+ * gpio_id: GPIO_ID_NONE or absent - means all ports
+ * result: port value
+ */
+LOCAL void      ICACHE_FLASH_ATTR
+fn_gpio_get (sh_eval_ctx_t * evctx, sh_bc_arg_t * ret_arg, const arg_count_t arg_count, sh_bc_arg_type_t arg_type[],
+             sh_bc_arg_t * bc_args[])
+{
+#ifdef ARCH_XTENSA
+    uint32          gpio_id = GPIO_ID_NONE;
+    if (arg_count > 1)
+        gpio_id = bc_args[0]->arg.value;
+
+    if (gpio_id != GPIO_ID_NONE)
+        ret_arg->arg.value = GPIO_INPUT_GET (GPIO_ID_PIN (gpio_id));
+    else
+        ret_arg->arg.value = gpio_input_get ();
+#endif
+}
+
+/*
+ * gpio_id: 
+ * value:
+ * result: gpio_result_t
+ */
+LOCAL void      ICACHE_FLASH_ATTR
+fn_gpio_set (sh_eval_ctx_t * evctx, sh_bc_arg_t * ret_arg, const arg_count_t arg_count, sh_bc_arg_type_t arg_type[],
+             sh_bc_arg_t * bc_args[])
+{
+    if (arg_count != 2) {
+        ret_arg->arg.value = GPIO_RESULT_ERROR;
+        return;
+    }
+
+    uint32          gpio_id = bc_args[0]->arg.value;
+    gpio_result_t   res = gpio_common_check (gpio_id);
+    if (res != GPIO_RESULT_SUCCESS) {
+        ret_arg->arg.value = res;
+        return;
+    }
+
+#ifdef ARCH_XTENSA
+    GPIO_OUTPUT_SET (GPIO_ID_PIN (gpio_id), (bc_args[1]->arg.value != 0));
+#endif
+    ret_arg->arg.value = GPIO_RESULT_SUCCESS;
+}
+
+
+/*
+ * gpio_id: 
+ * function: 
+ * pullup:
+ * result: gpio_result_t
+ */
+LOCAL void      ICACHE_FLASH_ATTR
+fn_gpio_setup (sh_eval_ctx_t * evctx, sh_bc_arg_t * ret_arg, const arg_count_t arg_count, sh_bc_arg_type_t arg_type[],
+               sh_bc_arg_t * bc_args[])
+{
+    if (arg_count != 2) {
+        ret_arg->arg.value = GPIO_RESULT_ERROR;
+        return;
+    }
+
+    uint8           gpio_id = bc_args[0]->arg.value;
+    gpio_result_t   res = gpio_common_check (gpio_id);
+    if (res != GPIO_RESULT_SUCCESS) {
+        ret_arg->arg.value = res;
+        return;
+    }
+
+    uint32          addr = gpio_layout[gpio_id].addr;
+#ifdef ARCH_XTENSA
+    PIN_FUNC_SELECT (addr, bc_args[1]->arg.value);
+#endif
+    d_log_iprintf (GPIO_SERVICE_NAME, "set gpio_id:%u, addr:%p,func:%u", gpio_id, addr, bc_args[1]->arg.value);
+
+#ifdef ARCH_XTENSA
+    uint8           pullup = bc_args[2]->arg.value;
+    if (pullup != 0xFF) {
+        if (pullup) {
+            PIN_PULLUP_EN (addr);
+        }
+        else {
+            PIN_PULLUP_DIS (addr);
+        }
+    }
+#endif
+
+    ret_arg->arg.value = GPIO_RESULT_SUCCESS;
+}
+
 svcs_errcode_t  ICACHE_FLASH_ATTR
-gpio_on_start (imdb_hndlr_t hmdb, imdb_hndlr_t hdata, dtlv_ctx_t * conf)
+gpio_on_start (const svcs_resource_t * svcres, dtlv_ctx_t * conf)
 {
     if (sdata)
-	return SVCS_SERVICE_ERROR;
+        return SVCS_SERVICE_ERROR;
 
-    d_svcs_check_imdb_error (imdb_clsobj_insert (hdata, d_pointer_as (void *, &sdata), sizeof (gpio_data_t))
-	);
+    d_svcs_check_imdb_error (imdb_clsobj_insert
+                             (svcres->hmdb, svcres->hdata, d_pointer_as (void *, &sdata), sizeof (gpio_data_t))
+        );
     os_memset (sdata, 0, sizeof (gpio_data_t));
-    sdata->hdata = hdata;
+    sdata->svcres = svcres;
+
+    // register functions
+    sh_func_entry_t fn_entries[3] = {
+        {GPIO_SERVICE_ID, false, false, 0, "gpio_get", {fn_gpio_get}
+         }
+        ,
+        {GPIO_SERVICE_ID, false, false, 0, "gpio_set", {fn_gpio_set}
+         }
+        ,
+        {GPIO_SERVICE_ID, false, false, 0, "gpio_setup", {fn_gpio_setup}
+         }
+        ,
+    };
+
+    int             i;
+    for (i = 0; i < 3; i++)
+        sh_func_register (&fn_entries[i]);
 
     return SVCS_ERR_SUCCESS;
 }
@@ -197,9 +325,9 @@ svcs_errcode_t  ICACHE_FLASH_ATTR
 gpio_on_stop ()
 {
     if (!sdata)
-	return SVCS_NOT_RUN;
+        return SVCS_NOT_RUN;
 
-    d_svcs_check_imdb_error (imdb_clsobj_delete (sdata->hdata, sdata));
+    d_svcs_check_imdb_error (imdb_clsobj_delete (sdata->svcres->hmdb, sdata->svcres->hdata, sdata));
 
     sdata = NULL;
 
@@ -213,22 +341,26 @@ gpio_on_msg_info (dtlv_ctx_t * msg_out)
     d_svcs_check_imdb_error (dtlv_avp_encode_list (msg_out, 0, GPIO_GPIO_PORT, DTLV_TYPE_OBJECT, &gavp));
 
     int             i;
+#ifdef ARCH_XTENSA
     uint32          value = gpio_input_get ();
+#endif
     for (i = 0; i < GPIO_PIN_COUNT; i++) {
-	gpio_use_t     *gpio_use = &sdata->gpio[i];
+        gpio_use_t     *gpio_use = &sdata->gpio[i];
 
-	if (!gpio_layout[i].addr)
-	    continue;
+        if (!gpio_layout[i].addr)
+            continue;
 
-	dtlv_avp_t     *gavp_in;
-	d_svcs_check_dtlv_error (dtlv_avp_encode_grouping (msg_out, 0, GPIO_GPIO_PORT, &gavp_in) ||
-				 dtlv_avp_encode_uint8 (msg_out, COMMON_AVP_PEREPHERIAL_GPIO_ID, i) ||
-				 dtlv_avp_encode_uint8 (msg_out, GPIO_PORT_AVAILABLE, gpio_layout[i].available) ||
-				 dtlv_avp_encode_uint8 (msg_out, GPIO_PORT_INUSE, gpio_use->in_use) ||
-				 dtlv_avp_encode_uint8 (msg_out, GPIO_PORT_FUNCTION_DEFAULT, gpio_layout[i].func) ||
-				 dtlv_avp_encode_uint8 (msg_out, GPIO_PORT_FUNCTION_SET, gpio_use->func) ||
-				 dtlv_avp_encode_uint8 (msg_out, GPIO_PORT_VALUE, (value >> i) & BIT0) ||
-				 dtlv_avp_encode_group_done (msg_out, gavp_in));
+        dtlv_avp_t     *gavp_in;
+        d_svcs_check_dtlv_error (dtlv_avp_encode_grouping (msg_out, 0, GPIO_GPIO_PORT, &gavp_in) ||
+                                 dtlv_avp_encode_uint8 (msg_out, COMMON_AVP_PEREPHERIAL_GPIO_ID, i) ||
+                                 dtlv_avp_encode_uint8 (msg_out, GPIO_PORT_AVAILABLE, gpio_layout[i].available) ||
+                                 dtlv_avp_encode_uint8 (msg_out, GPIO_PORT_INUSE, gpio_use->in_use) ||
+                                 dtlv_avp_encode_uint8 (msg_out, GPIO_PORT_FUNCTION_DEFAULT, gpio_layout[i].func) ||
+                                 dtlv_avp_encode_uint8 (msg_out, GPIO_PORT_FUNCTION_SET, gpio_use->func) ||
+#ifdef ARCH_XTENSA
+                                 dtlv_avp_encode_uint8 (msg_out, GPIO_PORT_VALUE, (value >> i) & BIT0) ||
+#endif
+                                 dtlv_avp_encode_group_done (msg_out, gavp_in));
     }
 
     d_svcs_check_imdb_error (dtlv_avp_encode_group_done (msg_out, gavp));
@@ -240,61 +372,77 @@ svcs_errcode_t  ICACHE_FLASH_ATTR
 gpio_on_msg_output_set (dtlv_ctx_t * msg_in, dtlv_ctx_t * msg_out)
 {
     if (!msg_in)
-	return SVCS_INVALID_MESSAGE;
+        return SVCS_INVALID_MESSAGE;
 
-    dtlv_davp_t     davp;
+#ifdef ARCH_XTENSA
     uint8           gpio_id = (uint8) GPIO_ID_NONE;
     uint16          pulse_us = 0;
     uint8           value = 0xFF;
-    while (dtlv_avp_decode (msg_in, &davp) == DTLV_ERR_SUCCESS) {
-	if (!dtlv_check_namespace (&davp, GPIO_SERVICE_ID))
-	    break;
+    uint8           pullup = 0xFF;
+    uint8           func = 0xFF;
 
-	switch (davp.havpd.nscode.comp.code) {
-        case COMMON_AVP_PEREPHERIAL_GPIO_ID:
-            dtlv_avp_get_uint8 (&davp, &gpio_id);
-            break;
-        case GPIO_PORT_PULSE_US:
-            dtlv_avp_get_uint16 (&davp, &pulse_us);
-            break;
-        case GPIO_PORT_VALUE:
-            dtlv_avp_get_uint8 (&davp, &value);
-            break;
-        }
-    }
+    dtlv_seq_decode_begin (msg_in, GPIO_SERVICE_ID);
+    dtlv_seq_decode_uint8 (COMMON_AVP_PEREPHERIAL_GPIO_ID, &gpio_id);
+    dtlv_seq_decode_uint16 (GPIO_PORT_PULSE_US, &pulse_us);
+    dtlv_seq_decode_uint8 (GPIO_PORT_VALUE, &value);
+    dtlv_seq_decode_uint8 (GPIO_PORT_FUNCTION_SET, &func);
+    dtlv_seq_decode_uint8 (GPIO_PORT_PULLUP, &pullup);
+    dtlv_seq_decode_end (msg_in);
 
     if (gpio_id == GPIO_ID_NONE)
-	return SVCS_INVALID_MESSAGE;
+        return SVCS_INVALID_MESSAGE;
+
+    gpio_result_t   res = gpio_common_check (gpio_id);
+    if (res != GPIO_RESULT_SUCCESS) {
+        encode_service_result_ext (msg_out, res, NULL);
+        return SVCS_ERR_SUCCESS;
+    }
+
+    uint8           gpio_pin = GPIO_ID_PIN (gpio_id);
 
     if (value == 0xFF) {
-        GPIO_DIS_OUTPUT (GPIO_ID_PIN (gpio_id));
+        GPIO_DIS_OUTPUT (gpio_pin);
     }
     else {
-        GPIO_OUTPUT_SET (GPIO_ID_PIN (gpio_id), (value != 0) );
+        uint32          addr = gpio_layout[gpio_id].addr;
+        if (func != 0xFF) {
+            PIN_FUNC_SELECT (addr, func);
+            d_log_iprintf (GPIO_SERVICE_NAME, "set gpio_id:%u, addr:%p,func:%u", gpio_id, addr, func);
+        }
+        if (pullup != 0xFF) {
+            if (pullup) {
+                PIN_PULLUP_EN (addr);
+            }
+            else {
+                PIN_PULLUP_DIS (addr);
+            }
+        }
+
+        GPIO_OUTPUT_SET (gpio_pin, (value != 0));
         if (pulse_us > 0) {
             os_delay_us (pulse_us);
-            GPIO_OUTPUT_SET (GPIO_ID_PIN (gpio_id), (value == 0));
+            GPIO_OUTPUT_SET (gpio_pin, (value == 0));
         }
     }
-
+#endif
 
     return SVCS_ERR_SUCCESS;
 }
 
 svcs_errcode_t  ICACHE_FLASH_ATTR
 gpio_on_message (service_ident_t orig_id, service_msgtype_t msgtype, void *ctxdata, dtlv_ctx_t * msg_in,
-		 dtlv_ctx_t * msg_out)
+                 dtlv_ctx_t * msg_out)
 {
     svcs_errcode_t  res = SVCS_ERR_SUCCESS;
     switch (msgtype) {
     case SVCS_MSGTYPE_INFO:
-	res = gpio_on_msg_info (msg_out);
-	break;
+        res = gpio_on_msg_info (msg_out);
+        break;
     case GPIO_MSGTYPE_OUTPUT_SET:
-	res = gpio_on_msg_output_set (msg_in, msg_out);
-	break;
+        res = gpio_on_msg_output_set (msg_in, msg_out);
+        break;
     default:
-	res = SVCS_MSGTYPE_INVALID;
+        res = SVCS_MSGTYPE_INVALID;
     }
 
     return res;

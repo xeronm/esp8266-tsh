@@ -35,10 +35,10 @@ crc8 (unsigned char *buf, size_t len)
     unsigned int    i;
 
     while (len--) {
-	crc ^= *buf++;
+        crc ^= *buf++;
 
-	for (i = 0; i < 8; i++)
-	    crc = crc & 0x80 ? (crc << 1) ^ 0xD5 : crc << 1;
+        for (i = 0; i < 8; i++)
+            crc = crc & 0x80 ? (crc << 1) ^ 0xD5 : crc << 1;
     }
 
     return crc;
@@ -57,10 +57,10 @@ crc16 (unsigned char *buf, size_t len)
     unsigned char   i;
 
     while (len--) {
-	crc ^= *buf++ << 8;
+        crc ^= *buf++ << 8;
 
-	for (i = 0; i < 8; i++)
-	    crc = crc & 0x8000 ? (crc << 1) ^ 0x1021 : crc << 1;
+        for (i = 0; i < 8; i++)
+            crc = crc & 0x8000 ? (crc << 1) ^ 0x1021 : crc << 1;
     }
     return crc;
 }

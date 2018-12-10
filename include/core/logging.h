@@ -1,11 +1,24 @@
-/* Copyright (c) 2018 by Denis Muratov <xeronm@gmail.com>. All rights reserved
-
-   FileName: logging.h
-   Source: https://dtec.pro/gitbucket/git/esp8266/esp8266_lsh.git
-
-   Description: Logging Facility
-
-*/
+/* 
+ * ESP8266 Things Shell Logging
+ * Copyright (c) 2018 Denis Muratov <xeronm@gmail.com>.
+ * https://dtec.pro/gitbucket/git/esp8266/esp8266-tsh.git
+ *
+ * This file is part of ESP8266 Things Shell.
+ *
+ * ESP8266 Things Shell is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * ESP8266 Things Shell is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with ESP8266 Things Shell.  If not, see <https://www.gnu.org/licenses/>.
+ *
+ */
 
 #ifndef _LOGGING_H_
 #define _LOGGING_H_ 1
@@ -14,7 +27,7 @@
 
 #define	MAIN_SERVICE_NAME	"main"
 
-typedef enum PACKED log_severity_s {
+typedef enum log_severity_s {
     LOG_NONE = 0,
     LOG_CRITICAL = 1,
     LOG_ERROR = 2,
@@ -28,13 +41,13 @@ void            log_printf (const log_severity_t severity, const char *svc, cons
 
 // used for buffer logging, writes buffer as hex dump, writes timestamps and service_name
 void            log_bprintf (const log_severity_t severity, const char *svc, const char *buf, size_t len,
-			     const char *fmt, ...);
+                             const char *fmt, ...);
 
 void            log_severity_set (log_severity_t severity);
 log_severity_t  log_severity_get (void);
 
 char           *get_last_error (void);
-void           reset_last_error (void);
+void            reset_last_error (void);
 
 #ifdef LOGGING_DEBUG
 #define d_log_dprintf(svc, fmt, ...)			log_printf(LOG_DEBUG, svc, fmt, ##__VA_ARGS__)

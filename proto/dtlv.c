@@ -36,11 +36,11 @@
 
 #define d_check_dtlv_error(ret)	if ((ret) != DTLV_ERR_SUCCESS) { return (ret); }
 
-#define AVP_LENGTH_MASK			0x1FFF	// 13 bytes
-#define AVP_NSID_MASK			0xFC00	// 6 bytes
-#define AVP_CODE_MASK			0x03FF	// 10 bytes
-#define AVP_FLAG_LIST			0x2000	// AVP is list of ...
-#define AVP_FLAG_DATATYPE		0xC000	// 2-bytes datatype dtlv_datatype_t
+#define AVP_LENGTH_MASK			0x1FFF  // 13 bytes
+#define AVP_NSID_MASK			0xFC00  // 6 bytes
+#define AVP_CODE_MASK			0x03FF  // 10 bytes
+#define AVP_FLAG_LIST			0x2000  // AVP is list of ...
+#define AVP_FLAG_DATATYPE		0xC000  // 2-bytes datatype dtlv_datatype_t
 
 #define d_havp_encode(havpd, havpe)	\
 	{	\
@@ -78,7 +78,7 @@ dtlv_ctx_add_length (dtlv_ctx_t * ctx, dtlv_size_t addlen)
 {
     dtlv_size_t     align_len = d_align (addlen);
     if (align_len > addlen)
-	os_memset (d_pointer_add (char, ctx->buf, ctx->datalen + addlen), 0xFF, align_len - addlen);
+        os_memset (d_pointer_add (char, ctx->buf, ctx->datalen + addlen), 0xFF, align_len - addlen);
 
     ctx->datalen += align_len;
 }
@@ -137,13 +137,13 @@ dtlv_ctx_reset_decode (dtlv_ctx_t * ctx)
 */
 dtlv_errcode_t  ICACHE_FLASH_ATTR
 dtlv_avp_encode (dtlv_ctx_t * ctx,
-		 const namespaceid_t namespace_id,
-		 const avp_code_t avp_code,
-		 const dtlv_datatype_t data_type, const dtlv_size_t data_length, const bool is_list, dtlv_avp_t ** avp)
+                 const namespaceid_t namespace_id,
+                 const avp_code_t avp_code,
+                 const dtlv_datatype_t data_type, const dtlv_size_t data_length, const bool is_list, dtlv_avp_t ** avp)
 {
     dtlv_size_t     length = d_avp_full_length (data_length);
     if (ctx->datalen + length > ctx->buflen)
-	return DTLV_BUFFER_OVERFLOW;
+        return DTLV_BUFFER_OVERFLOW;
 
     dtlv_havpd_t    havpd;
     havpd.length = length;
@@ -154,16 +154,16 @@ dtlv_avp_encode (dtlv_ctx_t * ctx,
 
     // if parent AVP is list check code & type
     if (ctx->depth >= 2) {
-	dtlv_havpd_t   *parent = &ctx->path[ctx->depth - 2];
-	if ((parent->is_list)
-	    && ((parent->nscode.nscode != havpd.nscode.nscode) || (parent->datatype != havpd.datatype)))
-	    return DTLV_PATH_ERROR;
+        dtlv_havpd_t   *parent = &ctx->path[ctx->depth - 2];
+        if ((parent->is_list)
+            && ((parent->nscode.nscode != havpd.nscode.nscode) || (parent->datatype != havpd.datatype)))
+            return DTLV_PATH_ERROR;
     }
 
     if ((data_type == DTLV_TYPE_OBJECT) || (is_list)) {
-	if (ctx->depth >= DTLV_MAX_PATH_LENGTH - 1)
-	    return DTLV_PATH_ERROR;
-	d_ctxpath_push (ctx, &havpd);
+        if (ctx->depth >= DTLV_MAX_PATH_LENGTH - 1)
+            return DTLV_PATH_ERROR;
+        d_ctxpath_push (ctx, &havpd);
     }
 
     *avp = d_pointer_add (dtlv_avp_t, ctx->buf, ctx->datalen);
@@ -181,13 +181,13 @@ dtlv_avp_encode_group_done (dtlv_ctx_t * ctx, dtlv_avp_t * avp)
     d_havp_decode (&avp->havpe, &havpd);
 
     if ((ctx->depth < 2) && (ctx->path[ctx->depth - 2].nscode.nscode != havpd.nscode.nscode))
-	return DTLV_PATH_ERROR;
+        return DTLV_PATH_ERROR;
     if (!havpd.is_list && (havpd.datatype != DTLV_TYPE_OBJECT))
-	return DTLV_AVP_NOT_GROUPING;
+        return DTLV_AVP_NOT_GROUPING;
 
     havpd.length = ctx->datalen - d_pointer_diff (avp, ctx->buf);
     if (havpd.length < sizeof (dtlv_havpe_t))
-	return DTLV_AVP_INVALID_LEN;	// length less than header, internal error
+        return DTLV_AVP_INVALID_LEN;    // length less than header, internal error
 
     d_ctxpath_trim (ctx);
 
@@ -252,7 +252,7 @@ dtlv_errcode_t  ICACHE_FLASH_ATTR
 dtlv_avp_encode_nchar (dtlv_ctx_t * ctx, const avp_code_t avp_code, const size_t maxlen, const char *data)
 {
     dtlv_avp_t     *avp;
-    size_t          length = MIN (maxlen, os_strnlen (data, maxlen));
+    size_t          length = os_strnlen (data, maxlen);
     dtlv_errcode_t  ret = dtlv_avp_encode (ctx, 0, avp_code, DTLV_TYPE_CHAR, length + 1, false, &avp);
     d_check_dtlv_error (ret);
     os_memcpy (avp->data, data, length);
@@ -261,10 +261,10 @@ dtlv_avp_encode_nchar (dtlv_ctx_t * ctx, const avp_code_t avp_code, const size_t
 }
 
 dtlv_errcode_t  ICACHE_FLASH_ATTR
-dtlv_raw_encode (dtlv_ctx_t * ctx, char * buf, dtlv_size_t datalen)
+dtlv_raw_encode (dtlv_ctx_t * ctx, char *buf, dtlv_size_t datalen)
 {
     if (ctx->datalen + datalen > ctx->buflen)
-	return DTLV_BUFFER_OVERFLOW;
+        return DTLV_BUFFER_OVERFLOW;
     os_memcpy ((ctx->buf + ctx->datalen), buf, datalen);
     ctx->datalen += datalen;
 
@@ -276,20 +276,20 @@ dtlv_errcode_t  ICACHE_FLASH_ATTR
 dtlv_avp_decode (dtlv_ctx_t * ctx, dtlv_davp_t * davp)
 {
     if (ctx->position == ctx->datalen)
-	return DTLV_END_OF_DATA;
+        return DTLV_END_OF_DATA;
 
     if (ctx->position + sizeof (dtlv_havpe_t) > ctx->datalen)
-	return DTLV_AVP_OUT_OF_BOUNDS;
+        return DTLV_AVP_OUT_OF_BOUNDS;
 
     os_memset (davp, 0, sizeof (dtlv_davp_t));
     davp->avp = d_pointer_add (dtlv_avp_t, ctx->buf, ctx->position);
     d_havp_decode (&davp->avp->havpe, &davp->havpd);
 
     if (davp->havpd.length < sizeof (dtlv_havpe_t))
-	return DTLV_AVP_INVALID_LEN;
+        return DTLV_AVP_INVALID_LEN;
 
     if (ctx->position + davp->havpd.length > ctx->datalen)
-	return DTLV_AVP_OUT_OF_BOUNDS;
+        return DTLV_AVP_OUT_OF_BOUNDS;
 
     ctx->position += d_align (davp->havpd.length);
 
@@ -300,29 +300,29 @@ typedef struct dtlv_decode_bypath_s {
     dtlv_davp_t    *avp_array;
     uint16          array_len;
     uint16          total_count;
-    bool            limit_count;	// exit when array_len is reached by total_count
+    bool            limit_count;        // exit when array_len is reached by total_count
 } dtlv_decode_bypath_t;
 
 LOCAL dtlv_errcode_t ICACHE_FLASH_ATTR
 forall_avp_decode_bypath (dtlv_davp_t * avp, const dtlv_ctx_t * ctx, const void *data, const bool group_exit)
 {
     if (group_exit)
-	return DTLV_ERR_SUCCESS;
+        return DTLV_ERR_SUCCESS;
 
     dtlv_decode_bypath_t *data2 = d_pointer_as (dtlv_decode_bypath_t, data);
     data2->total_count++;
     if (data2->total_count <= data2->array_len) {
-	os_memcpy (data2->avp_array, avp, sizeof (dtlv_davp_t));
-	data2->avp_array = d_pointer_add (dtlv_davp_t, data2->avp_array, sizeof (dtlv_davp_t));
+        os_memcpy (data2->avp_array, avp, sizeof (dtlv_davp_t));
+        data2->avp_array = d_pointer_add (dtlv_davp_t, data2->avp_array, sizeof (dtlv_davp_t));
     }
     if ((data2->limit_count) && (data2->total_count == data2->array_len))
-	return DTLV_FORALL_BREAK;
+        return DTLV_FORALL_BREAK;
     return DTLV_FORALL_STEP_OVER;
 }
 
 dtlv_errcode_t  ICACHE_FLASH_ATTR
 dtlv_avp_decode_bypath (dtlv_ctx_t * ctx, dtlv_nscode_t * path, dtlv_davp_t avp_array[], uint16 array_len,
-			bool limit_count, uint16 * total_count)
+                        bool limit_count, uint16 * total_count)
 {
     dtlv_decode_bypath_t data;
     os_memset (&data, 0, sizeof (dtlv_decode_bypath_t));
@@ -343,72 +343,72 @@ dtlv_decode_forall (dtlv_ctx_t * ctx, const void *data, dtlv_nscode_t * path, dt
 
     dtlv_nscode_t  *path_next = NULL;
     if (path && path->nscode) {
-	path_next = d_pointer_add (dtlv_nscode_t, path, sizeof (dtlv_nscode_t));
-	if (!path_next->nscode)
-	    path_next = NULL;
+        path_next = d_pointer_add (dtlv_nscode_t, path, sizeof (dtlv_nscode_t));
+        if (!path_next->nscode)
+            path_next = NULL;
     }
 
     dtlv_errcode_t  ret = DTLV_ERR_SUCCESS;
     while (ret == DTLV_ERR_SUCCESS) {
-	ret = dtlv_avp_decode (ctx, &davp);
-	if (ret != DTLV_ERR_SUCCESS)
-	    break;
+        ret = dtlv_avp_decode (ctx, &davp);
+        if (ret != DTLV_ERR_SUCCESS)
+            break;
 
-	if (path) {
-	    if ((path->nscode != davp.havpd.nscode.nscode) &&
-		((path->comp.namespace_id) || (path->comp.code != davp.havpd.nscode.comp.code)))
-		continue;
-	}
+        if (path) {
+            if ((path->nscode != davp.havpd.nscode.nscode) &&
+                ((path->comp.namespace_id) || (path->comp.code != davp.havpd.nscode.comp.code)))
+                continue;
+        }
 
-	dtlv_errcode_t  ret2 = DTLV_ERR_SUCCESS;
-	if (!path_next) {
-	    ret2 = forall_func (&davp, ctx, data, false);
-	    switch (ret2) {
-	    case DTLV_ERR_SUCCESS:
-	    case DTLV_FORALL_STEP_OVER:
-		break;
-	    case DTLV_FORALL_BREAK:
-		return (ctx->depth > 1) ? DTLV_FORALL_BREAK : DTLV_ERR_SUCCESS;
-	    default:
-		return DTLV_FORALL_FUNC;
-	    }
-	}
-	if ((davp.havpd.is_list || davp.havpd.datatype == DTLV_TYPE_OBJECT) && ret2 != DTLV_FORALL_STEP_OVER
-	    && davp.havpd.length > sizeof (dtlv_havpe_t)) {
-	    dtlv_size_t     datalen = ctx->datalen;
-	    dtlv_size_t     pos = ctx->position;
+        dtlv_errcode_t  ret2 = DTLV_ERR_SUCCESS;
+        if (!path_next) {
+            ret2 = forall_func (&davp, ctx, data, false);
+            switch (ret2) {
+            case DTLV_ERR_SUCCESS:
+            case DTLV_FORALL_STEP_OVER:
+                break;
+            case DTLV_FORALL_BREAK:
+                return (ctx->depth > 1) ? DTLV_FORALL_BREAK : DTLV_ERR_SUCCESS;
+            default:
+                return DTLV_FORALL_FUNC;
+            }
+        }
+        if ((davp.havpd.is_list || davp.havpd.datatype == DTLV_TYPE_OBJECT) && ret2 != DTLV_FORALL_STEP_OVER
+            && davp.havpd.length > sizeof (dtlv_havpe_t)) {
+            dtlv_size_t     datalen = ctx->datalen;
+            dtlv_size_t     pos = ctx->position;
 
-	    d_ctxpath_push (ctx, &davp.havpd);
+            d_ctxpath_push (ctx, &davp.havpd);
 
-	    ctx->position = d_pointer_diff (davp.avp, ctx->buf) + sizeof (dtlv_havpe_t);
-	    ctx->datalen = pos;
-	    ret = dtlv_decode_forall (ctx, data, path_next, forall_func);
-	    // second callback for same avp
-	    if (!path_next) {
-		ret2 = forall_func (&davp, ctx, data, true);
-		switch (ret2) {
-		case DTLV_ERR_SUCCESS:
-		    break;
-		case DTLV_FORALL_BREAK:
-		    return (ctx->depth > 1) ? DTLV_FORALL_BREAK : DTLV_ERR_SUCCESS;
-		default:
-		    return DTLV_FORALL_FUNC;
-		}
-	    }
+            ctx->position = d_pointer_diff (davp.avp, ctx->buf) + sizeof (dtlv_havpe_t);
+            ctx->datalen = pos;
+            ret = dtlv_decode_forall (ctx, data, path_next, forall_func);
+            // second callback for same avp
+            if (!path_next) {
+                ret2 = forall_func (&davp, ctx, data, true);
+                switch (ret2) {
+                case DTLV_ERR_SUCCESS:
+                    break;
+                case DTLV_FORALL_BREAK:
+                    return (ctx->depth > 1) ? DTLV_FORALL_BREAK : DTLV_ERR_SUCCESS;
+                default:
+                    return DTLV_FORALL_FUNC;
+                }
+            }
 
-	    // restore context
-	    d_ctxpath_trim (ctx);
+            // restore context
+            d_ctxpath_trim (ctx);
 
-	    ctx->datalen = datalen;
-	    ctx->position = pos;
-	}
+            ctx->datalen = datalen;
+            ctx->position = pos;
+        }
     }
 
     if (ret == DTLV_END_OF_DATA) {
-	return DTLV_ERR_SUCCESS;
+        return DTLV_ERR_SUCCESS;
     }
     else {
-	return ret;
+        return ret;
     }
 }
 
@@ -425,69 +425,69 @@ forall_avp_to_json (dtlv_davp_t * davp, const dtlv_ctx_t * ctx, const void *data
     dtlv_tojson_t  *data2 = d_pointer_as (dtlv_tojson_t, data);
 
     if (group_exit) {
-	*(data2->buf) = (davp->havpd.is_list ? ']' : '}');
-	data2->buf++;
-	data2->separate = true;
-	return DTLV_ERR_SUCCESS;
+        *(data2->buf) = (davp->havpd.is_list ? ']' : '}');
+        data2->buf++;
+        data2->separate = true;
+        return DTLV_ERR_SUCCESS;
     }
 
     if (data2->separate) {
-	*(data2->buf) = ',';
-	data2->buf++;
+        *(data2->buf) = ',';
+        data2->buf++;
     }
     else {
-	data2->separate = true;
+        data2->separate = true;
     }
 
     if ((ctx->depth < 2) || (!ctx->path[ctx->depth - 2].is_list)) {
-	// if parent not list
-	if (davp->havpd.nscode.comp.namespace_id) {
-	    data2->buf +=
-		os_sprintf (data2->buf, "\"%u.%u\":", davp->havpd.nscode.comp.namespace_id,
-			    davp->havpd.nscode.comp.code);
-	}
-	else {
-	    data2->buf += os_sprintf (data2->buf, "\"%u\":", davp->havpd.nscode.comp.code);
-	}
+        // if parent not list
+        if (davp->havpd.nscode.comp.namespace_id) {
+            data2->buf +=
+                os_sprintf (data2->buf, "\"%u.%u\":", davp->havpd.nscode.comp.namespace_id,
+                            davp->havpd.nscode.comp.code);
+        }
+        else {
+            data2->buf += os_sprintf (data2->buf, "\"%u\":", davp->havpd.nscode.comp.code);
+        }
     }
 
     size_t          data_length = d_avp_data_length (davp->havpd.length);
     if ((davp->havpd.is_list) || (davp->havpd.datatype == DTLV_TYPE_OBJECT)) {
-	*(data2->buf) = (davp->havpd.is_list ? '[' : '{');
-	data2->buf++;
-	if (data_length == 0) {
-	    *(data2->buf) = (davp->havpd.is_list ? ']' : '}');
-	    data2->buf++;
-	}
-	else {
-	    data2->separate = false;
-	}
+        *(data2->buf) = (davp->havpd.is_list ? '[' : '{');
+        data2->buf++;
+        if (data_length == 0) {
+            *(data2->buf) = (davp->havpd.is_list ? ']' : '}');
+            data2->buf++;
+        }
+        else {
+            data2->separate = false;
+        }
     }
     else if (data_length > 0) {
-	switch (davp->havpd.datatype) {
-	case DTLV_TYPE_INTEGER:
-	    {
-		uint32          intval;
-		dtlv_avp_get_uint (davp, &intval);
-		data2->buf += os_sprintf (data2->buf, "%u", intval);
-		break;
-	    }
-	case DTLV_TYPE_CHAR:
-	    data2->buf += os_sprintf (data2->buf, "\"%s\"", davp->avp->data);
-	    break;
-	case DTLV_TYPE_OCTETS:
-	    *(data2->buf) = '"';
-	    data2->buf++;
-	    data2->buf += buf2hex (data2->buf, davp->avp->data, data_length);
-	    *(data2->buf) = '"';
-	    data2->buf++;
-	    break;
-	default:
-	    data2->buf += os_sprintf (data2->buf, "null");
-	}
+        switch (davp->havpd.datatype) {
+        case DTLV_TYPE_INTEGER:
+            {
+                uint32          intval;
+                dtlv_avp_get_uint (davp, &intval);
+                data2->buf += os_sprintf (data2->buf, "%u", intval);
+                break;
+            }
+        case DTLV_TYPE_CHAR:
+            data2->buf += os_sprintf (data2->buf, "\"%s\"", davp->avp->data);
+            break;
+        case DTLV_TYPE_OCTETS:
+            *(data2->buf) = '"';
+            data2->buf++;
+            data2->buf += buf2hex (data2->buf, davp->avp->data, data_length);
+            *(data2->buf) = '"';
+            data2->buf++;
+            break;
+        default:
+            data2->buf += os_sprintf (data2->buf, "null");
+        }
     }
     else
-	data2->buf += os_sprintf (data2->buf, "null");
+        data2->buf += os_sprintf (data2->buf, "null");
 
     return DTLV_ERR_SUCCESS;
 }
@@ -512,7 +512,7 @@ dtlv_errcode_t  ICACHE_FLASH_ATTR
 dtlv_avp_get_uint8 (dtlv_davp_t * davp, uint8 * data)
 {
     if (davp->havpd.length != d_avp_full_length (sizeof (uint8)))
-	return DTLV_AVP_INVALID_LEN;
+        return DTLV_AVP_INVALID_LEN;
 
     *data = *(uint8 *) davp->avp->data;
     return DTLV_ERR_SUCCESS;
@@ -522,7 +522,7 @@ dtlv_errcode_t  ICACHE_FLASH_ATTR
 dtlv_avp_get_uint16 (dtlv_davp_t * davp, uint16 * data)
 {
     if (davp->havpd.length != d_avp_full_length (sizeof (uint16)))
-	return DTLV_AVP_INVALID_LEN;
+        return DTLV_AVP_INVALID_LEN;
 
     *data = (uint16) htobe16 (*(uint16 *) davp->avp->data);
     return DTLV_ERR_SUCCESS;
@@ -532,7 +532,7 @@ dtlv_errcode_t  ICACHE_FLASH_ATTR
 dtlv_avp_get_uint32 (dtlv_davp_t * davp, uint32 * data)
 {
     if (davp->havpd.length != d_avp_full_length (sizeof (uint32)))
-	return DTLV_AVP_INVALID_LEN;
+        return DTLV_AVP_INVALID_LEN;
 
     *data = (uint32) htobe32 (*(uint32 *) davp->avp->data);
     return DTLV_ERR_SUCCESS;
@@ -543,16 +543,16 @@ dtlv_avp_get_uint (dtlv_davp_t * davp, uint32 * data)
 {
     switch (davp->havpd.length) {
     case d_avp_full_length (sizeof (uint8)):
-	*data = (uint8) (*(uint8 *) davp->avp->data);
-	break;
+        *data = (uint8) (*(uint8 *) davp->avp->data);
+        break;
     case d_avp_full_length (sizeof (uint16)):
-	*data = (uint16) htobe16 (*(uint16 *) davp->avp->data);
-	break;
+        *data = (uint16) htobe16 (*(uint16 *) davp->avp->data);
+        break;
     case d_avp_full_length (sizeof (uint32)):
-	*data = (uint32) htobe32 (*(uint32 *) davp->avp->data);
-	break;
+        *data = (uint32) htobe32 (*(uint32 *) davp->avp->data);
+        break;
     default:
-	return DTLV_AVP_INVALID_LEN;
+        return DTLV_AVP_INVALID_LEN;
     }
     return DTLV_ERR_SUCCESS;
 }
@@ -561,7 +561,7 @@ dtlv_errcode_t  ICACHE_FLASH_ATTR
 dtlv_avp_get_char (dtlv_davp_t * davp, char *data)
 {
     if (davp->havpd.datatype != DTLV_TYPE_CHAR)
-	return DTLV_AVP_INV_TYPE;
+        return DTLV_AVP_INV_TYPE;
 
     os_memcpy (data, davp->avp->data, d_avp_data_length (davp->havpd.length) + 1);
     return DTLV_ERR_SUCCESS;

@@ -73,21 +73,21 @@ key_init (struct keys_param *keys)
     ETS_GPIO_INTR_DISABLE ();
 
     for (i = 0; i < keys->key_num; i++) {
-	keys->single_key[i]->key_level = 1;
+        keys->single_key[i]->key_level = 1;
 
-	PIN_FUNC_SELECT (keys->single_key[i]->gpio_name, keys->single_key[i]->gpio_func);
+        PIN_FUNC_SELECT (keys->single_key[i]->gpio_name, keys->single_key[i]->gpio_func);
 
-	gpio_output_set (0, 0, 0, GPIO_ID_PIN (keys->single_key[i]->gpio_id));
+        gpio_output_set (0, 0, 0, GPIO_ID_PIN (keys->single_key[i]->gpio_id));
 
-	gpio_register_set (GPIO_PIN_ADDR (keys->single_key[i]->gpio_id), GPIO_PIN_INT_TYPE_SET (GPIO_PIN_INTR_DISABLE)
-			   | GPIO_PIN_PAD_DRIVER_SET (GPIO_PAD_DRIVER_DISABLE)
-			   | GPIO_PIN_SOURCE_SET (GPIO_AS_PIN_SOURCE));
+        gpio_register_set (GPIO_PIN_ADDR (keys->single_key[i]->gpio_id), GPIO_PIN_INT_TYPE_SET (GPIO_PIN_INTR_DISABLE)
+                           | GPIO_PIN_PAD_DRIVER_SET (GPIO_PAD_DRIVER_DISABLE)
+                           | GPIO_PIN_SOURCE_SET (GPIO_AS_PIN_SOURCE));
 
-	//clear gpio14 status
-	GPIO_REG_WRITE (GPIO_STATUS_W1TC_ADDRESS, BIT (keys->single_key[i]->gpio_id));
+        //clear gpio14 status
+        GPIO_REG_WRITE (GPIO_STATUS_W1TC_ADDRESS, BIT (keys->single_key[i]->gpio_id));
 
-	//enable interrupt
-	gpio_pin_intr_state_set (GPIO_ID_PIN (keys->single_key[i]->gpio_id), GPIO_PIN_INTR_NEGEDGE);
+        //enable interrupt
+        gpio_pin_intr_state_set (GPIO_ID_PIN (keys->single_key[i]->gpio_id), GPIO_PIN_INTR_NEGEDGE);
     }
 
     ETS_GPIO_INTR_ENABLE ();
@@ -106,9 +106,9 @@ key_5s_cb (struct single_key_param *single_key)
 
     // low, then restart
     if (0 == GPIO_INPUT_GET (GPIO_ID_PIN (single_key->gpio_id))) {
-	if (single_key->long_press) {
-	    single_key->long_press ();
-	}
+        if (single_key->long_press) {
+            single_key->long_press ();
+        }
     }
 }
 
@@ -125,16 +125,16 @@ key_50ms_cb (struct single_key_param *single_key)
 
     // high, then key is up
     if (1 == GPIO_INPUT_GET (GPIO_ID_PIN (single_key->gpio_id))) {
-	os_timer_disarm (&single_key->key_5s);
-	single_key->key_level = 1;
-	gpio_pin_intr_state_set (GPIO_ID_PIN (single_key->gpio_id), GPIO_PIN_INTR_NEGEDGE);
+        os_timer_disarm (&single_key->key_5s);
+        single_key->key_level = 1;
+        gpio_pin_intr_state_set (GPIO_ID_PIN (single_key->gpio_id), GPIO_PIN_INTR_NEGEDGE);
 
-	if (single_key->short_press) {
-	    single_key->short_press ();
-	}
+        if (single_key->short_press) {
+            single_key->short_press ();
+        }
     }
     else {
-	gpio_pin_intr_state_set (GPIO_ID_PIN (single_key->gpio_id), GPIO_PIN_INTR_POSEDGE);
+        gpio_pin_intr_state_set (GPIO_ID_PIN (single_key->gpio_id), GPIO_PIN_INTR_POSEDGE);
     }
 }
 
@@ -152,27 +152,27 @@ key_intr_handler (void *arg)
     struct keys_param *keys = (struct keys_param *) arg;
 
     for (i = 0; i < keys->key_num; i++) {
-	if (gpio_status & BIT (keys->single_key[i]->gpio_id)) {
-	    //disable interrupt
-	    gpio_pin_intr_state_set (GPIO_ID_PIN (keys->single_key[i]->gpio_id), GPIO_PIN_INTR_DISABLE);
+        if (gpio_status & BIT (keys->single_key[i]->gpio_id)) {
+            //disable interrupt
+            gpio_pin_intr_state_set (GPIO_ID_PIN (keys->single_key[i]->gpio_id), GPIO_PIN_INTR_DISABLE);
 
-	    //clear interrupt status
-	    GPIO_REG_WRITE (GPIO_STATUS_W1TC_ADDRESS, gpio_status & BIT (keys->single_key[i]->gpio_id));
+            //clear interrupt status
+            GPIO_REG_WRITE (GPIO_STATUS_W1TC_ADDRESS, gpio_status & BIT (keys->single_key[i]->gpio_id));
 
-	    if (keys->single_key[i]->key_level == 1) {
-		// 5s, restart & enter softap mode
-		os_timer_disarm (&keys->single_key[i]->key_5s);
-		os_timer_setfn (&keys->single_key[i]->key_5s, (os_timer_func_t *) key_5s_cb, keys->single_key[i]);
-		os_timer_arm (&keys->single_key[i]->key_5s, 5000, 0);
-		keys->single_key[i]->key_level = 0;
-		gpio_pin_intr_state_set (GPIO_ID_PIN (keys->single_key[i]->gpio_id), GPIO_PIN_INTR_POSEDGE);
-	    }
-	    else {
-		// 50ms, check if this is a real key up
-		os_timer_disarm (&keys->single_key[i]->key_50ms);
-		os_timer_setfn (&keys->single_key[i]->key_50ms, (os_timer_func_t *) key_50ms_cb, keys->single_key[i]);
-		os_timer_arm (&keys->single_key[i]->key_50ms, 50, 0);
-	    }
-	}
+            if (keys->single_key[i]->key_level == 1) {
+                // 5s, restart & enter softap mode
+                os_timer_disarm (&keys->single_key[i]->key_5s);
+                os_timer_setfn (&keys->single_key[i]->key_5s, (os_timer_func_t *) key_5s_cb, keys->single_key[i]);
+                os_timer_arm (&keys->single_key[i]->key_5s, 5000, 0);
+                keys->single_key[i]->key_level = 0;
+                gpio_pin_intr_state_set (GPIO_ID_PIN (keys->single_key[i]->gpio_id), GPIO_PIN_INTR_POSEDGE);
+            }
+            else {
+                // 50ms, check if this is a real key up
+                os_timer_disarm (&keys->single_key[i]->key_50ms);
+                os_timer_setfn (&keys->single_key[i]->key_50ms, (os_timer_func_t *) key_50ms_cb, keys->single_key[i]);
+                os_timer_arm (&keys->single_key[i]->key_50ms, 50, 0);
+            }
+        }
     }
 }

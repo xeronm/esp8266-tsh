@@ -44,7 +44,7 @@ INCLUDES_EXTRA =
 CFLAGS = $(addprefix -I,$(INCLUDES)) \
 	-I$(SDK_DIR)/include \
 	$(addprefix -I,$(INCLUDES_EXTRA)) \
-	-mlongcalls \
+	-mlongcalls -Wall \
 	-mtext-section-literals \
 	$(addprefix -D,$(DEFINES))
 # The pre-processor options used by the cpp (man cpp for more).
@@ -112,6 +112,8 @@ MKDIR  = mkdir -p
 CP     = cp -v
 MV     = mv -v
 PYTHON = python
+BININFO = $(PYTHON) ./scripts/bininfo.py
+DIGEST = $(PYTHON) ./scripts/digest.py
 
 ## Stable Section: usually no need to be changed. But you can add more.
 ##==========================================================================
@@ -158,23 +160,30 @@ DEP_OPT = $(shell if `$(CC) --version | grep "GCC" >/dev/null`; then \
 
 DEPEND      = $(CC)  $(DEP_OPT)  $(CFLAGS) $(CPPFLAGS)
 DEPEND.d    = $(subst -g ,,$(DEPEND))
-COMPILE.c   = $(CC)  $(CFLAGS)   $(CPPFLAGS) -c
+COMPILE.c   = $(CC)  $(CFLAGS)   -c
 COMPILE.cxx = $(CXX) $(CXXFLAGS) $(CPPFLAGS) -c
-LINK.c      = $(CC)  $(CFLAGS)   $(CPPFLAGS) $(LDFLAGS)
+LINK.c      = $(CC)  $(CFLAGS)   $(LDFLAGS)
 LINK.cxx    = $(CXX) $(CXXFLAGS) $(CPPFLAGS) $(LDFLAGS)
 
-.PHONY: all objs clean cleanall show buildpath project image release reldate
+.PHONY: build all objs clean cleanall show buildpath project image release releasedate buildnumber
 
 # Delete the default suffixes
 .SUFFIXES:
 
-release: reldate clean all
+release: clean releasedate buildnumber all
 
-reldate:
+build: clean buildnumber all
+
+releasedate:
 	@echo "*** Make Release ***" && \
           release_date=$$(date '+%s') && sed -i -e "s/\(^#\\s*define\\s*APP_VERSION_RELEASE_DATE\\s*\)\([0-9]*\)/\\1$$release_date/" ./include/core/config.h && \
 	  echo "Release date: $$release_date"
 
+buildnumber:
+	@echo "*** Incrementing build number ***" && \
+	  build=$$(awk '/^#\s*define\s*BUILD_NUMBER/ {match($$0, "BUILD_NUMBER\\s*([0-9]*)", r); print r[1]+1}' ./include/core/config.h) && \
+	  [ "$$build" != "" ] && sed -i -e "s/\(^#\\s*define\\s*BUILD_NUMBER\\s*\)\([0-9]*\)/\\1$$build/" ./include/core/config.h && \
+	  echo "Build Number: $$build"
 
 all: buildpath project image
 
@@ -209,23 +218,23 @@ $(BUILD_DIR)%.o:%.cxx
 #-------------------------------------
 image:$(IMAGES) $(IMAGEINFO) $(SDK_IMAGES)
 	@echo '*******************************************************'
-	@echo -e flash 512k:\\n\\t esptool.py -p /dev/ttyUSB0 -b 115200 write_flash $(ESPTOOL_PARAMS) --verify \
+	@echo -e flash 512k:\\n\\t sudo esptool.py -p /dev/ttyUSB0 -b 115200 write_flash $(ESPTOOL_PARAMS) --verify \
   0x00000 boot_v1.7.bin \
-  0x01000 $(APP).spi$(SPI_MODE).app1.bin $(FLASH_ADD_ADDR) \\n
-	@echo -e bootloader messages:\\n\\t miniterm.py /dev/ttyUSB0 74880 \\n
-	@echo -e AT commands:\\n\\t miniterm.py /dev/ttyUSB0 115200 \\n
+  0x01000 $(APP)-$(APP_SUFFIX).spi$(SPI_MODE).app1.bin $(FLASH_ADD_ADDR) \\n
+	@echo -e bootloader messages:\\n\\t sudo miniterm.py /dev/ttyUSB0 74880 \\n
+	@echo -e AT commands:\\n\\t sudo miniterm.py /dev/ttyUSB0 115200 \\n
 	@echo '*******************************************************'
 
 $(SDK_IMAGES): $(BINDIR)%:$(SDK_DIR)/bin/%
 	@$(CP) $^ $@
 
 $(IMAGEINFO): $(APPS_INFO)
-	$(PYTHON) bininfo.py $^ $@
+	$(BININFO) $^ $@
 
 $(IMAGES): $(BINDIR)%.bin:$(BUILD_DIR)%
 ifeq ($(SDK_IMAGE_TOOL),0)
 	@esptool.py elf2image --version=2 $(ESPTOOL_PARAMS) -o $@ $^
-	$(PYTHON) digest.py $^ $@
+	$(DIGEST) $^ $@
 else
 	$(eval APPID := $(subst .app,$(SPACE),$^))
 	@echo gen_appbin.py: $(CURDIR)/$^ 2 0 0 $(SPI_MODE) $(word $(words $(APPID)),$(APPID))
@@ -242,10 +251,6 @@ endif
 # Rules for generating the executable.
 #-------------------------------------
 project: $(APPS)
-	@echo Incrementing build number && \
-	  build=$$(awk '/^#\s*define\s*BUILD_NUMBER/ {match($$0, "BUILD_NUMBER\\s*([0-9]*)", r); print r[1]+1}' ./include/core/config.h) && \
-	  [ "$$build" != "" ] && sed -i -e "s/\(^#\\s*define\\s*BUILD_NUMBER\\s*\)\([0-9]*\)/\\1$$build/" ./include/core/config.h && \
-	  echo "Next build: $$build"
 
 $(APPS): %:$(OBJS)
 ifeq ($(LD_APP_SUFFIX),1)

@@ -56,7 +56,7 @@
  *      sha Error Code.
  *
  */
-int ICACHE_FLASH_ATTR
+int             ICACHE_FLASH_ATTR
 hmac (SHAversion whichSha, const unsigned char *text, int text_len,
       const unsigned char *key, int key_len, uint8_t digest[USHAMaxHashSize])
 {
@@ -85,7 +85,7 @@ hmac (SHAversion whichSha, const unsigned char *text, int text_len,
  *      sha Error Code.
  *
  */
-int ICACHE_FLASH_ATTR
+int             ICACHE_FLASH_ATTR
 hmacReset (HMACContext * ctx, enum SHAversion whichSha, const unsigned char *key, int key_len)
 {
     int             i, blocksize, hashsize;
@@ -97,7 +97,7 @@ hmacReset (HMACContext * ctx, enum SHAversion whichSha, const unsigned char *key
     unsigned char   tempkey[USHAMaxHashSize];
 
     if (!ctx)
-	return shaNull;
+        return shaNull;
 
     blocksize = ctx->blockSize = USHABlockSize (whichSha);
     hashsize = ctx->hashSize = USHAHashSize (whichSha);
@@ -109,14 +109,14 @@ hmacReset (HMACContext * ctx, enum SHAversion whichSha, const unsigned char *key
      * reset it to key = HASH(key).
      */
     if (key_len > blocksize) {
-	USHAContext     tctx;
-	int             err = USHAReset (&tctx, whichSha) ||
-	    USHAInput (&tctx, key, key_len) || USHAResult (&tctx, tempkey);
-	if (err != shaSuccess)
-	    return err;
+        USHAContext     tctx;
+        int             err = USHAReset (&tctx, whichSha) ||
+            USHAInput (&tctx, key, key_len) || USHAResult (&tctx, tempkey);
+        if (err != shaSuccess)
+            return err;
 
-	key = tempkey;
-	key_len = hashsize;
+        key = tempkey;
+        key_len = hashsize;
     }
 
     /*
@@ -132,20 +132,20 @@ hmacReset (HMACContext * ctx, enum SHAversion whichSha, const unsigned char *key
 
     /* store key into the pads, XOR'd with ipad and opad values */
     for (i = 0; i < key_len; i++) {
-	k_ipad[i] = key[i] ^ 0x36;
-	ctx->k_opad[i] = key[i] ^ 0x5c;
+        k_ipad[i] = key[i] ^ 0x36;
+        ctx->k_opad[i] = key[i] ^ 0x5c;
     }
     /* remaining pad bytes are '\0' XOR'd with ipad and opad values */
     for (; i < blocksize; i++) {
-	k_ipad[i] = 0x36;
-	ctx->k_opad[i] = 0x5c;
+        k_ipad[i] = 0x36;
+        ctx->k_opad[i] = 0x5c;
     }
 
     /* perform inner hash */
     /* init context for 1st pass */
     return USHAReset (&ctx->shaContext, whichSha) ||
-	/* and start with inner pad */
-	USHAInput (&ctx->shaContext, k_ipad, blocksize);
+        /* and start with inner pad */
+        USHAInput (&ctx->shaContext, k_ipad, blocksize);
 }
 
 /*
@@ -168,11 +168,11 @@ hmacReset (HMACContext * ctx, enum SHAversion whichSha, const unsigned char *key
  *      sha Error Code.
  *
  */
-int ICACHE_FLASH_ATTR
+int             ICACHE_FLASH_ATTR
 hmacInput (HMACContext * ctx, const unsigned char *text, int text_len)
 {
     if (!ctx)
-	return shaNull;
+        return shaNull;
     /* then text of datagram */
     return USHAInput (&ctx->shaContext, text, text_len);
 }
@@ -196,11 +196,11 @@ hmacInput (HMACContext * ctx, const unsigned char *text, int text_len)
  * Returns:
  *   sha Error Code.
  */
-int ICACHE_FLASH_ATTR
+int             ICACHE_FLASH_ATTR
 hmacFinalBits (HMACContext * ctx, const uint8_t bits, unsigned int bitcount)
 {
     if (!ctx)
-	return shaNull;
+        return shaNull;
     /* then final bits of datagram */
     return USHAFinalBits (&ctx->shaContext, bits, bitcount);
 }
@@ -226,22 +226,22 @@ hmacFinalBits (HMACContext * ctx, const uint8_t bits, unsigned int bitcount)
  *   sha Error Code.
  *
  */
-int ICACHE_FLASH_ATTR
+int             ICACHE_FLASH_ATTR
 hmacResult (HMACContext * ctx, uint8_t * digest)
 {
     if (!ctx)
-	return shaNull;
+        return shaNull;
 
     /* finish up 1st pass */
     /* (Use digest here as a temporary buffer.) */
     return USHAResult (&ctx->shaContext, digest) ||
-	/* perform outer SHA */
-	/* init context for 2nd pass */
-	USHAReset (&ctx->shaContext, ctx->whichSha) ||
-	/* start with outer pad */
-	USHAInput (&ctx->shaContext, ctx->k_opad, ctx->blockSize) ||
-	/* then results of 1st hash */
-	USHAInput (&ctx->shaContext, digest, ctx->hashSize) ||
-	/* finish up 2nd pass */
-	USHAResult (&ctx->shaContext, digest);
+        /* perform outer SHA */
+        /* init context for 2nd pass */
+        USHAReset (&ctx->shaContext, ctx->whichSha) ||
+        /* start with outer pad */
+        USHAInput (&ctx->shaContext, ctx->k_opad, ctx->blockSize) ||
+        /* then results of 1st hash */
+        USHAInput (&ctx->shaContext, digest, ctx->hashSize) ||
+        /* finish up 2nd pass */
+        USHAResult (&ctx->shaContext, digest);
 }
