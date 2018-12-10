@@ -1,8 +1,19 @@
 esp8266-tsh
 ===========
-Light-weight Shell for ESP8266
+Light-weight Shell for ESP8266. 
+Developed and tested with ESP12E (4Mb) board. Many solutions of this projects may looks weird, but all of it made just for fun and it works.
 
-## Scope
+Main Goals:
+- light-weight udp control protocol with python client
+- cron-like task scheduler
+- basic scripting language for make control logic with tracing/debug feature
+
+License: GPLv3
+
+Please feel free to use, improve, report bugs, etc. And if you find my work usefull thank me through paypal <xeronm@gmail.com>.
+
+Contributors:
+- Denis Muratov <xeronm@gmail.com>
 
 ## References
 
@@ -76,8 +87,8 @@ Example:
 |esp.WiFi-Password| 1 | Password |  |
 |esp.WiFi-Auto-Connect| 1 | Station mode auto connect (0- disabled, 1- enabled)| 1- enabled |
 |esp.WIFI-Soft-AP| 0 | Soft AP mode parameters (object) |
-|esp.WiFi-SSID| 1 | SSID | ESPTSH_${MAC48[3:6]}> |
-|esp.WiFi-Password| 1 | Password | ${MAC48} |
+|esp.WiFi-SSID| 1 | SSID | `${HOST_NAME}` or `ESP_${MAC48[3:6]}`> |
+|esp.WiFi-Password| 1 | Password | `${MAC48}` |
 |esp.WiFi-Auth-Mode| 1 | Soft AP authentication mode (0- open, 1- wep, 2- wpa psk, 3- wpa2 psk, 4- wpa/wpa2 psk) | 4- wpa/wpa2 psk |
 
 `${MAC48}` - MAC address of station interface
@@ -108,7 +119,7 @@ Example:
 |Parameter|Level|Description|Default|
 |---------|-----|-----------|-------|
 |common.IP-Port| 0 | Listening UDP port | 3901 |
-|uctl.Secret| 0 | Authentication secret | ${MAC48} |
+|uctl.Secret| 0 | Authentication secret | `${MAC48}` |
 
 `${MAC48}` - MAC address of station interface
 
@@ -186,7 +197,6 @@ $ sudo esptool.py -p /dev/ttyUSB0 -b 115200 write_flash --flash_freq 80m --flash
     0x7e000 blank.bin \
     0x3fc000 esp_init_data_default.bin \
     0x3fe000 blank.bin
-...
 ```
 
 4. Connect to hidden WiFi AP `ESPTSH_85e196` (last 6 digit of MAC) with password `5ccf7f85e196` (MAC)
@@ -228,7 +238,8 @@ $ ./tcli.py -H 192.168.4.1 -s 5ccf7f85e196 system info
 
 1. Setup Wi-Fi station mode and system description
 ```
-$ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 service config set -m '{   
+$ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 service config set -m '
+{   
   "service.Service": [
       { 
           "service.Service-Id": 3, 
@@ -248,7 +259,8 @@ $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 service config set -m '{
 
 2. Setup Time-Zone
 ```
-$ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 service config set -m '{   
+$ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 service config set -m '
+{
   "service.Service": [
       { 
           "service.Service-Id": 6, 
@@ -260,7 +272,8 @@ $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 service config set -m '{
 
 3. Save configuration
 ```
-$ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 service config save -m '{
+$ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 service config save -m '
+{
   "service.Service": [
       { "service.Service-Id": 3 } ,
       { "service.Service-Id": 6 }
@@ -272,45 +285,51 @@ $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 service config save -m '{
 #### Configure Script Logic and Schedule
 
 Following terms were used:
-- global variable `last_ev` - last state change event (0- reset state, 1-force power on, 2- humidity high threshold, 3- humidity low threshold, 4- power off timeout);
-- global variable `last_dt` - last state change event date;
-- gpio pin `0` for FAN solid state relay G3MB-202P; low-level on pin relates to open state on relay;
-- humidity turn on threshold: 50%;
-- humidity turn off threshold: 40%;
-- we are using estimated moving average results from DHT sensor.
+- global variable `last_ev` - last state change event (0- reset state, 1-force power on, 2- humidity high threshold, 3- humidity low threshold, 4- power off timeout)
+- global variable `last_dt` - last state change event date
+- gpio pin `0` for FAN solid state relay G3MB-202P; low-level on pin relates to open state on relay
+- humidity turn on threshold: >= 36%
+- humidity turn off threshold: < 36%
+- used estimated moving average results from DHT sensor
+- force on power off timeout: 12 minutes
+- humidity on power off timeout: 30 minutes
+- humidity on/off cool down timeout: 5 minutes
 
-1. Make light-shell script with control rule logic. Solution is not optimal, may improved by using dht service thresholds and multicast signal handling.
-```
-\#\# last_dt; ## last_ev; # sdt := sysctime(); 
-(last_ev <= 0) ?? { gpio_set(0, 0); last_ev := 1; last_dt := sdt; print(last_ev) }; 	// set initial state, force power on
 
-\# temp = 0; # hmd = 0; # res := ! dht_get(1, hmd, temp); 
-((last_ev != 2) && res && (hmd >= 3600) && (last_dt + 300 < sdt)) ?? { gpio_set(0, 0); last_ev := 2; last_dt := sdt; print(last_ev) }; 	// humidity high threshold
-((last_ev = 2) && res && (hmd < 3600) && (last_dt + 300 < sdt)) ?? { gpio_set(0, 1); last_ev := 3; last_dt := sdt; print(last_ev) };	// humidity low threshold
-((last_ev = 1) && (last_dt + 720 < sdt) || (last_ev = 2) && (last_dt + 1800 < sdt)) ?? { gpio_set(0, 1); last_ev := 4; last_dt := sdt; print(last_ev) };	// power off timeout
+1. Make light-shell script with control rule logic. Solution is not optimal, may improved by using dht service thresholds and multicast signal handling
+```
+  ## last_dt; ## last_ev; # sdt := sysctime(); 
+  (last_ev <= 0) ?? { gpio_set(0, 0); last_ev := 1; last_dt := sdt; print(last_ev) }; 	// set initial state, force power on
+
+  # temp = 0; # hmd = 0; # res := ! dht_get(1, hmd, temp); 
+  ((last_ev != 2) && res && (hmd >= 3600) && (last_dt + 300 < sdt)) ?? { gpio_set(0, 0); last_ev := 2; last_dt := sdt; print(last_ev) }; 	// humidity high threshold
+  ((last_ev = 2) && res && (hmd < 3600) && (last_dt + 300 < sdt)) ?? { gpio_set(0, 1); last_ev := 3; last_dt := sdt; print(last_ev) };	// humidity low threshold
+  ((last_ev = 1) && (last_dt + 720 < sdt) || (last_ev = 2) && (last_dt + 1800 < sdt)) ?? { gpio_set(0, 1); last_ev := 4; last_dt := sdt; print(last_ev) };	// power off timeout
 ```
 
-2. Add peristent named statement `fan_control`
+2. Add peristent named statement `fan_control` for common control logic
 ```
-$ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 lsh add -m '{
+$ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 lsh add -m '
+{
   "lsh.Statement-Name": "fan_control",
   "lsh.Persistent-Flag": 1,
   "lsh.Statement-Text": "## last_dt; ## last_ev; # sdt := sysctime();\n(last_ev <= 0) ?? { gpio_set(0, 0); last_ev := 1; last_dt := sdt; print(last_ev) };\n\n# temp = 0; # hmd = 0; # res := !dht_get(1, hmd, temp);\n((last_ev != 2) && res && (hmd >= 3600) && (last_dt + 300 < sdt)) ?? { gpio_set(0, 0); last_ev := 2; last_dt := sdt; print(last_ev) };\n((last_ev = 2) && res && (hmd < 3600) && (last_dt + 300 < sdt)) ?? { gpio_set(0, 1); last_ev := 3; last_dt := sdt; print(last_ev) };\n((last_ev = 1) && (last_dt + 720 < sdt) || (last_ev = 2) && (last_dt + 1800 < sdt)) ?? { gpio_set(0, 1); last_ev := 4; last_dt := sdt; print(last_ev) };"
 }'
 ```
 
-3. Add peristent named statement `fan_force_on`
+3. Add peristent named statement `fan_force_on` for force turn on by schedule, startum signal, or manual run
 ```
-$ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 lsh add -m '{
+$ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 lsh add -m '
+{
   "lsh.Statement-Name": "fan_force_on",
   "lsh.Persistent-Flag": 1,
   "lsh.Statement-Text": "## last_ev; ((last_ev != 1) && (last_ev != 2)) ?? { last_ev := 1; ## last_dt := sysctime(); gpio_set(0, 0); print(last_ev) }"
 }'
 ```
 
-4. Perform simple tests. 
-4.1. Force turn on when no initial state
+4. Perform simple tests
 ```
+  # Force turn on when no initial state
 $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 lsh run -m '{ "lsh.Statement-Name": "fan_control" }'
 {
     "common.Event-Timestamp": "2018.12.07 08:37:26",
@@ -320,7 +339,7 @@ $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 lsh run -m '{ "lsh.Statement-Name": 
     },
     "common.Result-Code": 1
 }
-
+  # Second force turn on before off timeout occurs
 $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 lsh run -m '{ "lsh.Statement-Name": "fan_control" }'
 {
     "common.Event-Timestamp": "2018.12.07 08:37:29",
@@ -330,10 +349,7 @@ $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 lsh run -m '{ "lsh.Statement-Name": 
     },
     "common.Result-Code": 1
 }
-```
-
-4.2. Turn off after 10 minutes timeout
-```
+  # wait 10 minutes, must turn off after 10 minutes timeout
 $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 lsh run -m '{ "lsh.Statement-Name": "fan_control" }'
 {
     "common.Event-Timestamp": "2018.12.07 08:57:12",
@@ -343,7 +359,7 @@ $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 lsh run -m '{ "lsh.Statement-Name": 
     },
     "common.Result-Code": 1
 }
-
+  # second exceution will no effect
 $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 lsh run -m '{ "lsh.Statement-Name": "fan_control" }'
 {
     "common.Event-Timestamp": "2018.12.07 08:57:14",
@@ -353,10 +369,7 @@ $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 lsh run -m '{ "lsh.Statement-Name": 
     },
     "common.Result-Code": 1
 }
-```
-
-4.3. Force turn on
-```
+  # force turn on
 $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 lsh run -m '{ "lsh.Statement-Name": "fan_force_on" }'
 {
     "common.Event-Timestamp": "2018.12.07 08:59:32",
@@ -368,7 +381,7 @@ $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 lsh run -m '{ "lsh.Statement-Name": 
 }
 ```
 
-4.4. Output results (uart port)
+5. Output results on uart port
 ```
 [1200.868] [warn ][ntp] adjust time to: 2018.12.07 08:35:35+3:00 offset:-1.7
 [1674.718] [info ][lwsh] load "fan_control"
@@ -379,9 +392,7 @@ $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 lsh run -m '{ "lsh.Statement-Name": 
 [2639.283] [info ][lwsh] fan_force_on out: 1
 ```
 
-5. Add schedule
-- `fan_force_on` at system startup and every 30th minutes of 09 - 21 day hours
-- `fan_control` at 15th seconds of every minute
+6. Add schedules. `fan_force_on` at system startup and every 30th minutes of 09 - 21 day hours. `fan_control` at 15th seconds of every minute
 ```
 $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 sched add -m '{
   "sched.Entry-Name": "fan_force_on",
@@ -398,7 +409,6 @@ $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 sched add -m '{
   "sched.Statement-Args": {}
 }'
 ```
-
 
 
 ## Appendix: Memos
