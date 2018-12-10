@@ -1,6 +1,6 @@
 esp8266-tsh
 ===========
-Light-weight Shell for ESP8266. 
+Light-weight Shell for ESP8266 (Things Shell). 
 Developed and tested with ESP12E (4Mb) board. Many solutions of this projects may looks weird, but all of it made just for fun and it works.
 
 Main Goals:
@@ -16,6 +16,14 @@ Contributors:
 - Denis Muratov <xeronm@gmail.com>
 
 ## References
+
+ - [esp-open-sdk]: Free and open (as much as possible) integrated SDK for ESP8266/ESP8285 chips
+ - [docker-esp8266]: Toolchain for esp8266 based on crosstool-NG 1.22.x
+ - [esp8266-tshcli]: Things Shell client utilities for esp8266-tsh
+
+[esp-open-sdk]: https://github.com/pfalcon/esp-open-sdk.git
+[docker-esp8266]: https://github.com/xeronm/docker-esp8266
+[esp8266-tshcli]: https://github.com/xeronm/esp8266-tshcli
 
 ## Definitions and Abbrevations
 
