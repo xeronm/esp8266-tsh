@@ -114,11 +114,11 @@ typedef struct sh_eval_ctx_s {
 
 typedef struct sh_bc_arg_s {
     union sh_bc_arg_u {
-	bytecode_size_t dlength;
-	size_t          vptr;
-	void           *ptr;
-	uint32          value;
-    }               arg;
+        bytecode_size_t dlength;
+        size_t          vptr;
+        void           *ptr;
+        uint32          value;
+    } arg;
     ALIGN_DATA char data[];
 } sh_bc_arg_t;
 
@@ -131,9 +131,10 @@ typedef enum sh_bc_arg_type_e {
     SH_BC_ARG_GLOBAL,
 } sh_bc_arg_type_t;
 
-sh_bc_arg_type_t sh_pop_bcarg_type(uint16 * mask, sh_bc_arg_t * bc_arg);
+sh_bc_arg_type_t sh_pop_bcarg_type (uint16 * mask, sh_bc_arg_t * bc_arg);
 
-typedef void    (*sh_func_t) (sh_eval_ctx_t * evctx, sh_bc_arg_t * ret_arg, const arg_count_t arg_count, sh_bc_arg_type_t arg_type[], sh_bc_arg_t * bc_args[]);
+typedef void    (*sh_func_t) (sh_eval_ctx_t * evctx, sh_bc_arg_t * ret_arg, const arg_count_t arg_count,
+                              sh_bc_arg_type_t arg_type[], sh_bc_arg_t * bc_args[]);
 
 /*
 External function definition
@@ -150,25 +151,26 @@ typedef struct sh_func_entry_s {
     uint8           reserved:6;
     sh_func_name_t  func_name;
     union sh_func_u {
-	sh_func_t       func;
-	sh_hndlr_t      hstmt;
-	void           *ptr;
+        sh_func_t       func;
+        sh_hndlr_t      hstmt;
+        void           *ptr;
     } func;
 } sh_func_entry_t;
 
 sh_errcode_t    sh_func_get (const char *func_name, sh_func_entry_t ** entry);
 sh_errcode_t    sh_func_register (sh_func_entry_t * func_entry);
 
-sh_errcode_t    stmt_parse (const char * szstr, const char * stmt_name, sh_hndlr_t * hstmt);
-sh_errcode_t    stmt_dump (const sh_hndlr_t hstmt, char *buf, size_t len, bool resolve_glob, bytecode_size_t addr_start, bytecode_size_t addr_stop);
+sh_errcode_t    stmt_parse (const char *szstr, const char *stmt_name, sh_hndlr_t * hstmt);
+sh_errcode_t    stmt_dump (const sh_hndlr_t hstmt, char *buf, size_t len, bool resolve_glob, bytecode_size_t addr_start,
+                           bytecode_size_t addr_stop);
 sh_errcode_t    stmt_info (const sh_hndlr_t hstmt, sh_stmt_info_t * info);
 sh_errcode_t    stmt_eval (const sh_hndlr_t hstmt, sh_eval_ctx_t * ctx);
 sh_errcode_t    stmt_free (const sh_hndlr_t hstmt);
 
-sh_errcode_t    stmt_get (const char * stmt_name, sh_hndlr_t * hstmt);
-sh_errcode_t    stmt_src_get (const char * stmt_name, sh_stmt_source_t ** stmt_src);
+sh_errcode_t    stmt_get (const char *stmt_name, sh_hndlr_t * hstmt);
+sh_errcode_t    stmt_src_get (const char *stmt_name, sh_stmt_source_t ** stmt_src);
 // get stmt by name, if not exists try to load from source
-sh_errcode_t    stmt_get_ext (const char * stmt_name, sh_hndlr_t * hstmt);
+sh_errcode_t    stmt_get_ext (const char *stmt_name, sh_hndlr_t * hstmt);
 
 // used for sh_stmt_name_t stmt_name
 #define stmt_get2(stmt_name, hstmt)		stmt_get( (char *) (stmt_name), (hstmt))

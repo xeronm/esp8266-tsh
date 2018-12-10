@@ -43,24 +43,24 @@
  *      sha Error Code.
  *
  */
-int ICACHE_FLASH_ATTR
+int             ICACHE_FLASH_ATTR
 USHAReset (USHAContext * ctx, enum SHAversion whichSha)
 {
     if (ctx) {
-	ctx->whichSha = whichSha;
-	switch (whichSha) {
-	case SHA1:
-	    return SHA1Reset ((SHA1Context *) & ctx->ctx);
-	case SHA224:
-	    return SHA224Reset ((SHA224Context *) & ctx->ctx);
-	case SHA256:
-	    return SHA256Reset ((SHA256Context *) & ctx->ctx);
-	default:
-	    return shaBadParam;
-	}
+        ctx->whichSha = whichSha;
+        switch (whichSha) {
+        case SHA1:
+            return SHA1Reset ((SHA1Context *) & ctx->ctx);
+        case SHA224:
+            return SHA224Reset ((SHA224Context *) & ctx->ctx);
+        case SHA256:
+            return SHA256Reset ((SHA256Context *) & ctx->ctx);
+        default:
+            return shaBadParam;
+        }
     }
     else {
-	return shaNull;
+        return shaNull;
     }
 }
 
@@ -84,23 +84,23 @@ USHAReset (USHAContext * ctx, enum SHAversion whichSha)
  *      sha Error Code.
  *
  */
-int ICACHE_FLASH_ATTR
+int             ICACHE_FLASH_ATTR
 USHAInput (USHAContext * ctx, const uint8_t * bytes, unsigned int bytecount)
 {
     if (ctx) {
-	switch (ctx->whichSha) {
-	case SHA1:
-	    return SHA1Input ((SHA1Context *) & ctx->ctx, bytes, bytecount);
-	case SHA224:
-	    return SHA224Input ((SHA224Context *) & ctx->ctx, bytes, bytecount);
-	case SHA256:
-	    return SHA256Input ((SHA256Context *) & ctx->ctx, bytes, bytecount);
-	default:
-	    return shaBadParam;
-	}
+        switch (ctx->whichSha) {
+        case SHA1:
+            return SHA1Input ((SHA1Context *) & ctx->ctx, bytes, bytecount);
+        case SHA224:
+            return SHA224Input ((SHA224Context *) & ctx->ctx, bytes, bytecount);
+        case SHA256:
+            return SHA256Input ((SHA256Context *) & ctx->ctx, bytes, bytecount);
+        default:
+            return shaBadParam;
+        }
     }
     else {
-	return shaNull;
+        return shaNull;
     }
 }
 
@@ -123,23 +123,23 @@ USHAInput (USHAContext * ctx, const uint8_t * bytes, unsigned int bytecount)
  * Returns:
  *   sha Error Code.
  */
-int ICACHE_FLASH_ATTR
+int             ICACHE_FLASH_ATTR
 USHAFinalBits (USHAContext * ctx, const uint8_t bits, unsigned int bitcount)
 {
     if (ctx) {
-	switch (ctx->whichSha) {
-	case SHA1:
-	    return SHA1FinalBits ((SHA1Context *) & ctx->ctx, bits, bitcount);
-	case SHA224:
-	    return SHA224FinalBits ((SHA224Context *) & ctx->ctx, bits, bitcount);
-	case SHA256:
-	    return SHA256FinalBits ((SHA256Context *) & ctx->ctx, bits, bitcount);
-	default:
-	    return shaBadParam;
-	}
+        switch (ctx->whichSha) {
+        case SHA1:
+            return SHA1FinalBits ((SHA1Context *) & ctx->ctx, bits, bitcount);
+        case SHA224:
+            return SHA224FinalBits ((SHA224Context *) & ctx->ctx, bits, bitcount);
+        case SHA256:
+            return SHA256FinalBits ((SHA256Context *) & ctx->ctx, bits, bitcount);
+        default:
+            return shaBadParam;
+        }
     }
     else {
-	return shaNull;
+        return shaNull;
     }
 }
 
@@ -162,23 +162,23 @@ USHAFinalBits (USHAContext * ctx, const uint8_t bits, unsigned int bitcount)
  *   sha Error Code.
  *
  */
-int ICACHE_FLASH_ATTR
+int             ICACHE_FLASH_ATTR
 USHAResult (USHAContext * ctx, uint8_t Message_Digest[USHAMaxHashSize])
 {
     if (ctx) {
-	switch (ctx->whichSha) {
-	case SHA1:
-	    return SHA1Result ((SHA1Context *) & ctx->ctx, Message_Digest);
-	case SHA224:
-	    return SHA224Result ((SHA224Context *) & ctx->ctx, Message_Digest);
-	case SHA256:
-	    return SHA256Result ((SHA256Context *) & ctx->ctx, Message_Digest);
-	default:
-	    return shaBadParam;
-	}
+        switch (ctx->whichSha) {
+        case SHA1:
+            return SHA1Result ((SHA1Context *) & ctx->ctx, Message_Digest);
+        case SHA224:
+            return SHA224Result ((SHA224Context *) & ctx->ctx, Message_Digest);
+        case SHA256:
+            return SHA256Result ((SHA256Context *) & ctx->ctx, Message_Digest);
+        default:
+            return shaBadParam;
+        }
     }
     else {
-	return shaNull;
+        return shaNull;
     }
 }
 
@@ -197,17 +197,17 @@ USHAResult (USHAContext * ctx, uint8_t Message_Digest[USHAMaxHashSize])
  *   block size
  *
  */
-int ICACHE_FLASH_ATTR
+int             ICACHE_FLASH_ATTR
 USHABlockSize (enum SHAversion whichSha)
 {
     switch (whichSha) {
     case SHA1:
-	return SHA1_Message_Block_Size;
+        return SHA1_Message_Block_Size;
     case SHA224:
-	return SHA224_Message_Block_Size;
+        return SHA224_Message_Block_Size;
     default:
     case SHA256:
-	return SHA256_Message_Block_Size;
+        return SHA256_Message_Block_Size;
     }
 }
 
@@ -226,17 +226,17 @@ USHABlockSize (enum SHAversion whichSha)
  *   hash size
  *
  */
-int ICACHE_FLASH_ATTR
+int             ICACHE_FLASH_ATTR
 USHAHashSize (enum SHAversion whichSha)
 {
     switch (whichSha) {
     case SHA1:
-	return SHA1HashSize;
+        return SHA1HashSize;
     case SHA224:
-	return SHA224HashSize;
+        return SHA224HashSize;
     default:
     case SHA256:
-	return SHA256HashSize;
+        return SHA256HashSize;
     }
 }
 
@@ -255,16 +255,16 @@ USHAHashSize (enum SHAversion whichSha)
  *   hash size in bits
  *
  */
-int ICACHE_FLASH_ATTR
+int             ICACHE_FLASH_ATTR
 USHAHashSizeBits (enum SHAversion whichSha)
 {
     switch (whichSha) {
     case SHA1:
-	return SHA1HashSizeBits;
+        return SHA1HashSizeBits;
     case SHA224:
-	return SHA224HashSizeBits;
+        return SHA224HashSizeBits;
     default:
     case SHA256:
-	return SHA256HashSizeBits;
+        return SHA256HashSizeBits;
     }
 }

@@ -26,7 +26,7 @@
 #include "system/imdb.h"
 
 #define SYSTEM_IMDB_BLOCK_SIZE	2048
-#define SYSTEM_FDB_BLOCK_SIZE	(SPI_FLASH_SEC_SIZE / 2) // minmal write unit
+#define SYSTEM_FDB_BLOCK_SIZE	(SPI_FLASH_SEC_SIZE / 2)        // minmal write unit
 #define SYSTEM_FDB_FILE_SIZE	64
 #define SYSTEM_FDB_CACHE_BLOCKS	4
 #define TASK_QUEUE_LENGTH	4
@@ -42,11 +42,11 @@ imdb_hndlr_t    get_fdb (void);
 uint8           system_get_default_secret (unsigned char *buf, uint8 len);
 uint8           system_get_default_ssid (unsigned char *buf, uint8 len);
 
-const char    *system_get_description ();
-void           system_set_description (const char *sysdescr);
+const char     *system_get_description ();
+void            system_set_description (const char *sysdescr);
 
 #ifdef ARCH_XTENSA
-bool            system_post_delayed_cb(ETSTimerFunc task, void *arg);
+bool            system_post_delayed_cb (ETSTimerFunc task, void *arg);
 #endif
 
 #endif /* _SYSTEM_H */

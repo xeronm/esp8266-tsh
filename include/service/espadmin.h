@@ -113,7 +113,7 @@ typedef enum espadmin_avp_code_e {
     ESPADMIN_AVP_FDB_DATA_ADDR = 191,
     ESPADMIN_AVP_FDB_DATA_SIZE = 192,
     ESPADMIN_AVP_FDB_FILE_SIZE = 193,
-    ESPADMIN_AVP_FDB_FILE_HWM  = 194,
+    ESPADMIN_AVP_FDB_FILE_HWM = 194,
 } espadmin_avp_code_t;
 
 typedef enum ota_upgrade_sate_e {
@@ -133,7 +133,7 @@ svcs_errcode_t  espadmin_service_uninstall (void);
 svcs_errcode_t  espadmin_on_start (const svcs_resource_t * svcres, dtlv_ctx_t * conf);
 svcs_errcode_t  espadmin_on_stop (void);
 svcs_errcode_t  espadmin_on_message (service_ident_t orig_id, service_msgtype_t msgtype, void *ctxdata,
-				     dtlv_ctx_t * msg_in, dtlv_ctx_t * msg_out);
+                                     dtlv_ctx_t * msg_in, dtlv_ctx_t * msg_out);
 svcs_errcode_t  espadmin_on_cfgupd (dtlv_ctx_t * conf);
 
 

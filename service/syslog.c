@@ -38,10 +38,10 @@
 #define SYSLOG_IMDB_CLS_NAME		"syslog$"
 
 typedef struct syslog_data_s {
-    const svcs_resource_t * svcres;
+    const svcs_resource_t *svcres;
     imdb_hndlr_t    hlogs;
     uint16          seq_no;
-    char            buf[SYSLOG_MESSAGE_MAX_LEN + 1];	// +1 for null-terminated
+    char            buf[SYSLOG_MESSAGE_MAX_LEN + 1];    // +1 for null-terminated
 } syslog_data_t;
 
 LOCAL syslog_data_t *sdata = NULL;
@@ -53,7 +53,7 @@ syslog_on_cfgupd (dtlv_ctx_t * conf)
 
     if (conf) {
         dtlv_seq_decode_begin (conf, SYSLOG_SERVICE_ID);
-        dtlv_seq_decode_uint8 (SYSLOG_AVP_LOG_SEVERITY, (uint8 *) &severity);
+        dtlv_seq_decode_uint8 (SYSLOG_AVP_LOG_SEVERITY, (uint8 *) & severity);
         dtlv_seq_decode_end (conf);
     }
 
@@ -66,19 +66,20 @@ svcs_errcode_t  ICACHE_FLASH_ATTR
 syslog_on_start (const svcs_resource_t * svcres, dtlv_ctx_t * conf)
 {
     if (sdata) {
-	return SVCS_SERVICE_ERROR;
+        return SVCS_SERVICE_ERROR;
     }
 
     syslog_data_t  *tmp_sdata;
-    d_svcs_check_imdb_error (imdb_clsobj_insert (svcres->hmdb, svcres->hdata, (void **) &tmp_sdata, sizeof (syslog_data_t))
-	);
+    d_svcs_check_imdb_error (imdb_clsobj_insert
+                             (svcres->hmdb, svcres->hdata, (void **) &tmp_sdata, sizeof (syslog_data_t))
+        );
     os_memset (tmp_sdata, 0, sizeof (syslog_data_t));
 
     tmp_sdata->svcres = svcres;
     imdb_class_def_t cdef =
-	{ SYSLOG_IMDB_CLS_NAME, true, true, false, 0, SYSLOG_STORAGE_PAGES, SYSLOG_STORAGE_PAGE_BLOCKS, 0 };
+        { SYSLOG_IMDB_CLS_NAME, true, true, false, 0, SYSLOG_STORAGE_PAGES, SYSLOG_STORAGE_PAGE_BLOCKS, 0 };
     d_svcs_check_imdb_error (imdb_class_create (svcres->hmdb, &cdef, &(tmp_sdata->hlogs))
-	);
+        );
 
     sdata = tmp_sdata;
 
@@ -91,16 +92,16 @@ svcs_errcode_t  ICACHE_FLASH_ATTR
 syslog_on_stop ()
 {
     if (!sdata) {
-	return SVCS_NOT_RUN;
+        return SVCS_NOT_RUN;
     }
 
     syslog_data_t  *tmp_sdata = sdata;
     sdata = NULL;
     d_svcs_check_imdb_error (imdb_class_destroy (tmp_sdata->svcres->hmdb, tmp_sdata->hlogs)
-	);
+        );
 
     d_svcs_check_imdb_error (imdb_clsobj_delete (tmp_sdata->svcres->hmdb, tmp_sdata->svcres->hdata, tmp_sdata)
-	);
+        );
 
     return SVCS_ERR_SUCCESS;
 }
@@ -113,19 +114,19 @@ syslog_on_msg_query (dtlv_ctx_t * msg_in, dtlv_ctx_t * msg_out)
 {
     uint16          rec_no = 0xFFFF;
     if (msg_in) {
-	dtlv_davp_t     davp;
-	while (dtlv_avp_decode (msg_in, &davp) == DTLV_ERR_SUCCESS) {
-	    if (!dtlv_check_namespace (&davp, SYSLOG_SERVICE_ID))
-		break;
+        dtlv_davp_t     davp;
+        while (dtlv_avp_decode (msg_in, &davp) == DTLV_ERR_SUCCESS) {
+            if (!dtlv_check_namespace (&davp, SYSLOG_SERVICE_ID))
+                break;
 
-	    switch (davp.havpd.nscode.comp.code) {
-	    case SYSLOG_AVP_LOG_RECNO:
-		dtlv_avp_get_uint16 (&davp, &rec_no);
-		break;
-	    default:
-		continue;
-	    }
-	}
+            switch (davp.havpd.nscode.comp.code) {
+            case SYSLOG_AVP_LOG_RECNO:
+                dtlv_avp_get_uint16 (&davp, &rec_no);
+                break;
+            default:
+                continue;
+            }
+        }
     }
 
 
@@ -142,31 +143,31 @@ syslog_on_msg_query (dtlv_ctx_t * msg_in, dtlv_ctx_t * msg_out)
 
     bool            fcont = true;
     while (rowcount && fcont) {
-	int             i;
-	for (i = 0; i < rowcount; i++) {
-	    syslog_logrec_t *rec = d_pointer_as (syslog_logrec_t, recs[i].dataptr);
-	    //os_printf(" -- %u:%u %u - %u\n", i, rowcount, rec->rec_no, os_strlen(rec->vardata));
+        int             i;
+        for (i = 0; i < rowcount; i++) {
+            syslog_logrec_t *rec = d_pointer_as (syslog_logrec_t, recs[i].dataptr);
+            //os_printf(" -- %u:%u %u - %u\n", i, rowcount, rec->rec_no, os_strlen(rec->vardata));
 
-	    if (rec->rec_no < rec_no) {
-		if (d_ctx_left_size (msg_out) < DTLV_MIN_BUFFER_FIXED_LENGTH + os_strlen (rec->vardata)) {
-		    goto end_of_data;
-		}
+            if (rec->rec_no < rec_no) {
+                if (d_ctx_left_size (msg_out) < DTLV_MIN_BUFFER_FIXED_LENGTH + os_strlen (rec->vardata)) {
+                    goto end_of_data;
+                }
 
-		dtlv_avp_t     *gavp_in;
-		d_svcs_check_imdb_error (dtlv_avp_encode_grouping (msg_out, 0, SYSLOG_AVP_LOG_ENTRY, &gavp_in) ||
-					 dtlv_avp_encode_uint16 (msg_out, SYSLOG_AVP_LOG_RECNO, rec->rec_no) ||
-					 dtlv_avp_encode_uint8 (msg_out, SYSLOG_AVP_LOG_SEVERITY, rec->severity) ||
-					 dtlv_avp_encode_uint32 (msg_out, SYSLOG_AVP_LOG_TIMESTAMP,
-								 lt_time (&rec->rec_ctime))
-					 || dtlv_avp_encode_nchar (msg_out, COMMON_AVP_SERVICE_NAME,
-								   sizeof (service_name_t), rec->service)
-					 || dtlv_avp_encode_char (msg_out, SYSLOG_AVP_LOG_MESSAGE, rec->vardata)
-					 || dtlv_avp_encode_group_done (msg_out, gavp_in));
+                dtlv_avp_t     *gavp_in;
+                d_svcs_check_imdb_error (dtlv_avp_encode_grouping (msg_out, 0, SYSLOG_AVP_LOG_ENTRY, &gavp_in) ||
+                                         dtlv_avp_encode_uint16 (msg_out, SYSLOG_AVP_LOG_RECNO, rec->rec_no) ||
+                                         dtlv_avp_encode_uint8 (msg_out, SYSLOG_AVP_LOG_SEVERITY, rec->severity) ||
+                                         dtlv_avp_encode_uint32 (msg_out, SYSLOG_AVP_LOG_TIMESTAMP,
+                                                                 lt_time (&rec->rec_ctime))
+                                         || dtlv_avp_encode_nchar (msg_out, COMMON_AVP_SERVICE_NAME,
+                                                                   sizeof (service_name_t), rec->service)
+                                         || dtlv_avp_encode_char (msg_out, SYSLOG_AVP_LOG_MESSAGE, rec->vardata)
+                                         || dtlv_avp_encode_group_done (msg_out, gavp_in));
 
-	    }
-	}
+            }
+        }
 
-	d_svcs_check_imdb_error (imdb_class_fetch (hcur, LOG_FETCH_SIZE, &rowcount, recs));
+        d_svcs_check_imdb_error (imdb_class_fetch (hcur, LOG_FETCH_SIZE, &rowcount, recs));
     }
 
   end_of_data:
@@ -179,29 +180,30 @@ syslog_on_msg_query (dtlv_ctx_t * msg_in, dtlv_ctx_t * msg_out)
 
 svcs_errcode_t  ICACHE_FLASH_ATTR
 syslog_on_message (service_ident_t orig_id, service_msgtype_t msgtype, void *ctxdata, dtlv_ctx_t * msg_in,
-		   dtlv_ctx_t * msg_out)
+                   dtlv_ctx_t * msg_out)
 {
     svcs_errcode_t  res = SVCS_ERR_SUCCESS;
     switch (msgtype) {
     case SYSLOG_MSGTYPE_QUERY:
-	res = syslog_on_msg_query (msg_in, msg_out);
-	break;
+        res = syslog_on_msg_query (msg_in, msg_out);
+        break;
     default:
-	res = SVCS_MSGTYPE_INVALID;
+        res = SVCS_MSGTYPE_INVALID;
     }
 
     return res;
 }
 
-svcs_errcode_t ICACHE_FLASH_ATTR
-syslog_query(imdb_hndlr_t* hcur) {
+svcs_errcode_t  ICACHE_FLASH_ATTR
+syslog_query (imdb_hndlr_t * hcur)
+{
     if (!sdata) {
-	d_log_dprintf (SYSLOG_SERVICE_NAME, "not available");
-	return SVCS_NOT_RUN;
+        d_log_dprintf (SYSLOG_SERVICE_NAME, "not available");
+        return SVCS_NOT_RUN;
     }
- 
-    imdb_errcode_t ret = imdb_class_query(sdata->svcres->hmdb, sdata->hlogs, true, hcur);
-    d_svcs_check_imdb_error(ret);
+
+    imdb_errcode_t  ret = imdb_class_query (sdata->svcres->hmdb, sdata->hlogs, true, hcur);
+    d_svcs_check_imdb_error (ret);
 
     return SVCS_ERR_SUCCESS;
 }
@@ -211,19 +213,20 @@ syslog_write (const log_severity_t severity, const char *svc, size_t * length, c
 {
     *buf = NULL;
     if (!sdata) {
-	d_log_dprintf (SYSLOG_SERVICE_NAME, "not available");
-	return SVCS_NOT_RUN;
+        d_log_dprintf (SYSLOG_SERVICE_NAME, "not available");
+        return SVCS_NOT_RUN;
     }
 
     *length = MIN (*length, SYSLOG_MESSAGE_MAX_LEN);
     if (*length == 0) {
-	return SVCS_ERR_SUCCESS;
+        return SVCS_ERR_SUCCESS;
     }
 
     sdata->seq_no++;
     syslog_logrec_t *rec;
-    d_svcs_check_imdb_error (imdb_clsobj_insert (sdata->svcres->hmdb, sdata->hlogs, (void **) &rec, *length + sizeof (syslog_logrec_t))
-	);
+    d_svcs_check_imdb_error (imdb_clsobj_insert
+                             (sdata->svcres->hmdb, sdata->hlogs, (void **) &rec, *length + sizeof (syslog_logrec_t))
+        );
 
     rec->rec_ctime = lt_ctime ();
     rec->rec_no = sdata->seq_no;
@@ -232,7 +235,7 @@ syslog_write (const log_severity_t severity, const char *svc, size_t * length, c
     size_t          len = os_strnlen (svc, sizeof (service_name_t));
     os_memcpy (rec->service, svc, len);
     if (len < sizeof (service_name_t))
-	rec->service[len] = '\0';
+        rec->service[len] = '\0';
 
     *buf = (char *) rec->vardata;
 
@@ -246,11 +249,11 @@ syslog_write_msg (const log_severity_t severity, const char *svc, char *msg)
     char           *buf = NULL;
     svcs_errcode_t  ret = syslog_write (severity, svc, &length, &buf);
     if (ret) {
-	return ret;
+        return ret;
     }
 
-    os_memcpy (buf, msg, length + 1);	// +1 for null-terminate
-    buf[length] = '\0';		// null-terminate
+    os_memcpy (buf, msg, length + 1);   // +1 for null-terminate
+    buf[length] = '\0';         // null-terminate
 
     return SVCS_ERR_SUCCESS;
 }
@@ -259,13 +262,13 @@ svcs_errcode_t  ICACHE_FLASH_ATTR
 syslog_vprintf (const log_severity_t severity, const char *svc, const char *fmt, va_list al)
 {
     size_t          length = os_vsnprintf (sdata->buf, SYSLOG_MESSAGE_MAX_LEN, fmt, al);
-    sdata->buf[length] = '\0';	// make null-terminated
+    sdata->buf[length] = '\0';  // make null-terminated
     return syslog_write_msg (severity, svc, sdata->buf);
 }
 
 svcs_errcode_t  ICACHE_FLASH_ATTR
 syslog_vbprintf (const log_severity_t severity, const char *svc, const char *buf, size_t len, const char *fmt,
-		 va_list al)
+                 va_list al)
 {
     size_t          length = os_vsnprintf (sdata->buf, SYSLOG_MESSAGE_MAX_LEN, fmt, al);
     size_t          lenadd = LINE_END_STRLEN;
@@ -274,7 +277,7 @@ syslog_vbprintf (const log_severity_t severity, const char *svc, const char *buf
 
     lenadd = sprintb ((char *) &sdata->buf[length], SYSLOG_MESSAGE_MAX_LEN - length, buf, len);
     length += lenadd;
-    sdata->buf[length] = '\0';	// make null-terminated
+    sdata->buf[length] = '\0';  // make null-terminated
 
     return syslog_write_msg (severity, svc, sdata->buf);
 }

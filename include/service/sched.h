@@ -110,12 +110,13 @@ typedef struct sched_entry_source_s {
     ALIGN_DATA char vardata[];
 } sched_entry_source_t;
 
-sched_errcode_t sched_entry_get (const char * entry_name, sched_entry_t ** entry);
-sched_errcode_t sched_entry_src_get (const char * entry_name, sched_entry_source_t ** entry_src);
+sched_errcode_t sched_entry_get (const char *entry_name, sched_entry_t ** entry);
+sched_errcode_t sched_entry_src_get (const char *entry_name, sched_entry_source_t ** entry_src);
 
-sched_errcode_t sched_entry_run (const char * entry_name);
-sched_errcode_t sched_entry_add (const char * entry_name, bool persistent, const char * sztsentry, const char * stmt_name, const char * vardata, size_t varlen);
-sched_errcode_t sched_entry_remove (const char * entry_name);
+sched_errcode_t sched_entry_run (const char *entry_name);
+sched_errcode_t sched_entry_add (const char *entry_name, bool persistent, const char *sztsentry, const char *stmt_name,
+                                 const char *vardata, size_t varlen);
+sched_errcode_t sched_entry_remove (const char *entry_name);
 
 // used by services
 svcs_errcode_t  sched_service_install ();
@@ -125,7 +126,7 @@ svcs_errcode_t  sched_on_stop ();
 svcs_errcode_t  sched_on_cfgupd (dtlv_ctx_t * conf);
 
 svcs_errcode_t  sched_on_message (service_ident_t orig_id,
-				  service_msgtype_t msgtype, void *ctxdata, dtlv_ctx_t * msg_in, dtlv_ctx_t * msg_out);
+                                  service_msgtype_t msgtype, void *ctxdata, dtlv_ctx_t * msg_in, dtlv_ctx_t * msg_out);
 
 
 #define d_sched_check_imdb_error(ret) \

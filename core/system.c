@@ -33,10 +33,10 @@
 #include "service/sched.h"
 
 #ifdef ARCH_XTENSA
-#  include "uart.h"
-#  include "service/espadmin.h"
-#  include "service/gpioctl.h"
-#  include "service/device/dhtxx.h"
+#include "uart.h"
+#include "service/espadmin.h"
+#include "service/gpioctl.h"
+#include "service/device/dhtxx.h"
 #endif
 
 typedef struct system_data_s {
@@ -57,9 +57,9 @@ LOCAL system_data_t *sdata = NULL;
 typedef         svcs_errcode_t (*service_install) (void);
 
 typedef struct reg_service_s {
-    service_install 	fn_install;
-    service_name_t  	name;
-    bool		safe_mode;
+    service_install fn_install;
+    service_name_t  name;
+    bool            safe_mode;
 } reg_service_t;
 
 #ifdef ARCH_XTENSA
@@ -71,32 +71,32 @@ LOCAL reg_service_t const reg_services[REG_SERVICE_MAX] RODATA = {
     {syslog_service_install, SYSLOG_SERVICE_NAME, true},
     {lsh_service_install, LSH_SERVICE_NAME, false},
     {sched_service_install, SCHED_SERVICE_NAME, false},
-    #ifdef ARCH_XTENSA
+#ifdef ARCH_XTENSA
     {espadmin_service_install, ESPADMIN_SERVICE_NAME, false},
     {gpio_service_install, GPIO_SERVICE_NAME, false},
-    #endif
+#endif
     {udpctl_service_install, UDPCTL_SERVICE_NAME, true},
     {ntp_service_install, NTP_SERVICE_NAME, false},
-    #ifdef ARCH_XTENSA
+#ifdef ARCH_XTENSA
     {dht_service_install, DHT_SERVICE_NAME, false},
-    #endif
+#endif
 };
 
 
-LOCAL imdb_def_t db_def RODATA = { 
-	SYSTEM_IMDB_BLOCK_SIZE, 
-	BLOCK_CRC_NONE, 
-	false, 
-	0, 
-	0 
+LOCAL imdb_def_t db_def RODATA = {
+    SYSTEM_IMDB_BLOCK_SIZE,
+    BLOCK_CRC_NONE,
+    false,
+    0,
+    0
 };
 
-LOCAL imdb_def_t fdb_def RODATA = { 
-	SYSTEM_FDB_BLOCK_SIZE, 
-	BLOCK_CRC_META, 
-	true, 
-	SYSTEM_FDB_CACHE_BLOCKS, 
-	SYSTEM_FDB_FILE_SIZE 
+LOCAL imdb_def_t fdb_def RODATA = {
+    SYSTEM_FDB_BLOCK_SIZE,
+    BLOCK_CRC_META,
+    true,
+    SYSTEM_FDB_CACHE_BLOCKS,
+    SYSTEM_FDB_FILE_SIZE
 };
 
 LOCAL void      ICACHE_FLASH_ATTR
@@ -126,20 +126,21 @@ LOCAL void      ICACHE_FLASH_ATTR
 wifi_event_handler_cb (System_Event_t * event)
 {
     if (event->event == EVENT_STAMODE_GOT_IP) {
-	svcctl_service_message (0, 0, event, SVCS_MSGTYPE_NETWORK, NULL, NULL);
+        svcctl_service_message (0, 0, event, SVCS_MSGTYPE_NETWORK, NULL, NULL);
     }
     else if (event->event == EVENT_STAMODE_DISCONNECTED) {
-	svcctl_service_message (0, 0, event, SVCS_MSGTYPE_NETWORK_LOSS, NULL, NULL);
+        svcctl_service_message (0, 0, event, SVCS_MSGTYPE_NETWORK_LOSS, NULL, NULL);
     }
 }
 #endif
 
 #ifdef ARCH_XTENSA
-void ICACHE_FLASH_ATTR  
-system_task_delayed_cb (ETSEvent *e) { 
+void            ICACHE_FLASH_ATTR
+system_task_delayed_cb (ETSEvent * e)
+{
     if (e->sig) {
-        ETSTimerFunc *func_cb = (ETSTimerFunc *) e->sig;
-        func_cb ((void*)e->par);
+        ETSTimerFunc   *func_cb = (ETSTimerFunc *) e->sig;
+        func_cb ((void *) e->par);
     }
 }
 #endif
@@ -147,29 +148,30 @@ system_task_delayed_cb (ETSEvent *e) {
 void            ICACHE_FLASH_ATTR
 system_init (void)
 {
-    if (sdata) return;
-    st_alloc(sdata, system_data_t);
-  
-    #ifdef ARCH_XTENSA
-    system_os_task(system_task_delayed_cb, USER_TASK_PRIO_1, (ETSEvent *) &sdata->task_queue, TASK_QUEUE_LENGTH);
-    #ifdef ENABLE_AT
+    if (sdata)
+        return;
+    st_alloc (sdata, system_data_t);
+
+#ifdef ARCH_XTENSA
+    system_os_task (system_task_delayed_cb, USER_TASK_PRIO_1, (ETSEvent *) & sdata->task_queue, TASK_QUEUE_LENGTH);
+#ifdef ENABLE_AT
     at_init ();
     atcmd_init ();
-    #else
+#else
     uart_init (BIT_RATE_115200, BIT_RATE_115200);
-    #endif
-    #endif
+#endif
+#endif
 
     os_printf (LINE_END LINE_END "*** system_startup ***" LINE_END);
 
-    #ifdef ARCH_XTENSA
+#ifdef ARCH_XTENSA
     d_log_wprintf (STARTUP_SERVICE_NAME, "*** %s, ver:%s, sdk:%s (build:" __DATE__ " " __TIME__ ") ***", APP_PRODUCT,
-		   APP_VERSION, system_get_sdk_version ());
+                   APP_VERSION, system_get_sdk_version ());
     d_log_wprintf (STARTUP_SERVICE_NAME, "***  userbin:0x%06x, fmem:%d  ***", system_get_userbin_addr (),
-		   system_get_free_heap_size ());
-    #endif
+                   system_get_free_heap_size ());
+#endif
 
-    #ifndef DISABLE_SYSTEM
+#ifndef DISABLE_SYSTEM
     d_log_iprintf (STARTUP_SERVICE_NAME, "block_size imdb:%u,fdb:%u", SYSTEM_IMDB_BLOCK_SIZE, SYSTEM_FDB_BLOCK_SIZE);
 
     imdb_init (&db_def, &sdata->hmdb);
@@ -179,15 +181,15 @@ system_init (void)
     // installing services
     int             i;
     for (i = 0; i < REG_SERVICE_MAX; i++) {
-	reg_services[i].fn_install ();
+        reg_services[i].fn_install ();
     }
-    #endif
+#endif
 
-    #ifdef ARCH_XTENSA
+#ifdef ARCH_XTENSA
     time_overflow_setup ();
 
     wifi_set_event_handler_cb (wifi_event_handler_cb);
-    #endif
+#endif
 
     d_log_wprintf (STARTUP_SERVICE_NAME, "done, fmem:%d", system_get_free_heap_size ());
 
@@ -200,22 +202,23 @@ system_init (void)
 void            ICACHE_FLASH_ATTR
 system_shutdown (void)
 {
-    if (!sdata) return;
+    if (!sdata)
+        return;
 
     svcctl_service_message (0, 0, NULL, SVCS_MSGTYPE_SYSTEM_STOP, NULL, NULL);
 
-    #ifndef DISABLE_SYSTEM
+#ifndef DISABLE_SYSTEM
     svcctl_stop ();
 
     imdb_done (sdata->hmdb);
     imdb_done (sdata->hfdb);
-    #endif
+#endif
 
-    #ifdef ARCH_XTENSA
+#ifdef ARCH_XTENSA
     //wifi_station_disconnect ();
     os_timer_disarm (&sdata->timer_overflow);
-    #endif
-    st_free(sdata);
+#endif
+    st_free (sdata);
 
     d_log_wprintf (SHUTDOWN_SERVICE_NAME, "done, fmem:%d", system_get_free_heap_size ());
     os_printf (LINE_END LINE_END "*** system_shutdown ***" LINE_END);
@@ -237,51 +240,53 @@ uint8           ICACHE_FLASH_ATTR
 system_get_default_secret (unsigned char *buf, uint8 len)
 {
     uint8           macaddr[6];
-    #ifdef ARCH_XTENSA
+#ifdef ARCH_XTENSA
     if (wifi_get_macaddr (STATION_IF, macaddr))
-	return buf2hex ((char *) buf, (char *) &macaddr, MIN (sizeof (macaddr), len / 2));
+        return buf2hex ((char *) buf, (char *) &macaddr, MIN (sizeof (macaddr), len / 2));
     else
-    #endif
+#endif
         return 0;
 }
 
 uint8           ICACHE_FLASH_ATTR
 system_get_default_ssid (unsigned char *buf, uint8 len)
 {
-    #ifdef ARCH_XTENSA
-    char * hostname = wifi_station_get_hostname ();
-    size_t plen = os_strlen(hostname);
+#ifdef ARCH_XTENSA
+    char           *hostname = wifi_station_get_hostname ();
+    size_t          plen = os_strlen (hostname);
     if (plen) {
-        os_strncpy(buf, hostname, len);
+        os_strncpy ((char*) buf, hostname, len);
     }
     else
-    /*
-    uint8           macaddr[6];
-    if (wifi_get_macaddr (STATION_IF, macaddr)) {
-        size_t plen = os_strlen(AP_SSID_PREFIX);
-        os_memcpy (buf, AP_SSID_PREFIX, plen);
-	return plen + buf2hex ( d_pointer_add(char, buf, plen), d_pointer_add(char, &macaddr, 3), MIN (3, (len - plen)/ 2));
-    }	
-    else*/
-    #endif
+        /*
+         * uint8           macaddr[6];
+         * if (wifi_get_macaddr (STATION_IF, macaddr)) {
+         * size_t plen = os_strlen(AP_SSID_PREFIX);
+         * os_memcpy (buf, AP_SSID_PREFIX, plen);
+         * return plen + buf2hex ( d_pointer_add(char, buf, plen), d_pointer_add(char, &macaddr, 3), MIN (3, (len - plen)/ 2));
+         * }        
+         * else */
+#endif
         return 0;
 }
 
-const char    *ICACHE_FLASH_ATTR
-system_get_description () {
+const char     *ICACHE_FLASH_ATTR
+system_get_description ()
+{
     return (const char *) sdata->sysdescr;
 }
 
-void           ICACHE_FLASH_ATTR
-system_set_description (const char *sysdescr) {
-    os_strncpy(sdata->sysdescr, sysdescr, SYSTEM_DESCRIPTION_LENGTH);
+void            ICACHE_FLASH_ATTR
+system_set_description (const char *sysdescr)
+{
+    os_strncpy (sdata->sysdescr, sysdescr, SYSTEM_DESCRIPTION_LENGTH);
 }
 
 
 #ifdef ARCH_XTENSA
-bool           ICACHE_FLASH_ATTR
-system_post_delayed_cb(ETSTimerFunc task, void *arg)
+bool            ICACHE_FLASH_ATTR
+system_post_delayed_cb (ETSTimerFunc task, void *arg)
 {
-    return system_os_post(USER_TASK_PRIO_1, (os_signal_t) task, (os_param_t) arg);
+    return system_os_post (USER_TASK_PRIO_1, (os_signal_t) task, (os_param_t) arg);
 }
 #endif

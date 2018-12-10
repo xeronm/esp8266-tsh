@@ -37,25 +37,25 @@ typedef struct gpio_def_s {
 #ifdef ARCH_XTENSA
 // ESP-12E Layout
 LOCAL gpio_def_t const gpio_layout[GPIO_PIN_COUNT] = {
-    {PERIPHS_IO_MUX_GPIO0_U, FUNC_GPIO0, true},	// GPIO_0    High (Low for flash)
-    {PERIPHS_IO_MUX_U0TXD_U, FUNC_U0TXD, false},	// GPIO_1    U0TXD
-    {PERIPHS_IO_MUX_GPIO2_U, FUNC_GPIO2, true},	// GPIO_2    High
-    {PERIPHS_IO_MUX_U0RXD_U, 0, false},	// GPIO_3    U0RXD
-    {PERIPHS_IO_MUX_GPIO4_U, FUNC_GPIO4, true},	// GPIO_4
-    {PERIPHS_IO_MUX_GPIO5_U, FUNC_GPIO5, true},	// GPIO_5
-    {0, 0, false},		// GPIO_6
-    {0, 0, false},		// GPIO_7
-    {0, 0, false},		// GPIO_8
-    {PERIPHS_IO_MUX_SD_DATA2_U, FUNC_GPIO9, true},	// GPIO_9
-    {PERIPHS_IO_MUX_SD_DATA3_U, FUNC_GPIO10, true},	// GPIO_10
-    {0, 0, false},		// GPIO_11
-    {PERIPHS_IO_MUX_MTDI_U, FUNC_GPIO12, true},	// GPIO_12
-    {PERIPHS_IO_MUX_MTCK_U, FUNC_GPIO13, true},	// GPIO_13
-    {PERIPHS_IO_MUX_MTMS_U, FUNC_GPIO14, true},	// GPIO_14
-    {PERIPHS_IO_MUX_MTDO_U, FUNC_GPIO15, true},	// GPIO_15
+    {PERIPHS_IO_MUX_GPIO0_U, FUNC_GPIO0, true}, // GPIO_0    High (Low for flash)
+    {PERIPHS_IO_MUX_U0TXD_U, FUNC_U0TXD, false},        // GPIO_1    U0TXD
+    {PERIPHS_IO_MUX_GPIO2_U, FUNC_GPIO2, true}, // GPIO_2    High
+    {PERIPHS_IO_MUX_U0RXD_U, 0, false}, // GPIO_3    U0RXD
+    {PERIPHS_IO_MUX_GPIO4_U, FUNC_GPIO4, true}, // GPIO_4
+    {PERIPHS_IO_MUX_GPIO5_U, FUNC_GPIO5, true}, // GPIO_5
+    {0, 0, false},              // GPIO_6
+    {0, 0, false},              // GPIO_7
+    {0, 0, false},              // GPIO_8
+    {PERIPHS_IO_MUX_SD_DATA2_U, FUNC_GPIO9, true},      // GPIO_9
+    {PERIPHS_IO_MUX_SD_DATA3_U, FUNC_GPIO10, true},     // GPIO_10
+    {0, 0, false},              // GPIO_11
+    {PERIPHS_IO_MUX_MTDI_U, FUNC_GPIO12, true}, // GPIO_12
+    {PERIPHS_IO_MUX_MTCK_U, FUNC_GPIO13, true}, // GPIO_13
+    {PERIPHS_IO_MUX_MTMS_U, FUNC_GPIO14, true}, // GPIO_14
+    {PERIPHS_IO_MUX_MTDO_U, FUNC_GPIO15, true}, // GPIO_15
 };
 #else
-LOCAL gpio_def_t const gpio_layout[] = {};
+LOCAL gpio_def_t const gpio_layout[] = { };
 #endif
 
 typedef struct gpio_use_s {
@@ -97,6 +97,6 @@ svcs_errcode_t  gpio_service_uninstall (void);
 svcs_errcode_t  gpio_on_start (const svcs_resource_t * svcres, dtlv_ctx_t * conf);
 svcs_errcode_t  gpio_on_stop (void);
 svcs_errcode_t  gpio_on_message (service_ident_t orig_id, service_msgtype_t msgtype, void *ctxdata, dtlv_ctx_t * msg_in,
-				 dtlv_ctx_t * msg_out);
+                                 dtlv_ctx_t * msg_out);
 
 #endif

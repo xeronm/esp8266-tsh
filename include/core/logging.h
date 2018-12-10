@@ -41,13 +41,13 @@ void            log_printf (const log_severity_t severity, const char *svc, cons
 
 // used for buffer logging, writes buffer as hex dump, writes timestamps and service_name
 void            log_bprintf (const log_severity_t severity, const char *svc, const char *buf, size_t len,
-			     const char *fmt, ...);
+                             const char *fmt, ...);
 
 void            log_severity_set (log_severity_t severity);
 log_severity_t  log_severity_get (void);
 
 char           *get_last_error (void);
-void           reset_last_error (void);
+void            reset_last_error (void);
 
 #ifdef LOGGING_DEBUG
 #define d_log_dprintf(svc, fmt, ...)			log_printf(LOG_DEBUG, svc, fmt, ##__VA_ARGS__)

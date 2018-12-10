@@ -90,7 +90,7 @@ typedef struct svcs_resource_s {
     imdb_hndlr_t    hdata;
 } svcs_resource_t;
 
-#define SERVICE_NAME_LEN		16	//
+#define SERVICE_NAME_LEN		16      //
 typedef char    service_name_t[SERVICE_NAME_LEN];
 
 typedef uint16  service_ident_t;
@@ -101,8 +101,8 @@ typedef         svcs_errcode_t (*svcs_on_start_t) (const svcs_resource_t * svcre
 typedef         svcs_errcode_t (*svcs_on_stop_t) ();
 typedef         svcs_errcode_t (*svcs_on_cfgupd_t) (dtlv_ctx_t * conf);
 typedef         svcs_errcode_t (*svcs_on_message_t) (service_ident_t orig_id,
-						     service_msgtype_t msgtype,
-						     void *ctxdata, dtlv_ctx_t * msg_in, dtlv_ctx_t * msg_out);
+                                                     service_msgtype_t msgtype,
+                                                     void *ctxdata, dtlv_ctx_t * msg_in, dtlv_ctx_t * msg_out);
 
 /*
 Service Definition
@@ -148,9 +148,9 @@ svcs_errcode_t  svcctl_service_conf_set (service_ident_t service_id, dtlv_ctx_t 
 svcs_errcode_t  svcctl_service_conf_save (service_ident_t service_id);
 
 svcs_errcode_t  svcctl_service_message (service_ident_t orig_id,
-					service_ident_t dest_id,
-					void *ctxdata,
-					service_msgtype_t msgtype, dtlv_ctx_t * msg_in, dtlv_ctx_t * msg_out);
+                                        service_ident_t dest_id,
+                                        void *ctxdata,
+                                        service_msgtype_t msgtype, dtlv_ctx_t * msg_in, dtlv_ctx_t * msg_out);
 
 svcs_errcode_t  encode_service_result_ext (dtlv_ctx_t * msg_out, uint8 ext_code, const char *errmsg);
 

@@ -37,8 +37,8 @@
 #define LOGGING_LAST_ERROR_BUFFER_SIZE	84
 
 LOCAL log_severity_t __log_severity = LOGGING_SEVERITY;
-LOCAL char           __last_error[LOGGING_LAST_ERROR_BUFFER_SIZE] = "";
-LOCAL char           __last_error_tmp[LOGGING_LAST_ERROR_BUFFER_SIZE] = "";
+LOCAL char      __last_error[LOGGING_LAST_ERROR_BUFFER_SIZE] = "";
+LOCAL char      __last_error_tmp[LOGGING_LAST_ERROR_BUFFER_SIZE] = "";
 
 LOCAL const char *sz_severity_message[] = {
     "none ",
@@ -57,7 +57,7 @@ log_print_prefix (log_severity_t severity, const char *svc)
 
     os_printf ("[%u.%03d] [%s]", ts2.sec, ts2.usec / USEC_PER_MSEC, sz_severity_message[severity]);
     if (!d_char_is_end (svc)) {
-	os_printf ("[%s] ", svc);
+        os_printf ("[%s] ", svc);
     }
 }
 
@@ -65,13 +65,13 @@ LOCAL void      ICACHE_FLASH_ATTR
 log_vprintf (const log_severity_t severity, const char *svc, const char *fmt, va_list al)
 {
     if (severity <= LOG_WARNING) {
-        va_list al2;
+        va_list         al2;
         va_copy (al2, al);
-        os_vsnprintf(__last_error, LOGGING_LAST_ERROR_BUFFER_SIZE - 1, fmt, al2);
+        os_vsnprintf (__last_error, LOGGING_LAST_ERROR_BUFFER_SIZE - 1, fmt, al2);
     }
 
     if (severity > __log_severity)
-	return;
+        return;
 
     log_print_prefix (severity, svc);
     os_vprintf (fmt, al);
@@ -79,10 +79,10 @@ log_vprintf (const log_severity_t severity, const char *svc, const char *fmt, va
 
 #ifndef DISABLE_SERVICE_SYSLOG
     if ((severity < LOG_DEBUG) && (syslog_available ())) {
-        va_list al2;
+        va_list         al2;
         va_copy (al2, al);
-	syslog_vprintf (severity, svc, fmt, al2);
-	//return;
+        syslog_vprintf (severity, svc, fmt, al2);
+        //return;
     }
 #endif
 }
@@ -91,13 +91,13 @@ LOCAL void      ICACHE_FLASH_ATTR
 log_vbprintf (const log_severity_t severity, const char *svc, const char *buf, size_t len, const char *fmt, va_list al)
 {
     if (severity <= LOG_WARNING) {
-        va_list al2;
+        va_list         al2;
         va_copy (al2, al);
-        os_vsnprintf(__last_error, LOGGING_LAST_ERROR_BUFFER_SIZE-1, fmt, al2);
+        os_vsnprintf (__last_error, LOGGING_LAST_ERROR_BUFFER_SIZE - 1, fmt, al2);
     }
 
     if (severity > __log_severity)
-	return;
+        return;
 
     log_print_prefix (severity, svc);
     os_vprintf (fmt, al);
@@ -107,10 +107,10 @@ log_vbprintf (const log_severity_t severity, const char *svc, const char *buf, s
 
 #ifndef DISABLE_SERVICE_SYSLOG
     if ((severity < LOG_DEBUG) && (syslog_available ())) {
-        va_list al2;
+        va_list         al2;
         va_copy (al2, al);
-	syslog_vbprintf (severity, svc, buf, len, fmt, al2);
-	//return;
+        syslog_vbprintf (severity, svc, buf, len, fmt, al2);
+        //return;
     }
 #endif
 }
@@ -127,15 +127,17 @@ log_severity_get (void)
     return __log_severity;
 }
 
-char *           ICACHE_FLASH_ATTR
-get_last_error (void) {
-    os_memcpy(__last_error_tmp, __last_error, LOGGING_LAST_ERROR_BUFFER_SIZE);
+char           *ICACHE_FLASH_ATTR
+get_last_error (void)
+{
+    os_memcpy (__last_error_tmp, __last_error, LOGGING_LAST_ERROR_BUFFER_SIZE);
     return (char *) &__last_error_tmp;
 }
 
-void             ICACHE_FLASH_ATTR
-reset_last_error (void) {
-    os_memset(__last_error, 0, LOGGING_LAST_ERROR_BUFFER_SIZE);
+void            ICACHE_FLASH_ATTR
+reset_last_error (void)
+{
+    os_memset (__last_error, 0, LOGGING_LAST_ERROR_BUFFER_SIZE);
 }
 
 

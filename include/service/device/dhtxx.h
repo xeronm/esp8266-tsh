@@ -37,7 +37,7 @@ typedef struct dht_s {
 #define DHT_MIN_EMA_ALPHA_PCT		5
 #define DHT_MAX_EMA_ALPHA_PCT		95
 
-#define DHT_DEFAULT_EMA_ALPHA_PCT	90	// Exponentioal moving average alpha PCT
+#define DHT_DEFAULT_EMA_ALPHA_PCT	90      // Exponentioal moving average alpha PCT
 #define DHT_DEFAULT_SENSOR_TYPE		DHT_TYPE_DHT11
 #define DHT_DEFAULT_GPIO		4
 #define DHT_DEFAULT_STAT_TIMEOUT_SEC	20
@@ -68,7 +68,7 @@ typedef enum dht_avp_code_e {
 typedef dht_t   dht_hist_t[DHT_HISTORY_LENGTH];
 
 dht_result_t    dht_query (dht_t * value);
-dht_result_t    dht_get (dht_t * value);	// exponential moving average
+dht_result_t    dht_get (dht_t * value);        // exponential moving average
 
 dht_result_t    dht_get_hist (dht_hist_t * hist);
 
@@ -80,6 +80,6 @@ svcs_errcode_t  dht_on_stop ();
 svcs_errcode_t  dht_on_cfgupd (dtlv_ctx_t * conf);
 
 svcs_errcode_t  dht_on_message (service_ident_t orig_id,
-				service_msgtype_t msgtype, void *ctxdata, dtlv_ctx_t * msg_in, dtlv_ctx_t * msg_out);
+                                service_msgtype_t msgtype, void *ctxdata, dtlv_ctx_t * msg_in, dtlv_ctx_t * msg_out);
 
 #endif

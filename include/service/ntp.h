@@ -30,7 +30,7 @@
 #define NTP_SERVICE_ID		6
 #define NTP_SERVICE_NAME	"ntp"
 
-#define NTP_PORT		123	/* Remote NTP port */
+#define NTP_PORT		123     /* Remote NTP port */
 
 #define NTP_DEFAULT_LOCAL_PORT		0
 #define NTP_DEFAULT_POLL_TIMEOUT_MIN	15
@@ -99,7 +99,7 @@ svcs_errcode_t  ntp_on_stop ();
 svcs_errcode_t  ntp_on_cfgupd (dtlv_ctx_t * conf);
 
 svcs_errcode_t  ntp_on_message (service_ident_t orig_id,
-				service_msgtype_t msgtype, void *ctxdata, dtlv_ctx_t * msg_in, dtlv_ctx_t * msg_out);
+                                service_msgtype_t msgtype, void *ctxdata, dtlv_ctx_t * msg_in, dtlv_ctx_t * msg_out);
 
 
 #endif

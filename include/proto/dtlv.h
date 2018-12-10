@@ -56,8 +56,8 @@ typedef struct dtlv_havpe_s {
 
 typedef union dtlv_nscode_u {
     struct {
-	namespaceid_t   namespace_id:6;
-	avp_code_t      code:10;
+        namespaceid_t   namespace_id:6;
+        avp_code_t      code:10;
     } comp;
     uint16          nscode;
 } dtlv_nscode_t;
@@ -101,8 +101,8 @@ typedef struct PACKED dtlv_ctx_s {
 
 /* Decoded AVP */
 typedef struct dtlv_davp_s {
-    dtlv_havpd_t    havpd;	// decoded AVP Header
-    dtlv_avp_t     *avp;	// pointer to encoded AVP
+    dtlv_havpd_t    havpd;      // decoded AVP Header
+    dtlv_avp_t     *avp;        // pointer to encoded AVP
 } dtlv_davp_t;
 
 dtlv_errcode_t  dtlv_ctx_init_decode (dtlv_ctx_t * ctx, char *buf, dtlv_size_t datalen);
@@ -182,32 +182,32 @@ dtlv_errcode_t  dtlv_ctx_reset_encode (dtlv_ctx_t * ctx);
   - avp: avp pointers
 */
 dtlv_errcode_t  dtlv_avp_encode (dtlv_ctx_t * ctx,
-				 const namespaceid_t namespace_id,
-				 const avp_code_t avp_code,
-				 const dtlv_datatype_t data_type,
-				 const dtlv_size_t data_length, const bool is_list, dtlv_avp_t ** avp);
+                                 const namespaceid_t namespace_id,
+                                 const avp_code_t avp_code,
+                                 const dtlv_datatype_t data_type,
+                                 const dtlv_size_t data_length, const bool is_list, dtlv_avp_t ** avp);
 
 dtlv_errcode_t  dtlv_avp_encode_group_done (dtlv_ctx_t * ctx, dtlv_avp_t * avp);
 dtlv_errcode_t  dtlv_avp_encode_uint8 (dtlv_ctx_t * ctx, const avp_code_t avp_code, const uint8 data);
 dtlv_errcode_t  dtlv_avp_encode_uint16 (dtlv_ctx_t * ctx, const avp_code_t avp_code, const uint16 data);
 dtlv_errcode_t  dtlv_avp_encode_uint32 (dtlv_ctx_t * ctx, const avp_code_t avp_code, const uint32 data);
 dtlv_errcode_t  dtlv_avp_encode_octets (dtlv_ctx_t * ctx, const avp_code_t avp_code, const size_t length,
-					const char *data);
+                                        const char *data);
 dtlv_errcode_t  dtlv_avp_encode_char (dtlv_ctx_t * ctx, const avp_code_t avp_code, const char *data);
 dtlv_errcode_t  dtlv_avp_encode_nchar (dtlv_ctx_t * ctx, const avp_code_t avp_code, const size_t maxlen,
-				       const char *data);
-dtlv_errcode_t  dtlv_raw_encode (dtlv_ctx_t * ctx, char * buf, dtlv_size_t datalen);
+                                       const char *data);
+dtlv_errcode_t  dtlv_raw_encode (dtlv_ctx_t * ctx, char *buf, dtlv_size_t datalen);
 
 #define d_ctx_left_size(ctx)		((ctx)->buflen - (ctx)->datalen)
 
 dtlv_errcode_t  dtlv_avp_decode (dtlv_ctx_t * ctx, dtlv_davp_t * avp);
 dtlv_errcode_t  dtlv_avp_decode_bypath (dtlv_ctx_t * ctx, dtlv_nscode_t * path, dtlv_davp_t avp_array[],
-					uint16 arry_len, bool limit_count, uint16 * total_count);
+                                        uint16 arry_len, bool limit_count, uint16 * total_count);
 
 typedef         dtlv_errcode_t (*dtlv_forall_avp_func) (dtlv_davp_t * avp, const dtlv_ctx_t * ctx, const void *data,
-							const bool group_exit);
+                                                        const bool group_exit);
 dtlv_errcode_t  dtlv_decode_forall (dtlv_ctx_t * ctx, const void *data, dtlv_nscode_t * path,
-				    dtlv_forall_avp_func forall_func);
+                                    dtlv_forall_avp_func forall_func);
 dtlv_errcode_t  dtlv_decode_to_json (dtlv_ctx_t * ctx, char *buf);
 
 dtlv_errcode_t  dtlv_avp_get_uint8 (dtlv_davp_t * avp, uint8 * data);

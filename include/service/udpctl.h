@@ -82,7 +82,7 @@
 
 #define UDPCTL_SERVICE_ID	4
 #define UDPCTL_SERVICE_NAME	"udpctl"
-#define UDPCTL_SECRET_LEN	32	//
+#define UDPCTL_SECRET_LEN	32      //
 
 #define UDPCTL_PROTOCOL_VERSION		0x0100
 
@@ -107,12 +107,12 @@ typedef struct udpctl_packet_s {
 
 typedef struct udpctl_packet_sec_s {
     udpctl_packet_t base;
-    udpctl_digest_t digest;	// 32 bytes
+    udpctl_digest_t digest;     // 32 bytes
 } udpctl_packet_sec_t;
 
 typedef struct udpctl_packet_auth_s {
     udpctl_packet_sec_t base_sec;
-    udpctl_digest_t auth;	// 32 bytes
+    udpctl_digest_t auth;       // 32 bytes
 } udpctl_packet_auth_t;
 
 typedef enum udpctl_clnt_state_e {
@@ -185,12 +185,12 @@ svcs_errcode_t  udpctl_on_stop ();
 svcs_errcode_t  udpctl_on_cfgupd (dtlv_ctx_t * conf);
 
 svcs_errcode_t  udpctl_on_message (service_ident_t orig_id,
-				   service_msgtype_t msgtype, void *ctxdata, dtlv_ctx_t * msg_in, dtlv_ctx_t * msg_out);
+                                   service_msgtype_t msgtype, void *ctxdata, dtlv_ctx_t * msg_in, dtlv_ctx_t * msg_out);
 
 
 udpctl_errcode_t udpctl_sync_request (ipv4_addr_t * addr, ip_port_t * port,
-				      char *data_in, packet_size_t length_in, char *data_out,
-				      packet_size_t * length_out);
+                                      char *data_in, packet_size_t length_in, char *data_out,
+                                      packet_size_t * length_out);
 
 #define d_udpctl_check_udpctl_error(ret) \
 	{ \
