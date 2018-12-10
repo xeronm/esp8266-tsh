@@ -95,7 +95,7 @@ Example:
 |esp.WiFi-Password| 1 | Password |  |
 |esp.WiFi-Auto-Connect| 1 | Station mode auto connect (0- disabled, 1- enabled)| 1- enabled |
 |esp.WIFI-Soft-AP| 0 | Soft AP mode parameters (object) |
-|esp.WiFi-SSID| 1 | SSID | `${HOST_NAME}` or `ESP_${MAC48[3:6]}`> |
+|esp.WiFi-SSID| 1 | SSID | `${HOST_NAME}` or `ESP_${MAC48[3:6]}` |
 |esp.WiFi-Password| 1 | Password | `${MAC48}` |
 |esp.WiFi-Auth-Mode| 1 | Soft AP authentication mode (0- open, 1- wep, 2- wpa psk, 3- wpa2 psk, 4- wpa/wpa2 psk) | 4- wpa/wpa2 psk |
 
@@ -134,7 +134,7 @@ Example:
 Example:
 ```
   {
-    "common.IP-Port": 3900,
+    "common.IP-Port": 3901,
     "uctl.Secret": "mysecret"
   }
 ```
@@ -147,7 +147,7 @@ Example:
 |Parameter|Level|Description|Default|
 |---------|-----|-----------|-------|
 |common.Time-Zone| 0 | Local Timezone (1/4 hours) | +0:00 |
-|ntp.Poll-Interval| 0 |  Poll interval (minutes) | 20 |
+|ntp.Poll-Interval| 0 |  Poll interval (minutes) | 15 |
 |ntp.Peer| 0 |NTP Server peers (object list 0-2 items) | 0.pool.ntp.org, 1.pool.ntp.org |
 |common.Host-Name| 1 | NTP Server host |  |
 
@@ -155,7 +155,7 @@ Example:
 ```
   { 
     "common.Time-Zone": "+3:00", 
-    "ntp.Poll-Interval": 10, 
+    "ntp.Poll-Interval": 15, 
     "ntp.Peer": [
       { "common.Host-Name": "0.pool.ntp.org" }, 
       { "common.Host-Name": "1.pool.ntp.org" }
@@ -172,9 +172,10 @@ Example:
 Bathroom FAN control unit with DHT11 sensor and 1P solid state relay.
 
 Conrol Logic Goals
-- Force turn on FAN when system startup and every day-time hour. Turn off after 10 minutes timeout.
-- Turn on/off FAN when humidity reached high/low threshold. Regardless of humidity turn off after 20 minutes.
+- Force turn on FAN when system startup and every day-time hour. Turn off after 12 minutes timeout.
+- Turn on/off FAN when humidity reached high/low threshold. Regardless of humidity turn off after 30 minutes.
 - Cool-down turn on/off humidity event by 5 minutes after last on/off event.
+
 
 #### 5.1.2. Flash Initial Firmware Image
 
@@ -299,10 +300,6 @@ Following terms were used:
 - humidity turn on threshold: >= 36%
 - humidity turn off threshold: < 36%
 - used estimated moving average results from DHT sensor
-- force on power off timeout: 12 minutes
-- humidity on power off timeout: 30 minutes
-- humidity on/off cool down timeout: 5 minutes
-
 
 ###### 1. Make light-shell script with control rule logic. Solution is not optimal, may improved by using dht service thresholds and multicast signal handling
 ```
