@@ -1,16 +1,16 @@
 esp8266-tsh
-===============
+===========
 Light-weight Shell for ESP8266
 
-# Scope
+## Scope
 
-# References
+## References
 
-# Definitions and Abbrevations
+## Definitions and Abbrevations
 
-# Buld Firmware from scratch
+## Buld Firmware from scratch
 
-## Prepare build environment
+### Prepare build environment
 
 ```
 $ sudo docker pull dtec/esp8266:1.22-p
@@ -18,13 +18,13 @@ $ git clone https://github.com/xeronm/esp8266-tsh.git
 $ cd esp8266-tsh
 ```
 
-## Configure project
+### Configure project
 
 Configurables are:
 - APP, SPI_MODE, SDK_IMAGE_TOOL in `Makefile`
 - Global project defines in `./include/core/config.h`
 
-## Buld Firmware
+### Buld Firmware
 
 ```
 $ sudo docker run --name esp8266 -it --rm -v $PWD:/src/project dtec/esp8266:1.22-p
@@ -32,9 +32,9 @@ $ sudo docker run --name esp8266 -it --rm -v $PWD:/src/project dtec/esp8266:1.22
 ```
 
 
-# Usage
+## Usage
 
-## Service catalog
+### Service catalog
 
 | Id | Name      | Description                  |
 | ---| ----------| -----------------------------|
@@ -48,11 +48,11 @@ $ sudo docker run --name esp8266 -it --rm -v $PWD:/src/project dtec/esp8266:1.22
 |  7 | gpioctl   | GPIO control management      |
 |  8 | sched     | Cron-like scheduler          |
 
-## Service documentation
+### Service documentation
 
-### System logging (syslog)
+#### System logging (syslog)
 
-#### Configuration parameters
+##### Configuration parameters
 
 |Parameter|Level|Description|Default|
 |---------|-----|-----------|-------|
@@ -63,9 +63,9 @@ Example:
   { "syslog.Log-Severity": 4 }
 ```
 
-### esp8266 system management (espadmin)
+#### esp8266 system management (espadmin)
 
-#### Configuration parameters
+##### Configuration parameters
 
 |Parameter|Level|Description|Default|
 |---------|-----|-----------|-------|
@@ -101,9 +101,9 @@ Example:
   }
 ```
 
-### UDP system management (udpctl)
+#### UDP system management (udpctl)
 
-#### Configuration parameters
+##### Configuration parameters
 
 |Parameter|Level|Description|Default|
 |---------|-----|-----------|-------|
@@ -121,9 +121,9 @@ Example:
 ```
 
 
-### Network Time Protocol client (ntp)
+#### Network Time Protocol client (ntp)
 
-#### Configuration parameters
+##### Configuration parameters
 
 |Parameter|Level|Description|Default|
 |---------|-----|-----------|-------|
@@ -144,11 +144,11 @@ Example:
   }
 ```
 
-# Examples
+## Examples
 
-## FAN Control Unit
+### FAN Control Unit
 
-### Scope
+#### Scope
 
 Bathroom FAN control unit with DHT11 sensor and 1P solid state relay.
 
@@ -157,7 +157,7 @@ Conrol Logic Goals
 - Turn on/off FAN when humidity reached high/low threshold. Regardless of humidity turn off after 20 minutes.
 - Cool-down turn on/off humidity event by 5 minutes after last on/off event.
 
-### Flash Initial Firmware Image
+#### Flash Initial Firmware Image
 
 1. Connect ESP12E to host by serial cable
 2. Use esptool for query module `MAC` (in our example was `5ccf7f85e196`)
@@ -224,7 +224,7 @@ $ ./tcli.py -H 192.168.4.1 -s 5ccf7f85e196 system info
 }
 ```
 
-### Configure System
+#### Configure System
 
 1. Setup Wi-Fi station mode and system description
 ```
@@ -269,7 +269,7 @@ $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 service config save -m '{
 ```
 
 
-### Configure Script Logic and Schedule
+#### Configure Script Logic and Schedule
 
 Following terms were used:
 - global variable `last_ev` - last state change event (0- reset state, 1-force power on, 2- humidity high threshold, 3- humidity low threshold, 4- power off timeout);
@@ -281,15 +281,13 @@ Following terms were used:
 
 1. Make light-shell script with control rule logic. Solution is not optimal, may improved by using dht service thresholds and multicast signal handling.
 ```
-
-## last_dt; ## last_ev; # sdt := sysctime(); 
+\#\# last_dt; ## last_ev; # sdt := sysctime(); 
 (last_ev <= 0) ?? { gpio_set(0, 0); last_ev := 1; last_dt := sdt; print(last_ev) }; 	// set initial state, force power on
 
-# temp = 0; # hmd = 0; # res := ! dht_get(1, hmd, temp); 
+\# temp = 0; # hmd = 0; # res := ! dht_get(1, hmd, temp); 
 ((last_ev != 2) && res && (hmd >= 3600) && (last_dt + 300 < sdt)) ?? { gpio_set(0, 0); last_ev := 2; last_dt := sdt; print(last_ev) }; 	// humidity high threshold
 ((last_ev = 2) && res && (hmd < 3600) && (last_dt + 300 < sdt)) ?? { gpio_set(0, 1); last_ev := 3; last_dt := sdt; print(last_ev) };	// humidity low threshold
 ((last_ev = 1) && (last_dt + 720 < sdt) || (last_ev = 2) && (last_dt + 1800 < sdt)) ?? { gpio_set(0, 1); last_ev := 4; last_dt := sdt; print(last_ev) };	// power off timeout
-
 ```
 
 2. Add peristent named statement `fan_control`
@@ -306,7 +304,7 @@ $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 lsh add -m '{
 $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 lsh add -m '{
   "lsh.Statement-Name": "fan_force_on",
   "lsh.Persistent-Flag": 1,
-  "lsh.Statement-Text": "## last_ev; ((last_ev != 1) && (last_ev != 2)) ?? { last_ev := 1; ## last_dt = sysctime(); gpio_set(0, 0); print(last_ev) }"
+  "lsh.Statement-Text": "## last_ev; ((last_ev != 1) && (last_ev != 2)) ?? { last_ev := 1; ## last_dt := sysctime(); gpio_set(0, 0); print(last_ev) }"
 }'
 ```
 
@@ -335,7 +333,8 @@ $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 lsh run -m '{ "lsh.Statement-Name": 
 ```
 
 4.2. Turn off after 10 minutes timeout
-```$ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 lsh run -m '{ "lsh.Statement-Name": "fan_control" }'
+```
+$ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 lsh run -m '{ "lsh.Statement-Name": "fan_control" }'
 {
     "common.Event-Timestamp": "2018.12.07 08:57:12",
     "lsh:common.Service-Message": {
@@ -357,7 +356,8 @@ $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 lsh run -m '{ "lsh.Statement-Name": 
 ```
 
 4.3. Force turn on
-```$ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 lsh run -m '{ "lsh.Statement-Name": "fan_force_on" }'
+```
+$ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 lsh run -m '{ "lsh.Statement-Name": "fan_force_on" }'
 {
     "common.Event-Timestamp": "2018.12.07 08:59:32",
     "lsh:common.Service-Message": {
@@ -401,9 +401,9 @@ $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 sched add -m '{
 
 
 
-# Appendix: Memos
+## Appendix: Memos
 
-## Indent
+### Indent
 ```
 $ find ./ -name '*.h' -exec indent -l120 -brs -br -i4 -ci4 -di16 -sc {} -o {} \;
 $ find ./ -name '*.c' -exec indent -l120 -brs -br -i4 -ci4 -di16 -sc {} -o {} \;
