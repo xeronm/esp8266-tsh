@@ -1,7 +1,7 @@
 esp8266-tsh
 ===========
 Light-weight Shell for ESP8266 (Things Shell). 
-Developed and tested with ESP12E (4Mb) board. Many solutions of this projects may looks weird, but all of it made just for fun and it works.
+Developed and tested with my ESP-12E (4Mb) board. Many solutions of this projects may looks weird, but all of it made just for fun and it works.
 
 Main Goals:
 - light-weight udp control protocol with python client
@@ -10,7 +10,7 @@ Main Goals:
 
 License: GPLv3
 
-Please feel free to use, improve, report bugs, etc. And if you find my work usefull thank me through paypal <xeronm@gmail.com>.
+*Feel free to use, improve, report bugs, criticize, etc. And if you find my work usefull feel free to thank me through paypal "xeronm@gmail.com".*
 
 Contributors:
 - Denis Muratov <xeronm@gmail.com>
