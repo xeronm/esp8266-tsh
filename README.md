@@ -125,6 +125,7 @@ Example:
 |esp.WiFi-Auth-Mode| 2 | Soft AP authentication mode (0- open, 1- wep, 2- wpa psk, 3- wpa2 psk, 4- wpa/wpa2 psk) | 4- wpa/wpa2 psk |
 
 `${MAC48}` - MAC address of station interface
+
 `${HOST_NAME}` - WiFi station DHCP hostname
 
 Example:
@@ -234,13 +235,20 @@ Example:
 	+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ```
 Service-Id - message target service identifier.
+
 Length - message length (header + body)
-R flag - request message
-S flag - secured message (has message digest)
-E flag - error answer
+
+Flags:
+- R flag - request message
+- S flag - secured message (has message digest)
+- flag - error answer
+
 Command Code - corresponds to service Message type
+
 Identifier - message sequence identifier (starts from 0 for every new authenticated connection)
+
 Message Digest - message digest for validate message originator
+
 Authenticator - party authenticator issued by originator of auth request/answer message
 
 ###### Message Body
@@ -255,12 +263,18 @@ Message body is a sequence of AVP
 	+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ```
 
-DataType flag - (0- OCTETS, 1- OBJECT, 2- INTEGER, 3- CHAR)
+DataType - (0- OCTETS, 1- OBJECT, 2- INTEGER, 3- CHAR)
+
 List flag - means a grouping AVP that contains a sequence of AVP with same type
+
 AVP Length - length of AVP (hader + data)
+
 Namespace-Id - Namespace identifier, 0 means usage of parent Namespace
+
 AVP Code - AVP code, must unique identify AVP within Namespace
-Data - data
+
+Data - attribute value data (4-bytes aligned)
+
 
 #### 4.2.5. Network Time Protocol client (ntp)
 
