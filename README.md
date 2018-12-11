@@ -69,9 +69,31 @@ $ sudo docker run --name esp8266 -it --rm -v $PWD:/src/project dtec/esp8266:1.22
 
 ### 4.2. Service documentation
 
-#### 4.2.1. System logging (syslog)
+#### 4.2.1. Service management (service)
 
-##### 4.2.1.2. Configuration parameters
+##### 4.2.1.1. Message types
+
+|MsgType|Command|Multicast|Description|
+|-------|-------|---------|-----------|
+|1|INFO||Query information (state, services, etc.) |
+|2|CONTROL||Service control (start/stop, enable/disable, etc.) |
+|3|CONFIG_GET|| Query service configuration from Flash-DB (current, new)|
+|4|CONFIG_SET|| Set new service configuration (reboot will restore current configuration)|
+|5|CONFIG_SAVE|| Apply new service configuration as current configuration|
+|32|SYSTEM_START|Y| System startup signal|
+|33|SYSTEM_STOP|Y| System shutdown signal|
+|34|NETWORK|Y| Network changed signal (station got IP) |
+|35|NETWORK_LOSS|Y| Network loss signal |
+|36|ADJTIME|Y| Adjust NTP datetime signal |
+|37|MCAST_SIG1|Y| User signal |
+|38|MCAST_SIG2|Y| User signal |
+|39|MCAST_SIG3|Y| User signal |
+|40|MCAST_SIG4|Y| User signal |
+
+
+#### 4.2.2. System logging (syslog)
+
+##### 4.2.2.2. Configuration parameters
 
 |Parameter|Level|Description|Default|
 |---------|-----|-----------|-------|
@@ -82,9 +104,9 @@ Example:
   { "syslog.Log-Severity": 4 }
 ```
 
-#### 4.2.2. esp8266 system management (espadmin)
+#### 4.2.3. esp8266 system management (espadmin)
 
-##### 4.2.2.1. Configuration parameters
+##### 4.2.3.1. Configuration parameters
 
 |Parameter|Level|Description|Default|
 |---------|-----|-----------|-------|
@@ -98,11 +120,12 @@ Example:
 |esp.WiFi-Password| 2 | Password |  |
 |esp.WiFi-Auto-Connect| 2 | Station mode auto connect (0- disabled, 1- enabled)| 1- enabled |
 |esp.WIFI-Soft-AP| 1 | Soft AP mode parameters (object) |
-|esp.WiFi-SSID| 2 | SSID | `${HOST_NAME}` or `ESP_${MAC48[3:6]}` |
+|esp.WiFi-SSID| 2 | SSID | `${HOST_NAME}` |
 |esp.WiFi-Password| 2 | Password | `${MAC48}` |
 |esp.WiFi-Auth-Mode| 2 | Soft AP authentication mode (0- open, 1- wep, 2- wpa psk, 3- wpa2 psk, 4- wpa/wpa2 psk) | 4- wpa/wpa2 psk |
 
 `${MAC48}` - MAC address of station interface
+`${HOST_NAME}` - WiFi station DHCP hostname
 
 Example:
 ```
@@ -123,7 +146,7 @@ Example:
   }
 ```
 
-##### 4.2.2.2. Message types
+##### 4.2.3.2. Message types
 
 |MsgType|Command|Description|
 |-------|-------|-----------|
@@ -136,9 +159,9 @@ Example:
 |15|FW_OTA_ABORT| Abort firmware upgrade|
 |16|FW_VERIFY| Verify firmware digest|
 
-#### 4.2.3. UDP system management (udpctl)
+#### 4.2.4. UDP system management (udpctl)
 
-##### 4.2.3.1. Configuration parameters
+##### 4.2.4.1. Configuration parameters
 
 |Parameter|Level|Description|Default|
 |---------|-----|-----------|-------|
@@ -155,13 +178,13 @@ Example:
   }
 ```
 
-##### 4.2.3.2. Message types
+##### 4.2.4.2. Message types
 
 |MsgType|Command|Description|
 |-------|-------|-----------|
-|1|INFO|Query service information|
+|1|INFO|Query information (state, peers, etc.) |
 
-##### 4.2.3.3. Protocol
+##### 4.2.4.3. Protocol
 
 ###### Message Flow
 0. Auth Request
@@ -233,15 +256,15 @@ Message body is a sequence of AVP
 ```
 
 DataType flag - (0- OCTETS, 1- OBJECT, 2- INTEGER, 3- CHAR)
-List flag - means grouping AVP contains a sequence of AVP with same type
-AVP Length - 
+List flag - means a grouping AVP that contains a sequence of AVP with same type
+AVP Length - length of AVP (hader + data)
 Namespace-Id - Namespace identifier, 0 means usage of parent Namespace
 AVP Code - AVP code, must unique identify AVP within Namespace
-Data - 
+Data - data
 
-#### 4.2.4. Network Time Protocol client (ntp)
+#### 4.2.5. Network Time Protocol client (ntp)
 
-##### 4.2.4.1. Configuration parameters
+##### 4.2.5.1. Configuration parameters
 
 |Parameter|Level|Description|Default|
 |---------|-----|-----------|-------|
@@ -261,6 +284,14 @@ Example:
     ]
   }
 ```
+
+##### 4.2.5.2. Message types
+
+|MsgType|Command|Description|
+|-------|-------|-----------|
+|1|INFO|Query information (state, peers, etc.) |
+|10|SETDATE| Query NTP peers and try to set local datetime|
+
 
 ## 5. Examples
 
@@ -408,7 +439,7 @@ Following terms were used:
 - humidity turn off threshold: < 36%
 - used estimated moving average results from DHT sensor
 
-###### 1. Make light-shell script with control rule logic. Solution is not optimal, may improved by using dht service thresholds and multicast signal handling
+###### 1. Make light-weight shell script with control logic rules. Solution is not optimal, may improved by using dht service thresholds and multicast signal handling
 ```
   ## last_dt; ## last_ev; # sdt := sysctime(); 
   (last_ev <= 0) ?? { gpio_set(0, 0); last_ev := 1; last_dt := sdt; print(last_ev) }; 	// set initial state, force power on
@@ -429,7 +460,7 @@ $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 lsh add -m '
 }'
 ```
 
-###### 3. Add peristent named statement `fan_force_on` for force turn on by schedule, startum signal, or manual run
+###### 3. Add peristent named statement `fan_force_on` for force turn on by schedule, startup multicast signal, or manual run
 ```
 $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 lsh add -m '
 {
@@ -504,7 +535,7 @@ $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 lsh run -m '{ "lsh.Statement-Name": 
 [2639.283] [info ][lwsh] fan_force_on out: 1
 ```
 
-###### 6. Add schedules. `fan_force_on` at system startup and every 30th minutes of 09 - 21 day hours. `fan_control` at 15th seconds of every minute
+###### 6. Add schedules. `fan_force_on` - at system startup and every 30th minutes of 09 - 21 day hours. `fan_control` - at 15th seconds of every minute
 ```
 $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 sched add -m '{
   "sched.Entry-Name": "fan_force_on",
