@@ -66,6 +66,7 @@ $ sudo docker run --name esp8266 -it --rm -v $PWD:/src/project dtec/esp8266:1.22
 |  6 | ntp       | Network Time Protocol client |
 |  7 | gpioctl   | GPIO control management      |
 |  8 | sched     | Cron-like scheduler          |
+| 21 | dev.dht   | DHT11/AM2302 sensor          |
 
 ### 4.2. Service documentation
 
@@ -264,9 +265,28 @@ Message body is a sequence of AVP
 - **Data** - attribute value data (4-bytes aligned)
 
 
-#### 4.2.5. Network Time Protocol client (ntp)
+#### 4.2.5. Light-weight shell (lwsh)
 
 ##### 4.2.5.1. Configuration parameters
+
+This service hasn't any configurable parameters
+
+##### 4.2.5.2. Message types
+
+|MsgType|Command|Description|
+|-------|-------|-----------|
+|1|INFO|Query current loaded script information |
+|10|ADD| Add new script|
+|11|REMOVE| Remove existing script|
+|12|RUN| Run existing script (will load from source if needed)|
+|13|DUMP| Dump byte-code of loaded existing script|
+|14|SOURCE| Get source of existing script from Flash-DB|
+|15|LOAD| Load existing script from source (Flash-DB)|
+|16|LIST| List all stored scripts from Flash-DB|
+
+#### 4.2.6. Network Time Protocol client (ntp)
+
+##### 4.2.6.1. Configuration parameters
 
 |Parameter|Level|Description|Default|
 |---------|-----|-----------|-------|
@@ -287,12 +307,69 @@ Example:
   }
 ```
 
-##### 4.2.5.2. Message types
+##### 4.2.6.2. Message types
 
 |MsgType|Command|Description|
 |-------|-------|-----------|
 |1|INFO|Query information (state, peers, etc.) |
 |10|SETDATE| Query NTP peers and try to set local datetime|
+
+#### 4.2.7. GPIO control management (gpioctl)
+
+##### 4.2.7.1. Configuration parameters
+
+This service hasn't any configurable parameters
+
+##### 4.2.7.2. Message types
+
+|MsgType|Command|Description|
+|-------|-------|-----------|
+|1|INFO|Query GPIO perepherial information |
+|10|OUTPUT_SET| Set output parameters for GPIO PIN (value, delay, function)|
+
+#### 4.2.8. Cron-like scheduler (sched)
+
+##### 4.2.8.1. Configuration parameters
+
+This service hasn't any configurable parameters
+
+##### 4.2.8.2. Message types
+
+|MsgType|Command|Description|
+|-------|-------|-----------|
+|1|INFO|Query scheduled task information |
+|10|ADD| Add new task|
+|11|REMOVE| Remove existing task|
+|12|RUN| Run existing task|
+|13|SOURCE| Get source of existing task from Flash-DB|
+|14|LIST| List all stored tasks from Flash-DB|
+
+#### 4.2.9. DHT11/AM2302 sensor (dev.dht)
+
+##### 4.2.9.1. Configuration parameters
+
+|Parameter|Level|Description|Default|
+|---------|-----|-----------|-------|
+|common.Perepherial-GPIO-Id| 0 | GPIO PIN id | 4 |
+|dht.Sensor-Type| 0 | Sensor type (0- DHT11, 1- AM2302) | 0- DHT11 |
+|dht.Stat-Timeout| 0 | Query data timeout for statistics (last, average) (seconds) | 20 |
+|dht.Hist-Interval| 0 | - | 4 |
+|dht.EMA-Alpha-Percent| 0 | Estimated moving average alpha | 90 |
+|dht.Threshold-High| 0 | Increasing high threshold notification (object) | |
+|dht.Humidity| 1 | Humidity PCT (1/100)  | |
+|dht.Temperature| 1 | Temperature Celseus (1/100)  | |
+|common.Milticast-Signal| 1 | Notification multicast signal_id (32-63)|
+|dht.Threshold-Low| 0 | Decreasing low threshold notification (object)  | |
+|dht.Humidity| 1 | Humidity PCT (1/100)  | |
+|dht.Temperature| 1 | Temperature Celseus (1/100)  | |
+|common.Milticast-Signal| 1 | Notification multicast signal_id (32-63)|
+
+##### 4.2.9.2. Message types
+
+|MsgType|Command|Description|
+|-------|-------|-----------|
+|1|INFO|Query service information (last data response, average statistics, etc.)|
+|10|QUERY| Query data from sensor |
 
 
 ## 5. Examples
