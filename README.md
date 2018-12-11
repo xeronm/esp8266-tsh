@@ -10,10 +10,10 @@ Main Goals:
 
 License: GPLv3
 
-**Feel free to use, improve, report bugs, criticize, etc. And if you find my work usefull feel free to thank me through paypal "xeronm@gmail.com".**
+*Feel free to use, improve, report bugs, criticize and etc.*
 
 Contributors
-    - Denis Muratov <xeronm@gmail.com>
+- Denis Muratov <xeronm@gmail.com>
 
 ## 1. References
 
@@ -645,7 +645,15 @@ $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 sched add -m '{
 
 ## 6. Appendix A: Known Bugs
 
+1. #3: Sometimes NTP server returns local time wich is Posix epoch start time
+2. #4: Read previous block state of Flash-DB on reboot after spi_flash_erase_sector & spi_flash_write (not reproduced)
+
 ## 7. Appendix B: Roadmap Improvements
+
+1. #1: udpctl: send notification multicast signal messages to target host
+2. #2: udpctl: disable softap by timeout after system start
+3. #3: system: make safemode services startup after exception
+4. #6: lsh: add arguments support
 
 ## 8. Appendix C: Memos
 
