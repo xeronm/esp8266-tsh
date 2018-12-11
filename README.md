@@ -10,10 +10,10 @@ Main Goals:
 
 License: GPLv3
 
-**Feel free to use, improve, report bugs, criticize, etc. And if you find my work usefull feel free to thank me through paypal "xeronm@gmail.com".**
+*Feel free to use, improve, report bugs, criticize and etc.*
 
 Contributors
-    - Denis Muratov <xeronm@gmail.com>
+- Denis Muratov <xeronm@gmail.com>
 
 ## 1. References
 
