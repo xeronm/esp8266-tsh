@@ -32,10 +32,10 @@
  *		M1 = (Header1, H1, Auth1, Body1)
  *	Control Request #2:
  *		H2 = hmac( Header2, H1, Body2 )
- *		M2 = (Header2, H2, Body1)
+ *		M2 = (Header2, H2, Body2)
  *	Control Answer #3:
- *		H2 = hmac( Header2, H1, Body2 )
- *		M2 = (Header2, H2, Body1)
+ *		H3 = hmac( Header3, H2, Body3 )
+ *		M3 = (Header3, H3, Body3)
  *	...
  *
  */

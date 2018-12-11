@@ -15,7 +15,7 @@ Please feel free to use, improve, report bugs, etc. And if you find my work usef
 Contributors:
 - Denis Muratov <xeronm@gmail.com>
 
-## References
+## 1. References
 
  - [esp-open-sdk]: Free and open (as much as possible) integrated SDK for ESP8266/ESP8285 chips
  - [docker-esp8266]: Toolchain for esp8266 based on crosstool-NG 1.22.x
@@ -25,11 +25,11 @@ Contributors:
 [docker-esp8266]: https://github.com/xeronm/docker-esp8266
 [esp8266-tshcli]: https://github.com/xeronm/esp8266-tshcli
 
-## Definitions and Abbrevations
+## 2. Definitions and Abbrevations
 
-## Buld Firmware from scratch
+## 3. Buld Firmware from scratch
 
-### Prepare build environment
+### 3.1. Prepare build environment
 
 ```
 $ sudo docker pull dtec/esp8266:1.22-p
@@ -37,13 +37,13 @@ $ git clone https://github.com/xeronm/esp8266-tsh.git
 $ cd esp8266-tsh
 ```
 
-### Configure project
+### 3.2. Configure project
 
 Configurables are:
 - APP, SPI_MODE, SDK_IMAGE_TOOL in `Makefile`
 - Global project defines in `./include/core/config.h`
 
-### Buld Firmware
+### 3.3. Buld Firmware
 
 ```
 $ sudo docker run --name esp8266 -it --rm -v $PWD:/src/project dtec/esp8266:1.22-p
@@ -51,9 +51,9 @@ $ sudo docker run --name esp8266 -it --rm -v $PWD:/src/project dtec/esp8266:1.22
 ```
 
 
-## Usage
+## 4. Usage
 
-### Service catalog
+### 4.1. Service catalog
 
 | Id | Name      | Description                  |
 | ---| ----------| -----------------------------|
@@ -67,11 +67,11 @@ $ sudo docker run --name esp8266 -it --rm -v $PWD:/src/project dtec/esp8266:1.22
 |  7 | gpioctl   | GPIO control management      |
 |  8 | sched     | Cron-like scheduler          |
 
-### Service documentation
+### 4.2. Service documentation
 
-#### System logging (syslog)
+#### 4.2.1. System logging (syslog)
 
-##### Configuration parameters
+##### 4.2.1.2. Configuration parameters
 
 |Parameter|Level|Description|Default|
 |---------|-----|-----------|-------|
@@ -82,22 +82,25 @@ Example:
   { "syslog.Log-Severity": 4 }
 ```
 
-#### esp8266 system management (espadmin)
+#### 4.2.2. esp8266 system management (espadmin)
 
-##### Configuration parameters
+##### 4.2.2.1. Configuration parameters
 
 |Parameter|Level|Description|Default|
 |---------|-----|-----------|-------|
-|esp.WiFi-Operation-Mode| 0 | WiFi operation mode (1- station, 2- softap, 3- station + softap) | 3- station + softap |
-|esp.WiFi-Sleep-Type | 0 | WiFi sleep type (0- none, 1- light, 2- modem)| 2- modem |
-|esp.WIFI-Station| 0 | Station mode parameters (object) |
-|esp.WiFi-SSID| 1 | SSID |  |
-|esp.WiFi-Password| 1 | Password |  |
-|esp.WiFi-Auto-Connect| 1 | Station mode auto connect (0- disabled, 1- enabled)| 1- enabled |
-|esp.WIFI-Soft-AP| 0 | Soft AP mode parameters (object) |
-|esp.WiFi-SSID| 1 | SSID | `${HOST_NAME}` or `ESP_${MAC48[3:6]}`> |
-|esp.WiFi-Password| 1 | Password | `${MAC48}` |
-|esp.WiFi-Auth-Mode| 1 | Soft AP authentication mode (0- open, 1- wep, 2- wpa psk, 3- wpa2 psk, 4- wpa/wpa2 psk) | 4- wpa/wpa2 psk |
+|common.Host-Name| 0 | station DHCP hostname | `ESP_${MAC48[3:6]}` |
+|common.System-Description| 0 | Sysatem description | |
+|esp.Wireless| 0 | Wireless configuration (object) | |
+|esp.WiFi-Operation-Mode| 1 | WiFi operation mode (1- station, 2- softap, 3- station + softap) | 3- station + softap |
+|esp.WiFi-Sleep-Type | 1 | WiFi sleep type (0- none, 1- light, 2- modem)| 2- modem |
+|esp.WIFI-Station| 1 | Station mode parameters (object) |
+|esp.WiFi-SSID| 2 | SSID |  |
+|esp.WiFi-Password| 2 | Password |  |
+|esp.WiFi-Auto-Connect| 2 | Station mode auto connect (0- disabled, 1- enabled)| 1- enabled |
+|esp.WIFI-Soft-AP| 1 | Soft AP mode parameters (object) |
+|esp.WiFi-SSID| 2 | SSID | `${HOST_NAME}` or `ESP_${MAC48[3:6]}` |
+|esp.WiFi-Password| 2 | Password | `${MAC48}` |
+|esp.WiFi-Auth-Mode| 2 | Soft AP authentication mode (0- open, 1- wep, 2- wpa psk, 3- wpa2 psk, 4- wpa/wpa2 psk) | 4- wpa/wpa2 psk |
 
 `${MAC48}` - MAC address of station interface
 
@@ -120,9 +123,22 @@ Example:
   }
 ```
 
-#### UDP system management (udpctl)
+##### 4.2.2.2. Message types
 
-##### Configuration parameters
+|MsgType|Command|Description|
+|-------|-------|-----------|
+|1|INFO|Query system information (System, Firmware, Memory-DB, Flash-DB, Wireless)|
+|10|RESTART|restart system|
+|11|FDB_TRUNC|truncate Flash-DB|
+|12|FW_OTA_INIT| Initialize OTA firmware upgrade|
+|13|FW_OTA_UPLOAD| Upload firmware bin data |
+|14|FW_OTA_DONE| Commit firmware upgrade|
+|15|FW_OTA_ABORT| Abort firmware upgrade|
+|16|FW_VERIFY| Verify firmware digest|
+
+#### 4.2.3. UDP system management (udpctl)
+
+##### 4.2.3.1. Configuration parameters
 
 |Parameter|Level|Description|Default|
 |---------|-----|-----------|-------|
@@ -134,20 +150,103 @@ Example:
 Example:
 ```
   {
-    "common.IP-Port": 3900,
+    "common.IP-Port": 3901,
     "uctl.Secret": "mysecret"
   }
 ```
 
+##### 4.2.3.2. Message types
 
-#### Network Time Protocol client (ntp)
+|MsgType|Command|Description|
+|-------|-------|-----------|
+|1|INFO|Query service information|
 
-##### Configuration parameters
+##### 4.2.3.3. Protocol
+
+###### Message Flow
+0. Auth Request
+```
+	Auth0 := hmac(Random)
+	Digest0 := hmac( Header0, 0, Auth0, Body0 )
+	Message0 := (Header0, Digest0, Auth0, Body0)
+```
+1. Auth Answer
+```
+	Auth1 := hmac(Random)
+	Digest1 = hmac( Header1, Digest0, Auth1, Body1 )
+	Message1 = (Header1, Digest1, Auth1, Body1)
+```
+2. Control Request
+```
+	Digest2 = hmac( Header2, Digest1, Body2 )
+	Message2 = (Header2, Digest2, Body2)
+```
+3. Control Answer
+```
+	Digest3 = hmac( Header3, Digest2, Body3 )
+	Message3 = (Header3, Digest3, Body3)
+```
+
+###### Message Header
+```
+	 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+	+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+	|          Service-Id           |             Length            |
+	+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+	|R S E x x x x x|    Cmd Code   |          Identifier           |
+	+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+	|                    Message Digest (256 bits)                  |
+	+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+	|                              ...                              |
+	+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+	|                      Message Digest (end)                     |
+	+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+	|                     Authenticator (256 bits)                  |
+	+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+	|                              ...                              |
+	+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+	|                       Authenticator (end)                     |
+	+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+	|                              ...                              |
+	+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+```
+Service-Id - message target service identifier.
+Length - message length (header + body)
+R flag - request message
+S flag - secured message (has message digest)
+E flag - error answer
+Command Code - corresponds to service Message type
+Identifier - message sequence identifier (starts from 0 for every new authenticated connection)
+Message Digest - message digest for validate message originator
+Authenticator - party authenticator issued by originator of auth request/answer message
+
+###### Message Body
+
+Message body is a sequence of AVP
+```
+	 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+	+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+	|D D L|       AVP Length        |   NS-Id   |      AVP Code     |
+	+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+	|                             Data                              |
+	+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+```
+
+DataType flag - (0- OCTETS, 1- OBJECT, 2- INTEGER, 3- CHAR)
+List flag - means grouping AVP contains a sequence of AVP with same type
+AVP Length - 
+Namespace-Id - Namespace identifier, 0 means usage of parent Namespace
+AVP Code - AVP code, must unique identify AVP within Namespace
+Data - 
+
+#### 4.2.4. Network Time Protocol client (ntp)
+
+##### 4.2.4.1. Configuration parameters
 
 |Parameter|Level|Description|Default|
 |---------|-----|-----------|-------|
 |common.Time-Zone| 0 | Local Timezone (1/4 hours) | +0:00 |
-|ntp.Poll-Interval| 0 |  Poll interval (minutes) | 20 |
+|ntp.Poll-Interval| 0 |  Poll interval (minutes) | 15 |
 |ntp.Peer| 0 |NTP Server peers (object list 0-2 items) | 0.pool.ntp.org, 1.pool.ntp.org |
 |common.Host-Name| 1 | NTP Server host |  |
 
@@ -155,7 +254,7 @@ Example:
 ```
   { 
     "common.Time-Zone": "+3:00", 
-    "ntp.Poll-Interval": 10, 
+    "ntp.Poll-Interval": 15, 
     "ntp.Peer": [
       { "common.Host-Name": "0.pool.ntp.org" }, 
       { "common.Host-Name": "1.pool.ntp.org" }
@@ -163,23 +262,32 @@ Example:
   }
 ```
 
-## Examples
+## 5. Examples
 
-### FAN Control Unit
+### 5.1. FAN Control Unit
 
-#### Scope
+#### 5.1.1. Scope
 
-Bathroom FAN control unit with DHT11 sensor and 1P solid state relay.
+Bathroom FAN Control Unit with DHT11 humidity sensor and 1P solid state relay G3MB-202P.
 
 Conrol Logic Goals
-- Force turn on FAN when system startup and every day-time hour. Turn off after 10 minutes timeout.
-- Turn on/off FAN when humidity reached high/low threshold. Regardless of humidity turn off after 20 minutes.
+- Force turn on FAN when system startup and every daylight time hour. Turn off after 12 minutes timeout.
+- Turn on/off FAN when humidity threshold crossed high/low. Regardless of humidity turn off after 30 minutes.
 - Cool-down turn on/off humidity event by 5 minutes after last on/off event.
 
-#### Flash Initial Firmware Image
 
-1. Connect ESP12E to host by serial cable
-2. Use esptool for query module `MAC` (in our example was `5ccf7f85e196`)
+#### 5.1.2. Flash Initial Firmware Image
+
+###### 1. Prerequisties
+Connect ESP12E to host by serial cable.
+Install required utilities
+```
+$ sudo pip install esptool miniterm
+$ git clone https://github.com/xeronm/esp8266-tshcli.git
+$ cd esp8266-tshcli
+```
+
+###### 2. Use esptool for query module `MAC` (in our example was `5ccf7f85e196`)
 ```
 $  sudo esptool.py -p /dev/ttyUSB0 -b 115200 read_mac
 esptool.py v2.5.0
@@ -196,7 +304,7 @@ MAC: 5c:cf:7f:85:e1:96
 Hard resetting via RTS pin...
 ```
 
-3. Flash Things-Shell firmware
+###### 3. Flash Things-Shell firmware
 ```
 $ cd ./bin
 $ sudo esptool.py -p /dev/ttyUSB0 -b 115200 write_flash --flash_freq 80m --flash_mode dio --flash_size 32m --verify \
@@ -207,8 +315,8 @@ $ sudo esptool.py -p /dev/ttyUSB0 -b 115200 write_flash --flash_freq 80m --flash
     0x3fe000 blank.bin
 ```
 
-4. Connect to hidden WiFi AP `ESPTSH_85e196` (last 6 digit of MAC) with password `5ccf7f85e196` (MAC)
-5. Check that firmware and `udpctl` service works. Query system information
+###### 4. Connect to hidden WiFi AP `ESPTSH_85e196` (last 6 digit of MAC) with password `5ccf7f85e196` (MAC)
+###### 5. Check that firmware and `udpctl` service works. Query system information
 ```
 $ ./tcli.py -H 192.168.4.1 -s 5ccf7f85e196 system info
 {
@@ -242,9 +350,9 @@ $ ./tcli.py -H 192.168.4.1 -s 5ccf7f85e196 system info
 }
 ```
 
-#### Configure System
+#### 5.1.3. Configure System
 
-1. Setup Wi-Fi station mode and system description
+###### 1. Setup Wi-Fi station mode and system description
 ```
 $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 service config set -m '
 {   
@@ -265,7 +373,7 @@ $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 service config set -m '
 ]}'
 ```
 
-2. Setup Time-Zone
+###### 2. Setup Time-Zone
 ```
 $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 service config set -m '
 {
@@ -278,7 +386,7 @@ $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 service config set -m '
 }'
 ```
 
-3. Save configuration
+###### 3. Save configuration
 ```
 $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 service config save -m '
 {
@@ -290,21 +398,17 @@ $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 service config save -m '
 ```
 
 
-#### Configure Script Logic and Schedule
+#### 5.1.4. Configure Control Logic and Schedule
 
 Following terms were used:
 - global variable `last_ev` - last state change event (0- reset state, 1-force power on, 2- humidity high threshold, 3- humidity low threshold, 4- power off timeout)
 - global variable `last_dt` - last state change event date
-- gpio pin `0` for FAN solid state relay G3MB-202P; low-level on pin relates to open state on relay
+- gpio pin `0` for FAN solid state relay; low-level on pin relates to open state on relay
 - humidity turn on threshold: >= 36%
 - humidity turn off threshold: < 36%
 - used estimated moving average results from DHT sensor
-- force on power off timeout: 12 minutes
-- humidity on power off timeout: 30 minutes
-- humidity on/off cool down timeout: 5 minutes
 
-
-1. Make light-shell script with control rule logic. Solution is not optimal, may improved by using dht service thresholds and multicast signal handling
+###### 1. Make light-shell script with control rule logic. Solution is not optimal, may improved by using dht service thresholds and multicast signal handling
 ```
   ## last_dt; ## last_ev; # sdt := sysctime(); 
   (last_ev <= 0) ?? { gpio_set(0, 0); last_ev := 1; last_dt := sdt; print(last_ev) }; 	// set initial state, force power on
@@ -315,7 +419,7 @@ Following terms were used:
   ((last_ev = 1) && (last_dt + 720 < sdt) || (last_ev = 2) && (last_dt + 1800 < sdt)) ?? { gpio_set(0, 1); last_ev := 4; last_dt := sdt; print(last_ev) };	// power off timeout
 ```
 
-2. Add peristent named statement `fan_control` for common control logic
+###### 2. Add peristent named statement `fan_control` for common control logic
 ```
 $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 lsh add -m '
 {
@@ -325,7 +429,7 @@ $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 lsh add -m '
 }'
 ```
 
-3. Add peristent named statement `fan_force_on` for force turn on by schedule, startum signal, or manual run
+###### 3. Add peristent named statement `fan_force_on` for force turn on by schedule, startum signal, or manual run
 ```
 $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 lsh add -m '
 {
@@ -335,7 +439,7 @@ $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 lsh add -m '
 }'
 ```
 
-4. Perform simple tests
+###### 4. Perform simple tests
 ```
   # Force turn on when no initial state
 $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 lsh run -m '{ "lsh.Statement-Name": "fan_control" }'
@@ -389,7 +493,7 @@ $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 lsh run -m '{ "lsh.Statement-Name": 
 }
 ```
 
-5. Output results on uart port
+###### 5. Output results on uart port
 ```
 [1200.868] [warn ][ntp] adjust time to: 2018.12.07 08:35:35+3:00 offset:-1.7
 [1674.718] [info ][lwsh] load "fan_control"
@@ -400,7 +504,7 @@ $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 lsh run -m '{ "lsh.Statement-Name": 
 [2639.283] [info ][lwsh] fan_force_on out: 1
 ```
 
-6. Add schedules. `fan_force_on` at system startup and every 30th minutes of 09 - 21 day hours. `fan_control` at 15th seconds of every minute
+###### 6. Add schedules. `fan_force_on` at system startup and every 30th minutes of 09 - 21 day hours. `fan_control` at 15th seconds of every minute
 ```
 $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 sched add -m '{
   "sched.Entry-Name": "fan_force_on",
@@ -418,11 +522,14 @@ $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 sched add -m '{
 }'
 ```
 
+## 6. Appendix A: Known Bugs
 
-## Appendix: Memos
+## 7. Appendix B: Roadmap Improvements
 
-### Indent
+## 8. Appendix C: Memos
+
+### 8.1. Indent
 ```
-$ find ./ -name '*.h' -exec indent -l120 -brs -br -i4 -ci4 -di16 --no-tabs -sc {} -o {} \;
-$ find ./ -name '*.c' -exec indent -l120 -brs -br -i4 -ci4 -di16 --no-tabs -sc {} -o {} \;
+$ find ./ -name '*.h' -exec indent -l120 -brs -br -i4 -ci4 -di16 --no-tab -sc {} -o {} \;
+$ find ./ -name '*.c' -exec indent -l120 -brs -br -i4 -ci4 -di16 --no-tab -sc {} -o {} \;
 ```

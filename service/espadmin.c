@@ -541,6 +541,7 @@ espadmin_on_cfgupd (dtlv_ctx_t * conf)
 
     if (conf) {
         const char     *sysdescr = NULL;
+        const char     *hostname = NULL;
 
         dtlv_ctx_t      wifi_conf;
         os_memset (&wifi_conf, 0, sizeof (dtlv_ctx_t));
@@ -548,10 +549,16 @@ espadmin_on_cfgupd (dtlv_ctx_t * conf)
         dtlv_seq_decode_begin (conf, ESPADMIN_SERVICE_ID);
         dtlv_seq_decode_group (ESPADMIN_AVP_WIRELESS, wifi_conf.buf, wifi_conf.datalen);
         dtlv_seq_decode_ptr (COMMON_AVP_SYSTEM_DESCRIPTION, sysdescr, char);
+        dtlv_seq_decode_ptr (COMMON_AVP_HOST_NAME, hostname, char);
         dtlv_seq_decode_end (conf);
 
         if (sysdescr)
             system_set_description (sysdescr);
+
+        if (hostname && os_strlen (hostname)) {
+            if (! wifi_station_set_hostname (hostname))
+                d_log_eprintf (ESPADMIN_SERVICE_NAME, "failed set hostname: %s", hostname);
+        }
 
         if (wifi_conf.buf) {
             dtlv_ctx_reset_decode (&wifi_conf);
