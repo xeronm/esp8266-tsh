@@ -10,10 +10,10 @@ Main Goals:
 
 License: GPLv3
 
-*Feel free to use, improve, report bugs, criticize, etc. And if you find my work usefull feel free to thank me through paypal "xeronm@gmail.com".*
+**Feel free to use, improve, report bugs, criticize, etc. And if you find my work usefull feel free to thank me through paypal "xeronm@gmail.com".**
 
-Contributors:
-- Denis Muratov <xeronm@gmail.com>
+Contributors
+    - Denis Muratov <xeronm@gmail.com>
 
 ## 1. References
 
@@ -24,6 +24,10 @@ Contributors:
 [esp-open-sdk]: https://github.com/pfalcon/esp-open-sdk.git
 [docker-esp8266]: https://github.com/xeronm/docker-esp8266
 [esp8266-tshcli]: https://github.com/xeronm/esp8266-tshcli
+[DYI_01]: https://raw.githubusercontent.com/xeronm/esp8266-tsh/master/example/DYI_01.jpg
+[DYI_02]: https://raw.githubusercontent.com/xeronm/esp8266-tsh/master/example/DYI_02.jpg
+[DYI_03]: https://raw.githubusercontent.com/xeronm/esp8266-tsh/master/example/DYI_03.jpg
+[Dashboard]: https://raw.githubusercontent.com/xeronm/esp8266-tsh/master/example/dashboard_screenshot.png
 
 ## 2. Definitions and Abbrevations
 
@@ -631,6 +635,13 @@ $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 sched add -m '{
   "sched.Statement-Args": {}
 }'
 ```
+
+#### 5.1.5. Screenshots
+
+![DYI Assembling-1][DYI_01]
+![DYI Assembling-2][DYI_02]
+![DYI Assembling-3][DYI_03]
+![Chronograph Dashboard][Dashboard]
 
 ## 6. Appendix A: Known Bugs
 
