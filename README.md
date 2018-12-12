@@ -22,7 +22,7 @@ Contributors
 
  - [esp-open-sdk]: Free and open (as much as possible) integrated SDK for ESP8266/ESP8285 chips
  - [docker-esp8266]: Toolchain for esp8266 based on crosstool-NG 1.22.x
- - [esp8266-tshcli]: Things Shell client utilities for esp8266-tsh
+ - [esp8266-tshcli]: UDP client utilities for Light-weight Shell ESP8266
 
 [esp-open-sdk]: https://github.com/pfalcon/esp-open-sdk.git
 [docker-esp8266]: https://github.com/xeronm/docker-esp8266
