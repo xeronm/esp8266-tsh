@@ -7,11 +7,11 @@ Main Goals:
 - light-weight udp control/management protocol with python client [esp8266-tshcli]
 - cron-like task scheduler
 - simple scripting language for making control logic with trace/debug feature
-- almost fixed heap memory consuption
+- almost fixed heap memory consumption
 
 License: GPLv3
 
-*Some of solutions of this projects may looks weird, but all of it made just for fun and it works well.*
+*Some of internal solutions may looks weird, but all of it made just for fun and it works well.*
 
 *Feel free to use, improve, report bugs, criticize and etc.*
 
