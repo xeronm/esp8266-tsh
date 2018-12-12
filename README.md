@@ -1,14 +1,17 @@
 esp8266-tsh
 ===========
-Light-weight Shell for ESP8266 (Things Shell). 
-Developed and tested with my ESP-12E (4Mb) board. Many solutions of this projects may looks weird, but all of it made just for fun and it works.
+Light-weight Shell for ESP8266 with support of simple and configurable control logic script. 
+Developed and tested with my ESP-12E (4Mb) board.
 
 Main Goals:
-- light-weight udp control protocol with python client
+- light-weight udp control/management protocol with python client [esp8266-tshcli]
 - cron-like task scheduler
-- basic scripting language for make control logic with tracing/debug feature
+- simple scripting language for making control logic with trace/debug feature
+- almost fixed heap memory consuption
 
 License: GPLv3
+
+*Some of solutions of this projects may looks weird, but all of it made just for fun and it works well.*
 
 *Feel free to use, improve, report bugs, criticize and etc.*
 
@@ -477,8 +480,8 @@ $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 service config set -m '
               "common.System-Description": "Bathroom FAN#1",
               "esp.Wireless": {
                   "esp.WIFI-Station": {
-                      "esp.WiFi-SSID": "DMHOME",
-                      "esp.WiFi-Password": "d7bfeb9a3b2111e893fbc8f7330dd8c8",
+                      "esp.WiFi-SSID": "MYROUTER",
+                      "esp.WiFi-Password": "mypassword",
                       "esp.WiFi-Auto-Connect": 1
                   }
               }
