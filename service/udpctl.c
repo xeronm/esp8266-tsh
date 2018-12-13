@@ -66,9 +66,8 @@
  *  - secret: shared secret key
  *  - clients_limit: maximum authorized connections
  *  - auth_tx: authorization timer (in seconds)
- *  - idle_tx: idlle timer (in seconds)
+ *  - idle_tx: idle timer (in seconds)
  *  - recycle_tx: connection timer (in seconds)
- *  - softap_idle_timeout: TODO: in STATIONAP mode timeout for disable SOFTAP if station has IP and no active udpctl connection throught SOFTAP
  *  - maddr: multicast remote addr TODO:
  */
 typedef struct udpctl_conf_s {
@@ -79,7 +78,6 @@ typedef struct udpctl_conf_s {
     uint8           auth_tx;
     uint8           idle_tx;
     uint8           recycle_tx;
-    uint8           softap_idle_timeout;
     ipv4_addr_t     maddr;
 } udpctl_conf_t;
 

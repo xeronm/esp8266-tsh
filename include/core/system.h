@@ -47,6 +47,9 @@ void            system_set_description (const char *sysdescr);
 
 #ifdef ARCH_XTENSA
 bool            system_post_delayed_cb (ETSTimerFunc task, void *arg);
+void            softap_timeout_set (uint16 timeout_sec);
 #endif
+uint16          softap_timeout_get_last (void);
+
 
 #endif /* _SYSTEM_H */

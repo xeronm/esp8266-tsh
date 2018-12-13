@@ -198,11 +198,13 @@ espadmin_on_msg_wireless (dtlv_ctx_t * msg_out)
         struct softap_config config;
         os_memset (&config, 0, sizeof (struct softap_config));
         if (wifi_softap_get_config (&config)) {
+            uint16 timeout = softap_timeout_get_last();
             d_svcs_check_dtlv_error (dtlv_avp_encode_nchar
                                      (msg_out, ESPADMIN_AVP_WIFI_SSID, config.ssid_len, (char *) config.ssid)
                                      || dtlv_avp_encode_char (msg_out, ESPADMIN_AVP_WIFI_PASSWORD,
                                                               (char *) config.password)
-                                     || dtlv_avp_encode_uint8 (msg_out, ESPADMIN_AVP_WIFI_AUTH_MODE, config.authmode));
+                                     || dtlv_avp_encode_uint8 (msg_out, ESPADMIN_AVP_WIFI_AUTH_MODE, config.authmode)
+                                     || (timeout ? dtlv_avp_encode_uint16 (msg_out, ESPADMIN_AVP_WIFI_SOFTAP_TIMEOUT, timeout) : 0) );
         }
 
         uint8           macaddr[6];
@@ -522,6 +524,7 @@ espadmin_on_cfgupd (dtlv_ctx_t * conf)
     uint8           wifi_st_password[64] = ESPADMIN_DEFAULT_WIFI_ST_PASSWORD;
     uint8           wifi_autoconnect = ESPADMIN_DEFAULT_WIFI_AUTO_CONNECT;
     uint8           wifi_sleep_type = ESPADMIN_DEFAULT_WIFI_SLEEP_TYPE;
+    uint16          softap_timeout = ESPADMIN_DEFAULT_WIFI_SOFTAP_TIMEOUT;
 
 #ifdef ESPADMIN_DEFAULT_WIFI_AP_PASSWORD
     uint8           wifi_ap_password[64] = ESPADMIN_DEFAULT_WIFI_AP_PASSWORD;
@@ -541,7 +544,7 @@ espadmin_on_cfgupd (dtlv_ctx_t * conf)
 
     if (conf) {
         const char     *sysdescr = NULL;
-        const char     *hostname = NULL;
+        char     *hostname = NULL;
 
         dtlv_ctx_t      wifi_conf;
         os_memset (&wifi_conf, 0, sizeof (dtlv_ctx_t));
@@ -578,8 +581,10 @@ espadmin_on_cfgupd (dtlv_ctx_t * conf)
             if (softap_conf.buf) {
                 char           *password = NULL;
                 char           *ssid = NULL;
+
                 dtlv_ctx_reset_decode (&softap_conf);
                 dtlv_seq_decode_begin (&softap_conf, ESPADMIN_SERVICE_ID);
+                dtlv_seq_decode_uint16 (ESPADMIN_AVP_WIFI_SOFTAP_TIMEOUT, & softap_timeout);
                 dtlv_seq_decode_uint8 (ESPADMIN_AVP_WIFI_AUTH_MODE, (uint8 *) & wifi_ap_auth_mode);
                 dtlv_seq_decode_ptr (ESPADMIN_AVP_WIFI_PASSWORD, password, char);
                 dtlv_seq_decode_ptr (ESPADMIN_AVP_WIFI_SSID, ssid, char);
@@ -626,7 +631,7 @@ espadmin_on_cfgupd (dtlv_ctx_t * conf)
         os_strncpy ((char *) config.ssid, (char *) wifi_st_ssid, sizeof (wifi_st_ssid));
         os_strncpy ((char *) config.password, (char *) wifi_st_password, sizeof (wifi_st_password));
 
-        d_log_iprintf (ESPADMIN_SERVICE_NAME, "\tstation ssid:%s, auto:%u", config.ssid, wifi_autoconnect);
+        d_log_iprintf (ESPADMIN_SERVICE_NAME, "\tstation ssid:%s, password:%s, auto:%u", config.ssid, wifi_st_password, wifi_autoconnect);
         if (!wifi_station_set_config (&config))
             d_log_eprintf (ESPADMIN_SERVICE_NAME, "wifi set station config");
         wifi_station_set_auto_connect (wifi_autoconnect);
@@ -642,9 +647,12 @@ espadmin_on_cfgupd (dtlv_ctx_t * conf)
         config.ssid_hidden = wifi_ap_ssid_hidden;
         config.authmode = wifi_ap_auth_mode;
 
-        d_log_iprintf (ESPADMIN_SERVICE_NAME, "\tsoftap ssid:%s, password:%s", config.ssid, config.password);
+        d_log_iprintf (ESPADMIN_SERVICE_NAME, "\tsoftap ssid:%s, password:%s, auth:%u", config.ssid, config.password, config.authmode);
         if (!wifi_softap_set_config (&config))
             d_log_eprintf (ESPADMIN_SERVICE_NAME, "wifi set softap config");
+
+        if (softap_timeout)
+            softap_timeout_set (softap_timeout);
     }
 #endif
 

@@ -43,8 +43,10 @@ typedef struct system_data_s {
     imdb_hndlr_t    hmdb;
     imdb_hndlr_t    hfdb;
     char            sysdescr[SYSTEM_DESCRIPTION_LENGTH + 1];
+    uint16          softap_timeout;
 #ifdef ARCH_XTENSA
     os_timer_t      timer_overflow;
+    os_timer_t      timer_softap;
     os_event_t      task_queue[TASK_QUEUE_LENGTH];
 #endif
 } system_data_t;
@@ -106,12 +108,18 @@ time_overflow_timeout (void *args)
     lt_get_ctime (&ts);
 }
 
+LOCAL void      ICACHE_FLASH_ATTR
+softap_timeout (void *args)
+{
+    d_log_wprintf (MAIN_SERVICE_NAME, "softap timeout");
+    uint8 opmode = wifi_get_opmode ();
+    wifi_set_opmode_current (opmode & ~(uint8)SOFTAP_MODE );
+}
+
 #ifdef ARCH_XTENSA
 LOCAL void      ICACHE_FLASH_ATTR
 time_overflow_setup (void)
 {
-    // setup time overflow timer
-    os_memset (&sdata->timer_overflow, 0, sizeof (os_timer_t));
     os_timer_disarm (&sdata->timer_overflow);
     os_timer_setfn (&sdata->timer_overflow, time_overflow_timeout, NULL);
 
@@ -119,7 +127,21 @@ time_overflow_setup (void)
     d_log_iprintf (MAIN_SERVICE_NAME, "overflow timer:%u min", timeout_min);
     os_timer_arm (&sdata->timer_overflow, timeout_min * MSEC_PER_MIN, true);
 }
+
+void            ICACHE_FLASH_ATTR
+softap_timeout_set (uint16 timeout_sec)
+{
+    sdata->softap_timeout = timeout_sec;
+    os_timer_disarm (&sdata->timer_softap);
+    os_timer_setfn (&sdata->timer_softap, softap_timeout, NULL);
+
+    d_log_iprintf (MAIN_SERVICE_NAME, "softap timer:%u sec", timeout_sec);
+    os_timer_arm (&sdata->timer_softap, timeout_sec * MSEC_PER_SEC, false);
+}
 #endif
+
+uint16          ICACHE_FLASH_ATTR
+softap_timeout_get_last (void) { return sdata->softap_timeout; }
 
 #ifdef ARCH_XTENSA
 LOCAL void      ICACHE_FLASH_ATTR
@@ -253,21 +275,22 @@ system_get_default_ssid (unsigned char *buf, uint8 len)
 {
 #ifdef ARCH_XTENSA
     char           *hostname = wifi_station_get_hostname ();
-    size_t          plen = os_strlen (hostname);
+    size_t          plen = (hostname) ? os_strnlen (hostname, len) : 0;
     if (plen) {
         os_strncpy ((char*) buf, hostname, len);
+        return MIN (plen, len);
     }
-    else
-        /*
-         * uint8           macaddr[6];
-         * if (wifi_get_macaddr (STATION_IF, macaddr)) {
-         * size_t plen = os_strlen(AP_SSID_PREFIX);
-         * os_memcpy (buf, AP_SSID_PREFIX, plen);
-         * return plen + buf2hex ( d_pointer_add(char, buf, plen), d_pointer_add(char, &macaddr, 3), MIN (3, (len - plen)/ 2));
-         * }        
-         * else */
+    else {
+        uint8           macaddr[6];
+        if (wifi_get_macaddr (STATION_IF, macaddr)) {
+            size_t plen = os_strlen(AP_SSID_PREFIX);
+            os_memcpy (buf, AP_SSID_PREFIX, plen);
+            return plen + buf2hex ( d_pointer_add(char, buf, plen), d_pointer_add(char, &macaddr, 3), MIN (3, (len - plen)/ 2));
+        }        
+    }
 #endif
-        return 0;
+
+    return 0;
 }
 
 const char     *ICACHE_FLASH_ATTR
@@ -290,3 +313,5 @@ system_post_delayed_cb (ETSTimerFunc task, void *arg)
     return system_os_post (USER_TASK_PRIO_1, (os_signal_t) task, (os_param_t) arg);
 }
 #endif
+
+

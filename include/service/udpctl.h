@@ -157,7 +157,6 @@ typedef enum udpctl_avp_code_e {
     UDPCTL_AVP_CLIENT_STATE = 108,
     UDPCTL_AVP_CLIENT_FIRST_TIME = 109,
     UDPCTL_AVP_CLIENT_LAST_TIME = 110,
-    UDPCTL_AVP_SOFTAP_IDLE_TIMEOUT = 111,
 } udpctl_avp_code_t;
 
 typedef enum udpctl_result_code_e {

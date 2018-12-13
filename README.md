@@ -4,6 +4,7 @@ Light-weight Shell for ESP8266 with support of simple and configurable control l
 Developed and tested with my ESP-12E (4Mb) board.
 
 Main Goals:
+- OTA firmware update
 - light-weight udp control/management protocol with python client [esp8266-tshcli]
 - cron-like task scheduler
 - simple scripting language for making control logic with trace/debug feature
@@ -249,7 +250,7 @@ Example:
     - E flag - error answer
 - **Command Code** - corresponds to service Message type
 - **Identifier** - message sequence identifier (starts from 0 for every new authenticated connection)
-- **Message Digest** - message digest for validate message originator
+- **Message Digest** - message digest for message originator and body validation
 - **Authenticator** - party authenticator issued by originator of auth request/answer message
 
 ###### Message Body
@@ -533,7 +534,7 @@ Following terms were used:
   # temp = 0; # hmd = 0; # res := ! dht_get(1, hmd, temp); 
   ((last_ev != 2) && res && (hmd >= 3600) && (last_dt + 300 < sdt)) ?? { gpio_set(0, 0); last_ev := 2; last_dt := sdt; print(last_ev) }; 	// humidity high threshold
   ((last_ev = 2) && res && (hmd < 3600) && (last_dt + 300 < sdt)) ?? { gpio_set(0, 1); last_ev := 3; last_dt := sdt; print(last_ev) };	// humidity low threshold
-  ((last_ev = 1) && (last_dt + 720 < sdt) || (last_ev = 2) && (last_dt + 1800 < sdt)) ?? { gpio_set(0, 1); last_ev := 4; last_dt := sdt; print(last_ev) };	// power off timeout
+  ((last_ev = 1) && (last_dt + 720 < sdt) || (last_ev = 2) && res && (hmd < 4500) && (last_dt + 1800 < sdt)) ?? { gpio_set(0, 1); last_ev := 4; last_dt := sdt; print(last_ev) };	// power off timeout
 ```
 
 ###### 2. Add peristent named statement `fan_control` for common control logic
@@ -542,7 +543,7 @@ $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 lsh add -m '
 {
   "lsh.Statement-Name": "fan_control",
   "lsh.Persistent-Flag": 1,
-  "lsh.Statement-Text": "## last_dt; ## last_ev; # sdt := sysctime();\n(last_ev <= 0) ?? { gpio_set(0, 0); last_ev := 1; last_dt := sdt; print(last_ev) };\n\n# temp = 0; # hmd = 0; # res := !dht_get(1, hmd, temp);\n((last_ev != 2) && res && (hmd >= 3600) && (last_dt + 300 < sdt)) ?? { gpio_set(0, 0); last_ev := 2; last_dt := sdt; print(last_ev) };\n((last_ev = 2) && res && (hmd < 3600) && (last_dt + 300 < sdt)) ?? { gpio_set(0, 1); last_ev := 3; last_dt := sdt; print(last_ev) };\n((last_ev = 1) && (last_dt + 720 < sdt) || (last_ev = 2) && (last_dt + 1800 < sdt)) ?? { gpio_set(0, 1); last_ev := 4; last_dt := sdt; print(last_ev) };"
+  "lsh.Statement-Text": "## last_dt; ## last_ev; # sdt := sysctime();\n(last_ev <= 0) ?? { gpio_set(0, 0); last_ev := 1; last_dt := sdt; print(last_ev) };\n\n# temp = 0; # hmd = 0; # res := !dht_get(1, hmd, temp);\n((last_ev != 2) && res && (hmd >= 3600) && (last_dt + 300 < sdt)) ?? { gpio_set(0, 0); last_ev := 2; last_dt := sdt; print(last_ev) };\n((last_ev = 2) && res && (hmd < 3600) && (last_dt + 300 < sdt)) ?? { gpio_set(0, 1); last_ev := 3; last_dt := sdt; print(last_ev) };\n((last_ev = 1) && (last_dt + 720 < sdt) || (last_ev = 2) && res && (hmd < 4500) && (last_dt + 1800 < sdt)) ?? { gpio_set(0, 1); last_ev := 4; last_dt := sdt; print(last_ev) };"
 }'
 ```
 
