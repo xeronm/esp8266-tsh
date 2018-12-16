@@ -92,7 +92,7 @@ typedef enum gpio_avp_code_e {
 gpio_result_t   gpio_acquire (uint8 gpio_id, bool pullup, gpio_cb_func_t intr_cb);
 gpio_result_t   gpio_release (uint8 gpio_id);
 
-svcs_errcode_t  gpio_service_install (void);
+svcs_errcode_t  gpio_service_install (bool enabled);
 svcs_errcode_t  gpio_service_uninstall (void);
 svcs_errcode_t  gpio_on_start (const svcs_resource_t * svcres, dtlv_ctx_t * conf);
 svcs_errcode_t  gpio_on_stop (void);

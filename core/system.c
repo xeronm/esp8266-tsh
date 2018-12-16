@@ -34,6 +34,7 @@
 
 #ifdef ARCH_XTENSA
 #include "uart.h"
+#include "fwupgrade.h"
 #include "service/espadmin.h"
 #include "service/gpioctl.h"
 #include "service/device/dhtxx.h"
@@ -44,9 +45,11 @@ typedef struct system_data_s {
     imdb_hndlr_t    hfdb;
     char            sysdescr[SYSTEM_DESCRIPTION_LENGTH + 1];
     uint16          softap_timeout;
+    bool            safe_mode;
 #ifdef ARCH_XTENSA
     os_timer_t      timer_overflow;
     os_timer_t      timer_softap;
+    os_timer_t      timer_safemode;
     os_event_t      task_queue[TASK_QUEUE_LENGTH];
 #endif
 } system_data_t;
@@ -56,34 +59,40 @@ LOCAL system_data_t *sdata = NULL;
 #define STARTUP_SERVICE_NAME	"startup"
 #define SHUTDOWN_SERVICE_NAME	"shutdown"
 
-typedef         svcs_errcode_t (*service_install) (void);
+typedef         svcs_errcode_t (*service_install) (bool enabled);
 
 typedef struct reg_service_s {
     service_install fn_install;
+    service_ident_t service_id;
     service_name_t  name;
     bool            safe_mode;
 } reg_service_t;
 
 #ifdef ARCH_XTENSA
-#define REG_SERVICE_MAX	8
-#else
-#define REG_SERVICE_MAX	5
-#endif
-LOCAL reg_service_t const reg_services[REG_SERVICE_MAX] RODATA = {
-    {syslog_service_install, SYSLOG_SERVICE_NAME, true},
-    {lsh_service_install, LSH_SERVICE_NAME, false},
-    {sched_service_install, SCHED_SERVICE_NAME, false},
-#ifdef ARCH_XTENSA
-    {espadmin_service_install, ESPADMIN_SERVICE_NAME, false},
-    {gpio_service_install, GPIO_SERVICE_NAME, false},
-#endif
-    {udpctl_service_install, UDPCTL_SERVICE_NAME, true},
-    {ntp_service_install, NTP_SERVICE_NAME, false},
-#ifdef ARCH_XTENSA
-    {dht_service_install, DHT_SERVICE_NAME, false},
-#endif
+LOCAL reg_service_t const reg_services[] RODATA = {
+    {syslog_service_install, SYSLOG_SERVICE_ID, SYSLOG_SERVICE_NAME, true},
+    {lsh_service_install, LSH_SERVICE_ID, LSH_SERVICE_NAME, false},
+    {sched_service_install, SCHED_SERVICE_ID, SCHED_SERVICE_NAME, false},
+    {espadmin_service_install, ESPADMIN_SERVICE_ID, ESPADMIN_SERVICE_NAME, true},
+    {gpio_service_install, GPIO_SERVICE_ID, GPIO_SERVICE_NAME, false},
+    {udpctl_service_install, UDPCTL_SERVICE_ID, UDPCTL_SERVICE_NAME, true},
+    {ntp_service_install, NTP_SERVICE_ID, NTP_SERVICE_NAME, false},
+    {dht_service_install, DHT_SERVICE_ID, DHT_SERVICE_NAME, false},
 };
 
+#define REG_SERVICE_MAX	8
+#else
+
+LOCAL reg_service_t const reg_services[] RODATA = {
+    {syslog_service_install, SYSLOG_SERVICE_ID, SYSLOG_SERVICE_NAME, true},
+    {lsh_service_install, LSH_SERVICE_ID, LSH_SERVICE_NAME, false},
+    {sched_service_install, SCHED_SERVICE_ID, SCHED_SERVICE_NAME, false},
+    {udpctl_service_install, UDPCTL_SERVICE_ID, UDPCTL_SERVICE_NAME, true},
+    {ntp_service_install, NTP_SERVICE_ID, NTP_SERVICE_NAME, false},
+};
+
+#define REG_SERVICE_MAX	5
+#endif
 
 LOCAL imdb_def_t db_def RODATA = {
     SYSTEM_IMDB_BLOCK_SIZE,
@@ -116,6 +125,25 @@ softap_timeout (void *args)
     wifi_set_opmode_current (opmode & ~(uint8)SOFTAP_MODE );
 }
 
+LOCAL void      ICACHE_FLASH_ATTR
+safemode_timeout (void *args)
+{
+    d_log_wprintf (MAIN_SERVICE_NAME, "safemode timeout");
+
+    sdata->safe_mode = false;
+
+    svcctl_service_stop (ESPADMIN_SERVICE_ID, NULL);
+    svcctl_service_start (ESPADMIN_SERVICE_ID, NULL);
+
+    int             i;
+    for (i = 0; i < REG_SERVICE_MAX; i++) {
+        if (reg_services[i].safe_mode)
+            continue;
+
+        svcctl_service_start (reg_services[i].service_id, NULL);
+    }
+}
+
 #ifdef ARCH_XTENSA
 LOCAL void      ICACHE_FLASH_ATTR
 time_overflow_setup (void)
@@ -131,6 +159,8 @@ time_overflow_setup (void)
 void            ICACHE_FLASH_ATTR
 softap_timeout_set (uint16 timeout_sec)
 {
+    if (!sdata)
+        return;
     sdata->softap_timeout = timeout_sec;
     os_timer_disarm (&sdata->timer_softap);
     os_timer_setfn (&sdata->timer_softap, softap_timeout, NULL);
@@ -142,6 +172,9 @@ softap_timeout_set (uint16 timeout_sec)
 
 uint16          ICACHE_FLASH_ATTR
 softap_timeout_get_last (void) { return sdata->softap_timeout; }
+
+bool            ICACHE_FLASH_ATTR 
+system_get_safe_mode (void) { return sdata->safe_mode; }
 
 #ifdef ARCH_XTENSA
 LOCAL void      ICACHE_FLASH_ATTR
@@ -191,6 +224,22 @@ system_init (void)
                    APP_VERSION, system_get_sdk_version ());
     d_log_wprintf (STARTUP_SERVICE_NAME, "***  userbin:0x%06x, fmem:%d  ***", system_get_userbin_addr (),
                    system_get_free_heap_size ());
+
+    struct rst_info *rsti = system_get_rst_info ();
+    if ((rsti->reason == REASON_EXCEPTION_RST) || (rsti->exccause)) {
+        d_log_eprintf (STARTUP_SERVICE_NAME, "restart reason:%u,cause:%u, entering safe mode, timeout:%u", rsti->reason,
+                   rsti->exccause, SYSTEM_SAFEMODE_TIMEOUT_SEC);
+        sdata->safe_mode = true;
+    
+        os_timer_disarm (&sdata->timer_safemode);
+        os_timer_setfn (&sdata->timer_safemode, safemode_timeout, NULL);
+        os_timer_arm (&sdata->timer_safemode, SYSTEM_SAFEMODE_TIMEOUT_SEC * MSEC_PER_SEC, false);
+    }
+
+    if ((fwupdate_verify () == UPGRADE_NOT_VERIFIED) && (sdata->safe_mode)) {
+        d_log_eprintf (STARTUP_SERVICE_NAME, "firmware upgrade not verified, rollback");
+        fwupdate_rollback ();
+    }
 #endif
 
 #ifndef DISABLE_SYSTEM
@@ -203,7 +252,7 @@ system_init (void)
     // installing services
     int             i;
     for (i = 0; i < REG_SERVICE_MAX; i++) {
-        reg_services[i].fn_install ();
+        reg_services[i].fn_install (!sdata->safe_mode || reg_services[i].safe_mode);
     }
 #endif
 
@@ -239,6 +288,8 @@ system_shutdown (void)
 #ifdef ARCH_XTENSA
     //wifi_station_disconnect ();
     os_timer_disarm (&sdata->timer_overflow);
+    os_timer_disarm (&sdata->timer_softap);
+    os_timer_disarm (&sdata->timer_safemode);
 #endif
     st_free (sdata);
 
@@ -313,5 +364,3 @@ system_post_delayed_cb (ETSTimerFunc task, void *arg)
     return system_os_post (USER_TASK_PRIO_1, (os_signal_t) task, (os_param_t) arg);
 }
 #endif
-
-

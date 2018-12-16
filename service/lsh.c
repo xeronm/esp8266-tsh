@@ -2220,11 +2220,11 @@ lsh_on_message (service_ident_t orig_id,
 }
 
 svcs_errcode_t  ICACHE_FLASH_ATTR
-lsh_service_install (void)
+lsh_service_install (bool enabled)
 {
     svcs_service_def_t sdef;
     os_memset (&sdef, 0, sizeof (svcs_service_def_t));
-    sdef.enabled = true;
+    sdef.enabled = enabled;
     sdef.on_start = lsh_on_start;
     sdef.on_message = lsh_on_message;
     sdef.on_stop = lsh_on_stop;

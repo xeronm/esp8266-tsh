@@ -57,7 +57,7 @@ typedef enum PACKED syslog_avp_code_e {
 } syslog_avp_code_t;
 
 // used by services
-svcs_errcode_t  syslog_service_install (void);
+svcs_errcode_t  syslog_service_install (bool enabled);
 svcs_errcode_t  syslog_service_uninstall (void);
 svcs_errcode_t  syslog_on_start (const svcs_resource_t * svcres, dtlv_ctx_t * conf);
 svcs_errcode_t  syslog_on_stop (void);

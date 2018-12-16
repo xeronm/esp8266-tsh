@@ -56,6 +56,7 @@ firmware_info_t fw_info RODATA = {
 svcs_errcode_t  ICACHE_FLASH_ATTR
 espadmin_on_start (const svcs_resource_t * svcres, dtlv_ctx_t * conf)
 {
+    //if (!system_get_safe_mode ())
     espadmin_on_cfgupd (conf);
 
     return SVCS_ERR_SUCCESS;
@@ -382,8 +383,8 @@ espadmin_on_msg_fwupdate_info (dtlv_ctx_t * msg_out, upgrade_err_t ures)
 
     d_svcs_check_dtlv_error (dtlv_avp_encode_uint8 (msg_out, COMMON_AVP_RESULT_EXT_CODE, ures) ||
                              dtlv_avp_encode_uint8 (msg_out, ESPADMIN_AVP_OTA_STATE, info.state) ||
-                             dtlv_avp_encode_uint32 (msg_out, ESPADMIN_AVP_FW_ADDR, info.fwbin_start_addr) ||
-                             dtlv_avp_encode_uint32 (msg_out, ESPADMIN_AVP_OTA_CURRENT_ADDR, info.fwbin_curr_addr));
+                             ((info.state) ? (dtlv_avp_encode_uint32 (msg_out, ESPADMIN_AVP_FW_ADDR, info.fwbin_start_addr) ||
+                                             dtlv_avp_encode_uint32 (msg_out, ESPADMIN_AVP_OTA_CURRENT_ADDR, info.fwbin_curr_addr)) : false) );
     return SVCS_ERR_SUCCESS;
 }
 #endif
@@ -495,6 +496,9 @@ espadmin_on_message (service_ident_t orig_id, service_msgtype_t msgtype, void *c
         break;
     case ESPADMIN_MSGTYPE_FW_OTA_DONE:
         d_svcs_check_svcs_error (espadmin_on_msg_fwupdate_info (msg_out, fwupdate_done ()));
+        break;
+    case ESPADMIN_MSGTYPE_FW_OTA_VERIFY_DONE:
+        d_svcs_check_svcs_error (espadmin_on_msg_fwupdate_info (msg_out, fwupdate_verify_done ()));
         break;
     case ESPADMIN_MSGTYPE_FW_VERIFY:
         {
@@ -651,8 +655,10 @@ espadmin_on_cfgupd (dtlv_ctx_t * conf)
         if (!wifi_softap_set_config (&config))
             d_log_eprintf (ESPADMIN_SERVICE_NAME, "wifi set softap config");
 
+/*
         if (softap_timeout)
             softap_timeout_set (softap_timeout);
+*/
     }
 #endif
 
@@ -661,11 +667,11 @@ espadmin_on_cfgupd (dtlv_ctx_t * conf)
 
 
 svcs_errcode_t  ICACHE_FLASH_ATTR
-espadmin_service_install (void)
+espadmin_service_install (bool enabled)
 {
     svcs_service_def_t sdef;
     os_memset (&sdef, 0, sizeof (sdef));
-    sdef.enabled = true;
+    sdef.enabled = enabled;
     sdef.on_start = espadmin_on_start;
     sdef.on_stop = espadmin_on_stop;
     sdef.on_message = espadmin_on_message;

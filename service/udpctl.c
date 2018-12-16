@@ -720,11 +720,11 @@ udpctl_on_cfgupd (dtlv_ctx_t * conf)
 }
 
 svcs_errcode_t  ICACHE_FLASH_ATTR
-udpctl_service_install ()
+udpctl_service_install (bool enabled)
 {
     svcs_service_def_t sdef;
     os_memset (&sdef, 0, sizeof (svcs_service_def_t));
-    sdef.enabled = true;
+    sdef.enabled = enabled;
     sdef.on_cfgupd = udpctl_on_cfgupd;
     sdef.on_message = udpctl_on_message;
     sdef.on_start = udpctl_on_start;

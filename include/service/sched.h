@@ -119,7 +119,7 @@ sched_errcode_t sched_entry_add (const char *entry_name, bool persistent, const 
 sched_errcode_t sched_entry_remove (const char *entry_name);
 
 // used by services
-svcs_errcode_t  sched_service_install ();
+svcs_errcode_t  sched_service_install (bool enabled);
 svcs_errcode_t  sched_service_uninstall ();
 svcs_errcode_t  sched_on_start (const svcs_resource_t * svcres, dtlv_ctx_t * conf);
 svcs_errcode_t  sched_on_stop ();

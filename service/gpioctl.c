@@ -449,11 +449,11 @@ gpio_on_message (service_ident_t orig_id, service_msgtype_t msgtype, void *ctxda
 }
 
 svcs_errcode_t  ICACHE_FLASH_ATTR
-gpio_service_install (void)
+gpio_service_install (bool enabled)
 {
     svcs_service_def_t sdef;
     os_memset (&sdef, 0, sizeof (sdef));
-    sdef.enabled = true;
+    sdef.enabled = enabled;
     sdef.on_start = gpio_on_start;
     sdef.on_stop = gpio_on_stop;
     sdef.on_message = gpio_on_message;

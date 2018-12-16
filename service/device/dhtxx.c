@@ -571,11 +571,11 @@ dht_on_cfgupd (dtlv_ctx_t * conf)
 }
 
 svcs_errcode_t  ICACHE_FLASH_ATTR
-dht_service_install ()
+dht_service_install (bool enabled)
 {
     svcs_service_def_t sdef;
     os_memset (&sdef, 0, sizeof (svcs_service_def_t));
-    sdef.enabled = true;
+    sdef.enabled = enabled;
     sdef.on_cfgupd = dht_on_cfgupd;
     sdef.on_message = dht_on_message;
     sdef.on_start = dht_on_start;

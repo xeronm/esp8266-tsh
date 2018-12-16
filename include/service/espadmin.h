@@ -60,7 +60,8 @@ typedef enum espadmin_msgtype_e {
     ESPADMIN_MSGTYPE_FW_OTA_UPLOAD = 13,
     ESPADMIN_MSGTYPE_FW_OTA_DONE = 14,
     ESPADMIN_MSGTYPE_FW_OTA_ABORT = 15,
-    ESPADMIN_MSGTYPE_FW_VERIFY = 16,
+    ESPADMIN_MSGTYPE_FW_OTA_VERIFY_DONE = 16,
+    ESPADMIN_MSGTYPE_FW_VERIFY = 17,
 } espadmin_msgtype_t;
 
 typedef enum espadmin_avp_code_e {
@@ -129,19 +130,8 @@ typedef enum espadmin_avp_code_e {
     ESPADMIN_AVP_FDB_FILE_HWM = 194,
 } espadmin_avp_code_t;
 
-typedef enum ota_upgrade_sate_e {
-    OTA_UPGRADE_NONE = 0,
-    OTA_UPGRADE_ERROR = 1,
-    OTA_UPGRADE_ERASING = 2,
-    OTA_UPGRADE_READY = 3,
-    OTA_UPGRADE_UPLOADING = 4,
-    OTA_UPGRADE_COMPLETE = 5,
-    OTA_UPGRADE_ABORTED = 6,
-} ota_upgrade_sate_t;
-
-
 // used by services
-svcs_errcode_t  espadmin_service_install (void);
+svcs_errcode_t  espadmin_service_install (bool enabled);
 svcs_errcode_t  espadmin_service_uninstall (void);
 svcs_errcode_t  espadmin_on_start (const svcs_resource_t * svcres, dtlv_ctx_t * conf);
 svcs_errcode_t  espadmin_on_stop (void);

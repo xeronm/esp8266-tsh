@@ -177,7 +177,7 @@ typedef struct udpctl_client_s {
 } udpctl_client_t;
 
 // used by services
-svcs_errcode_t  udpctl_service_install ();
+svcs_errcode_t  udpctl_service_install (bool enabled);
 svcs_errcode_t  udpctl_service_uninstall ();
 svcs_errcode_t  udpctl_on_start (const svcs_resource_t * svcres, dtlv_ctx_t * conf);
 svcs_errcode_t  udpctl_on_stop ();
