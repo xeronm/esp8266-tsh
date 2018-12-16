@@ -1346,6 +1346,7 @@ imdb_page_block_alloc (imdb_t * imdb, imdb_block_class_t * class_block, imdb_blo
     block->block_index = bidx;
 
     imdb_block_slot_init (imdb, class_block->dbclass.ds_type, page_block, block);
+    d_setwrite_block (imdb, page_block);
     d_imdb_page_fl_insert_block (page_block, block);
 
 #ifdef IMDB_BLOCK_CRC

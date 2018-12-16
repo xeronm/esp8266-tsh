@@ -136,13 +136,13 @@ fio_user_write (uint32 addr, uint32 * buffer, uint32 size)
         return 0;
     }
 
-    os_printf ("--write %p %u\n", addr, size);
+    //os_printf ("--write %p:%u %u\n", addr0, sec, size);
     if (size < SPI_FLASH_SEC_SIZE) {
         uint8           tmp_buffer[SPI_FLASH_SEC_SIZE];
         uint32          addr_s0 = sec * SPI_FLASH_SEC_SIZE;
         //uint32          addr_s1 = addr_s0 + SPI_FLASH_SEC_SIZE;
 
-        os_printf ("--write-get %p %u\n", addr_s0, SPI_FLASH_SEC_SIZE);
+        //os_printf ("--write-get %p %u\n", addr_s0, SPI_FLASH_SEC_SIZE);
         if (spi_flash_read (addr_s0, (uint32 *) tmp_buffer, SPI_FLASH_SEC_SIZE))
             return 0;
         os_memcpy (tmp_buffer + (addr0 - addr_s0), buffer, size);

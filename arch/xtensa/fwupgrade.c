@@ -66,7 +66,6 @@ LOCAL const char *sz_upgrade_error[] ICACHE_RODATA_ATTR = {
 LOCAL bool      ICACHE_FLASH_ATTR
 firmware_write_fui (flash_upgrade_info_t * fui, uint32 fui_addr)
 {
-    os_printf("-- fui_write %p\n", fui_addr);
     fui->crc16 = ~(uint16)0;
     fui->crc16 = crc16 (d_pointer_as (unsigned char, fui), sizeof (flash_upgrade_info_t));
     return  !(spi_flash_erase_sector (fui_addr/SPI_FLASH_SEC_SIZE) ||
@@ -76,7 +75,6 @@ firmware_write_fui (flash_upgrade_info_t * fui, uint32 fui_addr)
 LOCAL bool      ICACHE_FLASH_ATTR
 firmware_read_fui (flash_upgrade_info_t * fui, uint32 fui_addr)
 {
-    os_printf("-- fui_read %p\n", fui_addr);
     if (spi_flash_read (fui_addr, (uint32 *) fui, sizeof (flash_upgrade_info_t)))
         return false;
 
