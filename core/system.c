@@ -121,8 +121,10 @@ LOCAL void      ICACHE_FLASH_ATTR
 softap_timeout (void *args)
 {
     d_log_wprintf (MAIN_SERVICE_NAME, "softap timeout");
+#ifdef ARCH_XTENSA
     uint8 opmode = wifi_get_opmode ();
     wifi_set_opmode_current (opmode & ~(uint8)SOFTAP_MODE );
+#endif
 }
 
 LOCAL void      ICACHE_FLASH_ATTR
@@ -132,9 +134,10 @@ safemode_timeout (void *args)
 
     sdata->safe_mode = false;
 
+#ifdef ARCH_XTENSA
     svcctl_service_stop (ESPADMIN_SERVICE_ID, NULL);
     svcctl_service_start (ESPADMIN_SERVICE_ID, NULL);
-
+#endif
     int             i;
     for (i = 0; i < REG_SERVICE_MAX; i++) {
         if (reg_services[i].safe_mode)
