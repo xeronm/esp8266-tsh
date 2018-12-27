@@ -23,6 +23,7 @@
 #include "sysinit.h"
 #include "core/utils.h"
 #include "core/logging.h"
+#include "core/system.h"
 #include "system/services.h"
 #include "system/imdb.h"
 #include "system/comavp.h"
@@ -64,6 +65,7 @@ typedef struct svcs_service_s {
     svcs_on_stop_t  on_stop;
     svcs_on_message_t on_message;
     svcs_on_cfgupd_t on_cfgupd;
+    bool            multicast;
     // configuration
     svcs_service_conf_t *conf;
 } svcs_service_t;
@@ -175,7 +177,7 @@ svcctl_svc_start (svcs_service_t * svc)
 
     dtlv_ctx_t      conf;
     dtlv_ctx_t     *conf_ptr = NULL;
-    {
+    if (!system_get_safe_mode ()) {
         svcs_errcode_t  res = svcctl_service_conf_get (svc->info.service_id, &conf, SVCS_CFGTYPE_CURRENT);
         if (res == SVCS_ERR_SUCCESS) {
             conf_ptr = &conf;
@@ -258,7 +260,7 @@ svcctl_forall_message (imdb_fetch_obj_t * fobj, void *data)
     svcs_service_t *svc = d_pointer_as (svcs_service_t, fobj->dataptr);
     svcs_message_ctx_t *ctx = d_pointer_as (svcs_message_ctx_t, data);
 
-    if ((svc->info.state != SVCS_STATE_RUNNING) || (!svc->on_message)) {
+    if ((svc->info.state != SVCS_STATE_RUNNING) || (!svc->on_message) || (!svc->multicast)) {
         return IMDB_ERR_SUCCESS;
     }
 
@@ -586,8 +588,8 @@ sizeof (svcs_service_t) };
             };
             d_svcs_check_svcs_error (imdb_class_create (hfdb, &cdef3, &sdata->hconf));
         }
-
-        imdb_class_forall (sdata->svcres.hfdb, sdata->hconf, NULL, svcctl_forall_clean_conf);
+        if (!system_get_safe_mode ())
+            imdb_class_forall (sdata->svcres.hfdb, sdata->hconf, NULL, svcctl_forall_clean_conf);
     }
 
     d_log_wprintf (SERVICES_SERVICE_NAME, "started");
@@ -703,6 +705,7 @@ svcctl_service_install (service_ident_t service_id, const char *name, svcs_servi
     svc->info.service_id = service_id;
     svc->info.state = SVCS_STATE_STOPPED;
     svc->info.enabled = sdef->enabled;
+    svc->multicast = sdef->multicast;
     os_memcpy (svc->info.name, name, MIN (os_strlen (name), sizeof (service_name_t)));
 
     ret = SVCS_ERR_SUCCESS;

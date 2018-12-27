@@ -821,6 +821,7 @@ ntp_service_install (bool enabled)
     svcs_service_def_t sdef;
     os_memset (&sdef, 0, sizeof (svcs_service_def_t));
     sdef.enabled = enabled;
+    sdef.multicast = true;
     sdef.on_cfgupd = ntp_on_cfgupd;
     sdef.on_message = ntp_on_message;
     sdef.on_start = ntp_on_start;

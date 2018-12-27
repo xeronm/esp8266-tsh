@@ -127,24 +127,32 @@ softap_timeout (void *args)
 #endif
 }
 
+
+LOCAL void      ICACHE_FLASH_ATTR
+start_all_services (void)
+{
+    svcctl_start (sdata->hmdb, sdata->hfdb);
+    // installing services
+    int             i;
+    for (i = 0; i < REG_SERVICE_MAX; i++) {
+        reg_services[i].fn_install (!sdata->safe_mode || reg_services[i].safe_mode);
+    }
+}
+
 LOCAL void      ICACHE_FLASH_ATTR
 safemode_timeout (void *args)
 {
     d_log_wprintf (MAIN_SERVICE_NAME, "safemode timeout");
 
+#ifdef ARCH_XTENSA
+    svcctl_stop ();
+#endif
+
     sdata->safe_mode = false;
 
 #ifdef ARCH_XTENSA
-    svcctl_service_stop (ESPADMIN_SERVICE_ID, NULL);
-    svcctl_service_start (ESPADMIN_SERVICE_ID, NULL);
+    start_all_services ();
 #endif
-    int             i;
-    for (i = 0; i < REG_SERVICE_MAX; i++) {
-        if (reg_services[i].safe_mode)
-            continue;
-
-        svcctl_service_start (reg_services[i].service_id, NULL);
-    }
 }
 
 #ifdef ARCH_XTENSA
@@ -242,6 +250,7 @@ system_init (void)
     if ((fwupdate_verify () == UPGRADE_NOT_VERIFIED) && (sdata->safe_mode)) {
         d_log_eprintf (STARTUP_SERVICE_NAME, "firmware upgrade not verified, rollback");
         fwupdate_rollback ();
+        return;
     }
 #endif
 
@@ -251,12 +260,7 @@ system_init (void)
     imdb_init (&db_def, &sdata->hmdb);
     imdb_init (&fdb_def, &sdata->hfdb);
 
-    svcctl_start (sdata->hmdb, sdata->hfdb);
-    // installing services
-    int             i;
-    for (i = 0; i < REG_SERVICE_MAX; i++) {
-        reg_services[i].fn_install (!sdata->safe_mode || reg_services[i].safe_mode);
-    }
+    start_all_services ();
 #endif
 
 #ifdef ARCH_XTENSA

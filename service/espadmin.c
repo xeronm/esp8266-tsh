@@ -56,7 +56,6 @@ firmware_info_t fw_info RODATA = {
 svcs_errcode_t  ICACHE_FLASH_ATTR
 espadmin_on_start (const svcs_resource_t * svcres, dtlv_ctx_t * conf)
 {
-    //if (!system_get_safe_mode ())
     espadmin_on_cfgupd (conf);
 
     return SVCS_ERR_SUCCESS;
@@ -68,17 +67,20 @@ espadmin_on_stop ()
     return SVCS_ERR_SUCCESS;
 }
 
-LOCAL svcs_errcode_t ICACHE_FLASH_ATTR
+svcs_errcode_t ICACHE_FLASH_ATTR
 espadmin_on_msg_product (dtlv_ctx_t * msg_out)
 {
 #ifdef ARCH_XTENSA
     char            version[VERSION_BUFFER_SIZE];
     os_snprintf (version, VERSION_BUFFER_SIZE, FW_VERSTR, FW_VER2STR (&fw_info));
+    char           *hostname = wifi_station_get_hostname ();
+
     d_svcs_check_dtlv_error (dtlv_avp_encode_nchar
                              (msg_out, COMMON_AVP_APP_PRODUCT, sizeof (fw_info.product), fw_info.product)
                              || dtlv_avp_encode_nchar (msg_out, COMMON_AVP_APP_VERSION, VERSION_BUFFER_SIZE, version)
-                             || dtlv_avp_encode_char (msg_out, COMMON_AVP_HOST_NAME, wifi_station_get_hostname ())
+                             || ((hostname) ? dtlv_avp_encode_char (msg_out, COMMON_AVP_HOST_NAME, hostname) : false)
                              || dtlv_avp_encode_char (msg_out, COMMON_AVP_SYSTEM_DESCRIPTION, system_get_description ())
+                             || dtlv_avp_encode_uint32 (msg_out, COMMON_AVP_SYS_UPTIME, lt_ctime ())
         );
 #endif
     return SVCS_ERR_SUCCESS;
@@ -110,7 +112,7 @@ espadmin_on_msg_firmware (dtlv_ctx_t * msg_out)
     return SVCS_ERR_SUCCESS;
 }
 
-LOCAL svcs_errcode_t ICACHE_FLASH_ATTR
+svcs_errcode_t ICACHE_FLASH_ATTR
 espadmin_on_msg_system (dtlv_ctx_t * msg_out)
 {
 #ifdef ARCH_XTENSA
@@ -122,7 +124,6 @@ espadmin_on_msg_system (dtlv_ctx_t * msg_out)
                              dtlv_avp_encode_char (msg_out, ESPADMIN_AVP_SYS_SDKVERSION, system_get_sdk_version ()) ||
                              dtlv_avp_encode_uint32 (msg_out, ESPADMIN_AVP_SYS_CHIP_ID, system_get_chip_id ()) ||
                              dtlv_avp_encode_uint32 (msg_out, ESPADMIN_AVP_SYS_FLASH_ID, spi_flash_get_id ()) ||
-                             dtlv_avp_encode_uint32 (msg_out, ESPADMIN_AVP_SYS_UPTIME, lt_ctime ()) ||
                              dtlv_avp_encode_uint32 (msg_out, ESPADMIN_AVP_SYS_HEAP_FREE, system_get_free_heap_size ())
                              || dtlv_avp_encode_uint8 (msg_out, ESPADMIN_AVP_SYS_RST_REASON, rsti->reason));
     if ((rsti->reason == REASON_EXCEPTION_RST) || (rsti->exccause)) {
@@ -672,6 +673,7 @@ espadmin_service_install (bool enabled)
     svcs_service_def_t sdef;
     os_memset (&sdef, 0, sizeof (sdef));
     sdef.enabled = enabled;
+    sdef.multicast = false;
     sdef.on_start = espadmin_on_start;
     sdef.on_stop = espadmin_on_stop;
     sdef.on_message = espadmin_on_message;

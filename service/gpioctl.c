@@ -454,6 +454,7 @@ gpio_service_install (bool enabled)
     svcs_service_def_t sdef;
     os_memset (&sdef, 0, sizeof (sdef));
     sdef.enabled = enabled;
+    sdef.multicast = false;
     sdef.on_start = gpio_on_start;
     sdef.on_stop = gpio_on_stop;
     sdef.on_message = gpio_on_message;

@@ -115,7 +115,8 @@ Service Definition
   - vardata: variable data pointer
 */
 typedef struct svcs_service_def_s {
-    bool            enabled;
+    bool            enabled: 1;
+    bool            multicast: 1;
     svcs_on_start_t on_start;
     svcs_on_stop_t  on_stop;
     svcs_on_message_t on_message;

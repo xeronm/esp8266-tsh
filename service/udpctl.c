@@ -51,6 +51,7 @@
 #include "crypto/sha.h"
 #include "proto/dtlv.h"
 #include "service/udpctl.h"
+#include "service/espadmin.h"
 #ifdef ARCH_XTENSA
 #include "espconn.h"
 #endif
@@ -68,7 +69,9 @@
  *  - auth_tx: authorization timer (in seconds)
  *  - idle_tx: idle timer (in seconds)
  *  - recycle_tx: connection timer (in seconds)
- *  - maddr: multicast remote addr TODO:
+ *  - surveillance_tx: surveillance notification message timer (in minutes)
+ *  - ntfaddr: multicast notification message remote host addr
+ *  - ntfaddr: multicast notification message remote host port
  */
 typedef struct udpctl_conf_s {
     ip_port_t       port;
@@ -78,15 +81,18 @@ typedef struct udpctl_conf_s {
     uint8           auth_tx;
     uint8           idle_tx;
     uint8           recycle_tx;
-    ipv4_addr_t     maddr;
+    uint8           surveillance_tx;
+    ipv4_addr_t     ntfaddr;
+    uint16          ntfaddr_port;
 } udpctl_conf_t;
 
 typedef struct udpctl_data_s {
     const svcs_resource_t *svcres;
     uint8           client_count;
-    ip_conn_t       conn;
+    ip_conn_t       srvconn;
 #ifdef ARCH_XTENSA
-    esp_udp         proto_udp;
+    esp_udp         srvudp;
+    os_timer_t      surveillance_timer;
 #endif
     udpctl_client_t clients[UDPCTL_CLIENTS_MAX];
     udpctl_conf_t   conf;
@@ -262,6 +268,67 @@ udpctl_packet_answer_digest (udpctl_client_t * client, udpctl_packet_sec_t * pac
     return UDPCTL_ERR_SUCCESS;
 }
 
+LOCAL svcs_errcode_t  ICACHE_FLASH_ATTR
+udpctl_notify_message (service_ident_t orig_id,
+                   service_msgtype_t msgtype, void *ctxdata, dtlv_ctx_t * msg_in)
+{
+    os_memcpy (sdata->srvudp.remote_ip, sdata->conf.ntfaddr.bytes, sizeof (ipv4_addr_t));
+    sdata->srvudp.remote_port = sdata->conf.ntfaddr_port;
+    char            data_out[UDPCTL_MESSAGE_SIZE];
+
+    udpctl_packet_t *packet_out = d_pointer_as (udpctl_packet_t, data_out);
+    size_t          hdrlen;
+    if (sdata->conf.secret_len == 0) {
+        hdrlen = sizeof (udpctl_packet_t);
+        os_memset (packet_out, 0, hdrlen);
+    }
+    else {
+        hdrlen = sizeof (udpctl_packet_sec_t);
+        os_memset (packet_out, 0, hdrlen);
+        packet_out->flags |= PACKET_FLAG_SECURED;
+    }
+
+    packet_out->service_id = orig_id;
+    packet_out->code = UCTL_CMD_CODE_NTFMSG;
+    packet_out->identifier = 0;
+
+    dtlv_ctx_t      ntfmsg;
+    dtlv_ctx_init_encode (&ntfmsg, d_pointer_add (char, packet_out, hdrlen), UDPCTL_MESSAGE_SIZE - hdrlen);
+
+    dtlv_avp_t     *gavp;
+
+    d_udpctl_check_dtlv_error (dtlv_avp_encode_uint32 (&ntfmsg, COMMON_AVP_EVENT_TIMESTAMP, lt_time (NULL))
+                              || dtlv_avp_encode_grouping (&ntfmsg, orig_id, COMMON_AVP_SVC_MESSAGE, &gavp)
+                              || dtlv_avp_encode_uint16 (&ntfmsg, COMMON_AVP_SVC_MESSAGE_TYPE, msgtype)
+                              || espadmin_on_msg_product (&ntfmsg)
+                              || ((msg_in) ? dtlv_raw_encode (&ntfmsg, msg_in->buf, msg_in->datalen) : false)
+                              || dtlv_avp_encode_group_done (&ntfmsg, gavp));
+
+    size_t          length_out = hdrlen + ntfmsg.datalen;
+    packet_out->length = htobe16 (length_out);
+
+    if ((packet_out->flags & PACKET_FLAG_SECURED) == PACKET_FLAG_SECURED) {
+        udpctl_digest_t digest_out;
+        hmac (SHA256, (unsigned char *) packet_out, length_out, sdata->conf.secret, sdata->conf.secret_len, digest_out);
+        os_memcpy (d_pointer_as (udpctl_packet_sec_t, packet_out)->digest, digest_out, sizeof (udpctl_digest_t));
+    }
+
+    sint16          cres = espconn_sendto (&sdata->srvconn, (uint8 *) data_out, length_out);
+    if (cres)
+        d_log_wprintf (UDPCTL_SERVICE_NAME, "notify " IPSTR ":%u sent %u:%u failed:%u", IP2STR (&sdata->conf.ntfaddr), sdata->conf.ntfaddr_port, msgtype, length_out, cres);
+    else
+        d_log_iprintf (UDPCTL_SERVICE_NAME, "notify " IPSTR ":%u sent %u:%u", IP2STR (&sdata->conf.ntfaddr), sdata->conf.ntfaddr_port, msgtype, length_out);
+
+    return UDPCTL_ERR_SUCCESS;
+}
+
+LOCAL void      ICACHE_FLASH_ATTR
+surveillance_timeout (void *args)
+{
+    udpctl_notify_message (UDPCTL_SERVICE_ID, UDPCTL_MSGTYPE_SURVEILLANCE, NULL, NULL);
+}
+
+
 LOCAL size_t    ICACHE_FLASH_ATTR
 udpctl_answer_result (udpctl_msgctx_t * msgctx)
 {
@@ -271,14 +338,15 @@ udpctl_answer_result (udpctl_msgctx_t * msgctx)
             (msgctx->packet_out->code ==
              UCTL_CMD_CODE_AUTH ? sizeof (udpctl_packet_auth_t) : sizeof (udpctl_packet_sec_t));
 
+        msgctx->packet_out->length = htobe16 (len);
         udpctl_packet_answer_digest (msgctx->cli,
                                      d_pointer_as (udpctl_packet_sec_t, msgctx->packet_out), len,
                                      d_pointer_as (udpctl_packet_sec_t, msgctx->packet_in)->digest);
     }
-    else
+    else {
         len += sizeof (udpctl_packet_t);
-
-    msgctx->packet_out->length = htobe16 (len);
+        msgctx->packet_out->length = htobe16 (len);
+    }
 
     return len;
 }
@@ -550,8 +618,6 @@ udpctl_sync_request (ipv4_addr_t * addr, ip_port_t * port, char *data_in, packet
     return res;
 }
 
-
-
 LOCAL void      ICACHE_FLASH_ATTR
 uctl_recv_cb (void *arg, char *pusrdata, unsigned short length)
 {
@@ -584,16 +650,24 @@ LOCAL void      ICACHE_FLASH_ATTR
 udpctl_setup (void)
 {
 #ifdef ARCH_XTENSA
-    if (sdata->proto_udp.local_port)
-        os_conn_free (&sdata->conn);
+    if (sdata->srvudp.local_port) {
+        os_conn_free (&sdata->srvconn);
+    }
 
-    sdata->conn.type = ESPCONN_UDP;
-    sdata->conn.proto.udp = &sdata->proto_udp;
-    sdata->proto_udp.local_port = sdata->conf.port;
+    sdata->srvconn.type = ESPCONN_UDP;
+    sdata->srvconn.proto.udp = &sdata->srvudp;
+    sdata->srvudp.local_port = sdata->conf.port;
     d_log_iprintf (UDPCTL_SERVICE_NAME, "listen port:%u, secret length:%u", sdata->conf.port, sdata->conf.secret_len);
-    if (os_conn_create (&sdata->conn) || os_conn_set_recvcb (&sdata->conn, uctl_recv_cb)) {
+    if (os_conn_create (&sdata->srvconn) || os_conn_set_recvcb (&sdata->srvconn, uctl_recv_cb)) {
         d_log_eprintf (UDPCTL_SERVICE_NAME, "conn setup failed");
         return;
+    }
+
+    os_timer_disarm (&sdata->surveillance_timer);
+    if ((sdata->conf.ntfaddr.addr != IPADDR_NONE) && sdata->conf.ntfaddr_port) {
+        d_log_iprintf (UDPCTL_SERVICE_NAME, "ntfaddr" IPSTR ":%u surv.tx:%u", IP2STR (&sdata->conf.ntfaddr), sdata->conf.ntfaddr_port, sdata->conf.surveillance_tx);
+        if (sdata->conf.surveillance_tx)
+            os_timer_arm (&sdata->surveillance_timer, sdata->conf.surveillance_tx * MSEC_PER_MIN, true);
     }
 #endif
 }
@@ -610,6 +684,11 @@ udpctl_on_start (const svcs_resource_t * svcres, dtlv_ctx_t * conf)
     os_memset (sdata, 0, sizeof (udpctl_data_t));
     sdata->svcres = svcres;
 
+#ifdef ARCH_XTENSA
+    os_timer_disarm (&sdata->surveillance_timer);
+    os_timer_setfn (&sdata->surveillance_timer, surveillance_timeout, NULL);
+#endif
+
     udpctl_on_cfgupd (conf);
 
     return SVCS_ERR_SUCCESS;
@@ -622,7 +701,8 @@ udpctl_on_stop ()
         return SVCS_NOT_RUN;
 
 #ifdef ARCH_XTENSA
-    if (os_conn_free (&sdata->conn))
+    os_timer_disarm (&sdata->surveillance_timer);
+    if (os_conn_free (&sdata->srvconn))
         d_log_eprintf (UDPCTL_SERVICE_NAME, "conn free error");
 #endif
     d_svcs_check_imdb_error (imdb_clsobj_delete (sdata->svcres->hmdb, sdata->svcres->hdata, sdata));
@@ -636,7 +716,12 @@ LOCAL svcs_errcode_t ICACHE_FLASH_ATTR
 udpctl_on_msg_info (dtlv_ctx_t * msg_out)
 {
     dtlv_avp_t     *gavp;
-    d_svcs_check_imdb_error (dtlv_avp_encode_list (msg_out, 0, UDPCTL_AVP_CLIENT, DTLV_TYPE_OBJECT, &gavp));
+    d_svcs_check_imdb_error (dtlv_avp_encode_grouping (msg_out, 0, UDPCTL_AVP_NOTIFICATION_ADDR, &gavp)
+                             || dtlv_avp_encode_uint32 (msg_out, COMMON_AVP_IPV4_ADDRESS, sdata->conf.ntfaddr.addr)
+                             || dtlv_avp_encode_uint16 (msg_out, COMMON_AVP_IP_PORT, sdata->conf.ntfaddr_port)
+                             || dtlv_avp_encode_group_done (msg_out, gavp)
+                             || dtlv_avp_encode_uint16 (msg_out, UDPCTL_AVP_SURVEILLANCE_TIMEOUT, sdata->conf.surveillance_tx)
+                             || dtlv_avp_encode_list (msg_out, 0, UDPCTL_AVP_CLIENT, DTLV_TYPE_OBJECT, &gavp));
 
     int             i;
     for (i = 0; i < MIN (UDPCTL_CLIENTS_MAX, sdata->conf.clients_limit); i++) {
@@ -662,12 +747,16 @@ udpctl_on_msg_info (dtlv_ctx_t * msg_out)
     return SVCS_ERR_SUCCESS;
 }
 
-
 svcs_errcode_t  ICACHE_FLASH_ATTR
 udpctl_on_message (service_ident_t orig_id,
                    service_msgtype_t msgtype, void *ctxdata, dtlv_ctx_t * msg_in, dtlv_ctx_t * msg_out)
 {
     svcs_errcode_t  res = SVCS_ERR_SUCCESS;
+
+    // multicast
+    if ((msgtype >= SVCS_MSGTYPE_MULTICAST_MIN) && (msgtype < SVCS_MSGTYPE_MULTICAST_MAX) && (sdata->conf.ntfaddr.addr != IPADDR_NONE) && sdata->conf.ntfaddr_port)
+        return udpctl_notify_message (orig_id, msgtype, ctxdata, msg_in);
+
     switch (msgtype) {
     case SVCS_MSGTYPE_INFO:
         res = udpctl_on_msg_info (msg_out);
@@ -695,6 +784,8 @@ udpctl_on_cfgupd (dtlv_ctx_t * conf)
     sdata->conf.recycle_tx = UDPCTL_DEFAULT_RECYCLE_TX;
     sdata->conf.auth_tx = UDPCTL_DEFAULT_AUTH_TX;
     sdata->conf.port = UDPCTL_DEFAULT_PORT;
+    sdata->conf.surveillance_tx = 0;
+    sdata->conf.ntfaddr.addr = IPADDR_NONE;
 #ifdef UDPCTL_DEFAULT_SECRET
     sdata->conf.secret_len = os_strlen (UDPCTL_DEFAULT_SECRET);
     os_memcpy (sdata->conf.secret, UDPCTL_DEFAULT_SECRET, sdata->conf.secret_len);
@@ -703,12 +794,29 @@ udpctl_on_cfgupd (dtlv_ctx_t * conf)
 #endif
 
     if (conf) {
+        dtlv_ctx_t      ntfaddr_ctx;
+        os_memset (&ntfaddr_ctx, 0, sizeof (dtlv_ctx_t));
+
         dtlv_seq_decode_begin (conf, UDPCTL_SERVICE_ID);
         dtlv_seq_decode_octets (UDPCTL_AVP_SECRET, sdata->conf.secret, sizeof (sdata->conf.secret),
                                 sdata->conf.secret_len);
-        dtlv_seq_decode_uint32 (UDPCTL_AVP_MULTICAST_ADDR, &sdata->conf.maddr.addr);
         dtlv_seq_decode_uint16 (COMMON_AVP_IP_PORT, &sdata->conf.port);
+        dtlv_seq_decode_uint8 (UDPCTL_AVP_SURVEILLANCE_TIMEOUT, &sdata->conf.surveillance_tx);
+        dtlv_seq_decode_group (UDPCTL_AVP_NOTIFICATION_ADDR, ntfaddr_ctx.buf, ntfaddr_ctx.datalen);
         dtlv_seq_decode_end (conf);
+
+        if (ntfaddr_ctx.buf) {
+            dtlv_ctx_reset_decode (&ntfaddr_ctx);
+
+            uint32         addr = 0;
+            dtlv_seq_decode_begin (&ntfaddr_ctx, UDPCTL_SERVICE_ID);
+            dtlv_seq_decode_uint32 (COMMON_AVP_IPV4_ADDRESS, &addr);
+            dtlv_seq_decode_uint16 (COMMON_AVP_IP_PORT, &sdata->conf.ntfaddr_port);
+            dtlv_seq_decode_end (&ntfaddr_ctx);
+
+            if ((addr != IPADDR_NONE) && (addr != IPADDR_ANY))
+                sdata->conf.ntfaddr.addr = be32toh(addr);
+        }
     }
 
 #ifdef ARCH_XTENSA
@@ -725,6 +833,7 @@ udpctl_service_install (bool enabled)
     svcs_service_def_t sdef;
     os_memset (&sdef, 0, sizeof (svcs_service_def_t));
     sdef.enabled = enabled;
+    sdef.multicast = true;
     sdef.on_cfgupd = udpctl_on_cfgupd;
     sdef.on_message = udpctl_on_message;
     sdef.on_start = udpctl_on_start;

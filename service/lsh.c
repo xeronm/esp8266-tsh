@@ -2225,6 +2225,7 @@ lsh_service_install (bool enabled)
     svcs_service_def_t sdef;
     os_memset (&sdef, 0, sizeof (svcs_service_def_t));
     sdef.enabled = enabled;
+    sdef.multicast = false;
     sdef.on_start = lsh_on_start;
     sdef.on_message = lsh_on_message;
     sdef.on_stop = lsh_on_stop;

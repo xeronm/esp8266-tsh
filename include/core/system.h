@@ -55,6 +55,4 @@ uint16          softap_timeout_get_last (void);
 
 bool            system_get_safe_mode (void);
 
-
-
 #endif /* _SYSTEM_H */

@@ -2089,6 +2089,7 @@ imdb_clsobj_delete (imdb_hndlr_t hmdb, imdb_hndlr_t hclass, void *ptr)
                 else 
                     fslot_prev = fslot;
                 fslot = d_block_next_slot_free (block, fslot);
+                d_assert (fslot_prev != fslot, "free list loop");
             }
         }
 
@@ -2114,14 +2115,11 @@ imdb_clsobj_delete (imdb_hndlr_t hmdb, imdb_hndlr_t hclass, void *ptr)
         d_release_block (imdb, &page_block->block);
     }
 
-
     if (slot_footer) {
         os_memset (slot_footer, 0, sizeof (imdb_slot_footer_t));
         slot_footer->flags = SLOT_FLAG_FREE;
         slot_footer->length = slot_free->length;
     }
-
-    // !!! TODO: Coalesce adjoin Slots !!!
 
     d_release_class_block (imdb, class_block);
 
