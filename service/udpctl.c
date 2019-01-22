@@ -283,7 +283,7 @@ udpctl_notify_message (service_ident_t orig_id,
         os_memset (packet_out, 0, hdrlen);
     }
     else {
-        hdrlen = sizeof (udpctl_packet_sec_t);
+        hdrlen = sizeof (udpctl_packet_auth_t);
         os_memset (packet_out, 0, hdrlen);
         packet_out->flags |= PACKET_FLAG_SECURED;
     }
@@ -296,11 +296,14 @@ udpctl_notify_message (service_ident_t orig_id,
     dtlv_ctx_init_encode (&ntfmsg, d_pointer_add (char, packet_out, hdrlen), UDPCTL_MESSAGE_SIZE - hdrlen);
 
     dtlv_avp_t     *gavp;
+    char           *hostname = wifi_station_get_hostname ();
 
     d_udpctl_check_dtlv_error (dtlv_avp_encode_uint32 (&ntfmsg, COMMON_AVP_EVENT_TIMESTAMP, lt_time (NULL))
                               || dtlv_avp_encode_grouping (&ntfmsg, orig_id, COMMON_AVP_SVC_MESSAGE, &gavp)
                               || dtlv_avp_encode_uint16 (&ntfmsg, COMMON_AVP_SVC_MESSAGE_TYPE, msgtype)
-                              || espadmin_on_msg_product (&ntfmsg)
+                              || ((hostname) ? dtlv_avp_encode_char (&ntfmsg, COMMON_AVP_HOST_NAME, hostname) : false)
+                              || dtlv_avp_encode_char (&ntfmsg, COMMON_AVP_SYSTEM_DESCRIPTION, system_get_description ())
+                              || dtlv_avp_encode_uint32 (&ntfmsg, COMMON_AVP_SYS_UPTIME, lt_ctime ())
                               || ((msg_in) ? dtlv_raw_encode (&ntfmsg, msg_in->buf, msg_in->datalen) : false)
                               || dtlv_avp_encode_group_done (&ntfmsg, gavp));
 
@@ -308,16 +311,23 @@ udpctl_notify_message (service_ident_t orig_id,
     packet_out->length = htobe16 (length_out);
 
     if ((packet_out->flags & PACKET_FLAG_SECURED) == PACKET_FLAG_SECURED) {
+        udpctl_packet_auth_t *packetsec_out = d_pointer_as (udpctl_packet_auth_t, packet_out);
+        udpctl_digest_t initial;
+#ifdef ARCH_XTENSA
+        os_random_buffer (initial, sizeof (udpctl_digest_t));
+#endif
+        hmac (SHA256, initial, sizeof (udpctl_digest_t), sdata->conf.secret, sdata->conf.secret_len, packetsec_out->auth);
+
         udpctl_digest_t digest_out;
         hmac (SHA256, (unsigned char *) packet_out, length_out, sdata->conf.secret, sdata->conf.secret_len, digest_out);
-        os_memcpy (d_pointer_as (udpctl_packet_sec_t, packet_out)->digest, digest_out, sizeof (udpctl_digest_t));
+        os_memcpy (packetsec_out->base_sec.digest, digest_out, sizeof (udpctl_digest_t));
     }
 
     sint16          cres = espconn_sendto (&sdata->srvconn, (uint8 *) data_out, length_out);
     if (cres)
         d_log_wprintf (UDPCTL_SERVICE_NAME, "notify " IPSTR ":%u sent %u:%u failed:%u", IP2STR (&sdata->conf.ntfaddr), sdata->conf.ntfaddr_port, msgtype, length_out, cres);
     else
-        d_log_iprintf (UDPCTL_SERVICE_NAME, "notify " IPSTR ":%u sent %u:%u", IP2STR (&sdata->conf.ntfaddr), sdata->conf.ntfaddr_port, msgtype, length_out);
+        d_log_dprintf (UDPCTL_SERVICE_NAME, "notify " IPSTR ":%u sent %u:%u", IP2STR (&sdata->conf.ntfaddr), sdata->conf.ntfaddr_port, msgtype, length_out);
 
     return UDPCTL_ERR_SUCCESS;
 }

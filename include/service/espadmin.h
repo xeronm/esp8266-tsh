@@ -130,8 +130,8 @@ typedef enum espadmin_avp_code_e {
     ESPADMIN_AVP_FDB_FILE_HWM = 194,
 } espadmin_avp_code_t;
 
-svcs_errcode_t  espadmin_on_msg_product (dtlv_ctx_t * msg_out);
-svcs_errcode_t  espadmin_on_msg_system (dtlv_ctx_t * msg_out);
+//svcs_errcode_t  espadmin_on_msg_product (dtlv_ctx_t * msg_out);
+//svcs_errcode_t  espadmin_on_msg_system (dtlv_ctx_t * msg_out);
 
 // used by services
 svcs_errcode_t  espadmin_service_install (bool enabled);

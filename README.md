@@ -12,8 +12,6 @@ Main Goals:
 
 License: GPLv3
 
-*Some of internal solutions may looks weird, but all of it made just for fun and it works well.*
-
 *Feel free to use, improve, report bugs, criticize and etc.*
 
 Contributors

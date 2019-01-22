@@ -67,7 +67,7 @@ espadmin_on_stop ()
     return SVCS_ERR_SUCCESS;
 }
 
-svcs_errcode_t ICACHE_FLASH_ATTR
+LOCAL svcs_errcode_t ICACHE_FLASH_ATTR
 espadmin_on_msg_product (dtlv_ctx_t * msg_out)
 {
 #ifdef ARCH_XTENSA
@@ -112,7 +112,7 @@ espadmin_on_msg_firmware (dtlv_ctx_t * msg_out)
     return SVCS_ERR_SUCCESS;
 }
 
-svcs_errcode_t ICACHE_FLASH_ATTR
+LOCAL svcs_errcode_t ICACHE_FLASH_ATTR
 espadmin_on_msg_system (dtlv_ctx_t * msg_out)
 {
 #ifdef ARCH_XTENSA

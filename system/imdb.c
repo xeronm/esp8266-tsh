@@ -1926,7 +1926,7 @@ imdb_clsobj_insert (imdb_hndlr_t hmdb, imdb_hndlr_t hclass, void **ptr, size_t l
  * [public] write lock object block, need manual unlock.
  *   - hmdb: Handler to imdb instance
  *   - rowid: object row id
- *   - ptr: pointer to deleting object
+ *   - ptr: if not NULL returns pointer to updating object
  *   - result: imdb error code
  */
 imdb_errcode_t  ICACHE_FLASH_ATTR
@@ -1942,7 +1942,8 @@ imdb_clsobj_update_init (imdb_hndlr_t hmdb, imdb_rowid_t * rowid, void **ptr)
             return IMDB_BLOCK_ACCESS;
         }
 
-        *ptr = d_pointer_add (void, block, d_bptr_size (rowid->slot_offset) +
+        if (ptr)
+            *ptr = d_pointer_add (void, block, d_bptr_size (rowid->slot_offset) +
                               (rowid->ds_type == DATA_SLOT_TYPE_1) ? 0 : sizeof (imdb_slot_free_t));
     }
 
@@ -1953,7 +1954,7 @@ imdb_clsobj_update_init (imdb_hndlr_t hmdb, imdb_rowid_t * rowid, void **ptr)
  * [public] write lock and unlock object block.
  *   - hmdb: Handler to imdb instance
  *   - rowid: object row id
- *   - ptr: pointer to deleting object
+ *   - ptr: if not NULL returns pointer to updating object
  *   - result: imdb error code
  */
 imdb_errcode_t  ICACHE_FLASH_ATTR
@@ -1970,7 +1971,8 @@ imdb_clsobj_update (imdb_hndlr_t hmdb, imdb_rowid_t * rowid, void **ptr)
         }
         block->lock_flag = DATA_LOCK_NONE;
 
-        *ptr = d_pointer_add (void, block, d_bptr_size (rowid->slot_offset) +
+        if (ptr)
+            *ptr = d_pointer_add (void, block, d_bptr_size (rowid->slot_offset) +
                               ((rowid->ds_type == DATA_SLOT_TYPE_1) ? 0 : sizeof (imdb_slot_free_t)));
     }
 

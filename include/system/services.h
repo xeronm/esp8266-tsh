@@ -47,6 +47,7 @@ typedef enum svcs_errcode_e {
     SVCS_NOT_EXISTS = 6,
     SVCS_MSGTYPE_INVALID = 7,
     SVCS_INVALID_MESSAGE = 8,
+    SVCS_DISABLED = 9,
 } svcs_errcode_t;
 
 typedef enum svcs_state_e {
@@ -143,6 +144,8 @@ svcs_errcode_t  svcctl_service_install (service_ident_t service_id, const char *
 svcs_errcode_t  svcctl_service_uninstall (const char *name);
 svcs_errcode_t  svcctl_service_start (service_ident_t service_id, const char *name);
 svcs_errcode_t  svcctl_service_stop (service_ident_t service_id, const char *name);
+
+svcs_errcode_t  svcctl_service_set_enabled (service_ident_t service_id, bool enabled);
 
 svcs_errcode_t  svcctl_service_conf_get (service_ident_t service_id, dtlv_ctx_t * conf, svcs_cfgtype_t cfgtype);
 svcs_errcode_t  svcctl_service_conf_set (service_ident_t service_id, dtlv_ctx_t * conf);
