@@ -17,6 +17,9 @@ License: GPLv3
 Contributors
 - Denis Muratov <xeronm@gmail.com>
 
+
+[![Paypal Donations](https://www.paypalobjects.com/en_US/i/btn/btn_donate_SM.gif)](https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=xeronm%40gmail.com&currency_code=USD&source=url)
+
 ## 1. References
 
  - [esp-open-sdk]: Free and open (as much as possible) integrated SDK for ESP8266/ESP8285 chips
