@@ -50,11 +50,19 @@
 		return SVCS_NOT_RUN;
 
 
+typedef struct svcs_service_conf_v0_s {
+    service_ident_t service_id;
+    svcs_cfgtype_t  cfgtype;
+    os_time_t       utime;
+    dtlv_size_t     varlen;
+    ALIGN_DATA char vardata[];
+} svcs_service_conf_v0_t;
+
 typedef struct svcs_service_conf_s {
     service_ident_t service_id;
+    obj_size_t      struct_size;
     svcs_cfgtype_t  cfgtype: 2;
     bool            disabled: 1;
-    uint8           reserved: 5;
     os_time_t       utime;
     dtlv_size_t     varlen;
     ALIGN_DATA char vardata[];
@@ -98,6 +106,8 @@ LOCAL imdb_errcode_t ICACHE_FLASH_ATTR
 svcctl_forall_conf_find (imdb_fetch_obj_t * fobj, void *data)
 {
     svcs_service_conf_t *conf = d_pointer_as (svcs_service_conf_t, fobj->dataptr);
+    os_printf("-- 22!! %d %d %d\n", conf->service_id, conf->disabled, conf->cfgtype);
+
     svcs_find_conf_ctx_t *find_conf_ctx = d_pointer_as (svcs_find_conf_ctx_t, data);
     if ((find_conf_ctx->service_id == conf->service_id) && (find_conf_ctx->cfgtype == conf->cfgtype)) {
         os_memcpy (&find_conf_ctx->rowid, &fobj->rowid, sizeof (imdb_rowid_t));
@@ -107,13 +117,52 @@ svcctl_forall_conf_find (imdb_fetch_obj_t * fobj, void *data)
     return IMDB_ERR_SUCCESS;
 }
 
+/*
+ * [private]: Upgrade configuration from previous version and delete obsoleted new configuration
+ *  - conf: configuration
+ */
 LOCAL imdb_errcode_t ICACHE_FLASH_ATTR
-svcctl_forall_conf_clean (imdb_fetch_obj_t * fobj, void *data)
+svcctl_forall_conf_validate (imdb_fetch_obj_t * fobj, void *data)
 {
     svcs_service_conf_t *conf = d_pointer_as (svcs_service_conf_t, fobj->dataptr);
-    if (conf->cfgtype == SVCS_CFGTYPE_NEW) {
+    os_printf("-- 11!! %d %d %d\n", conf->service_id, conf->disabled, conf->cfgtype);
+
+    svcs_service_conf_t * new_conf = NULL;
+    bool fobsolete = false;
+
+    if (conf->struct_size != sizeof(svcs_service_conf_t)) {
+        svcs_service_conf_v0_t *old_conf = d_pointer_as(svcs_service_conf_v0_t, fobj->dataptr);
+        if (old_conf->cfgtype == SVCS_CFGTYPE_NEW) {
+            fobsolete = true;
+        } else {
+            d_svcs_check_imdb_error (imdb_clsobj_insert
+                                    (sdata->svcres.hfdb, sdata->hconf, (void **) &new_conf,
+                                    sizeof (svcs_service_conf_t) + old_conf->varlen));
+
+            new_conf->service_id = old_conf->service_id;
+            new_conf->disabled = false;
+            new_conf->struct_size = sizeof (svcs_service_conf_t);
+            new_conf->cfgtype = old_conf->cfgtype;
+            new_conf->varlen = old_conf->varlen;
+            new_conf->utime = lt_time (NULL);
+            os_memcpy (new_conf->vardata, old_conf->vardata, old_conf->varlen);
+        }
+    } 
+    else {
+        if (conf->cfgtype == SVCS_CFGTYPE_NEW) {
+            fobsolete = true;
+        }
+    }
+
+    if (new_conf) {
+        d_log_wprintf (SERVICES_SERVICE_NAME, "id:%d type:%d config upgraded", new_conf->cfgtype, conf->service_id);
         return imdb_clsobj_delete (sdata->svcres.hfdb, sdata->hconf, data);
     }
+    if (fobsolete) {
+        d_log_wprintf (SERVICES_SERVICE_NAME, "id:%d new config obsolete", conf->service_id);
+        return imdb_clsobj_delete (sdata->svcres.hfdb, sdata->hconf, data);
+    }
+
     return IMDB_ERR_SUCCESS;
 }
 
@@ -136,6 +185,7 @@ svcctl_find_conf (service_ident_t service_id, svcs_service_conf_t ** conf, svcs_
     return (*conf) ? SVCS_ERR_SUCCESS : SVCS_NOT_EXISTS;
 }
 
+    
 LOCAL imdb_errcode_t ICACHE_FLASH_ATTR
 svcctl_svc_stop (svcs_service_t * svc)
 {
@@ -183,6 +233,7 @@ svcctl_svc_start (svcs_service_t * svc, bool ignore_disabled)
     svcs_service_conf_t *conf_data;
     dtlv_ctx_t      conf;
     dtlv_ctx_t     *conf_ptr = NULL;
+    os_printf("-- !! %d\n", svc->info.service_id);
     if (!system_get_safe_mode ()) {
         svcs_errcode_t  res = svcctl_find_conf (svc->info.service_id, &conf_data, SVCS_CFGTYPE_CURRENT, false);
         if (res == SVCS_ERR_SUCCESS) {
@@ -570,7 +621,7 @@ svcctl_start (imdb_hndlr_t hmdb, imdb_hndlr_t hfdb)
 
     imdb_class_def_t cdef =
         { SERVICES_IMDB_CLS_DATA, false, true, false, 0, SERVICES_DATA_STORAGE_PAGES, SERVICES_DATA_STORAGE_PAGE_BLOCKS,
-0 };
+        0 };
 
     imdb_hndlr_t    hdata;
     d_svcs_check_svcs_error (imdb_class_create (hmdb, &cdef, &hdata)
@@ -586,7 +637,7 @@ svcctl_start (imdb_hndlr_t hmdb, imdb_hndlr_t hfdb)
 
     imdb_class_def_t cdef2 =
         { SERVICES_IMDB_CLS_SERVICE, false, true, false, 0, SERVICES_STORAGE_PAGES, SERVICES_STORAGE_PAGE_BLOCKS,
-sizeof (svcs_service_t) };
+        sizeof (svcs_service_t) };
     d_svcs_check_svcs_error (imdb_class_create (hmdb, &cdef2, &sdata->hsvcs)
         );
 
@@ -598,8 +649,10 @@ sizeof (svcs_service_t) };
             };
             d_svcs_check_svcs_error (imdb_class_create (hfdb, &cdef3, &sdata->hconf));
         }
-        if (!system_get_safe_mode ())
-            imdb_class_forall (sdata->svcres.hfdb, sdata->hconf, NULL, svcctl_forall_conf_clean);
+
+        if (!system_get_safe_mode ()) {
+            imdb_class_forall (sdata->svcres.hfdb, sdata->hconf, NULL, svcctl_forall_conf_validate);
+        }
     }
 
     d_log_wprintf (SERVICES_SERVICE_NAME, "started");
@@ -828,6 +881,8 @@ svcctl_service_conf_set (service_ident_t service_id, dtlv_ctx_t * conf)
                                   sizeof (svcs_service_conf_t) + conf->datalen));
 
         conf_data->service_id = service_id;
+        conf_data->struct_size = sizeof (svcs_service_conf_t);
+        conf_data->disabled = false;
         conf_data->cfgtype = SVCS_CFGTYPE_NEW;
         conf_data->varlen = conf->datalen;
         conf_data->utime = lt_time (NULL);

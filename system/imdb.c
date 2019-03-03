@@ -49,7 +49,7 @@
 #define	IMDB_SERVICE_NAME		"imdb"
 
 #define d_obj2hndlr(obj)		(imdb_hndlr_t) (obj)
-#define d_hndlr2obj(type, hndlr)	(type *) (hndlr)        // TODO: сделать проверку на тип
+#define d_hndlr2obj(type, hndlr)	(type *) (hndlr)        // TODO: пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅ
 
 LOCAL const char *sz_imdb_error[] RODATA = {
     "",
@@ -2047,6 +2047,7 @@ imdb_clsobj_delete (imdb_hndlr_t hmdb, imdb_hndlr_t hclass, void *ptr)
     d_stat_slot_free (imdb);
     slot_free->flags = SLOT_FLAG_FREE;
 
+    os_printf("--10 delete: class=%p add free slot=%p, len=%u\n", class_block, slot_free,slot_free->length);
     d_log_dprintf (IMDB_SERVICE_NAME, "delete: class=%p add free slot=%p, len=%u", class_block, slot_free,
                    slot_free->length);
 
@@ -2055,6 +2056,7 @@ imdb_clsobj_delete (imdb_hndlr_t hmdb, imdb_hndlr_t hclass, void *ptr)
     imdb_slot_free_t *slot_free_n = NULL;
     imdb_slot_free_t *slot_free_p = NULL;
     // coalesce with next free slot
+    os_printf("--11 \n");
     if (block_offset + slot_free->length < d_block_upper_data_blimit (imdb, block)) {
         slot_free_n = d_pointer_add (imdb_slot_free_t, slot_free, slen);
         if (slot_free_n->flags == SLOT_FLAG_FREE) {
@@ -2065,6 +2067,8 @@ imdb_clsobj_delete (imdb_hndlr_t hmdb, imdb_hndlr_t hclass, void *ptr)
         else
             slot_free_n = NULL;
     }
+
+    os_printf("--12 \n");
     // coalesce with prev free slot
     if (block_offset > d_block_lower_data_blimit (block)) {
         imdb_slot_footer_t *slot_footer_p = d_pointer_add (imdb_slot_footer_t, slot_free, -sizeof (imdb_slot_footer_t));
@@ -2076,12 +2080,14 @@ imdb_clsobj_delete (imdb_hndlr_t hmdb, imdb_hndlr_t hclass, void *ptr)
         }
     }
 
+    os_printf("--13 \n");
     imdb_slot_free_t *fslot = d_block_slot_free (block);
     if (fslot) { // block FL was not empty
         if (slot_free_p || slot_free_n) {
             // prev/next free slot may not in free list        
             imdb_slot_free_t *fslot_prev = NULL;
             while (fslot) {
+                os_printf("--13.5 %p\n", fslot);
                 if ((fslot == slot_free_p) || (fslot == slot_free_n)) {
                     if (fslot_prev)
                         fslot_prev->next_offset = fslot->next_offset;
@@ -2117,6 +2123,7 @@ imdb_clsobj_delete (imdb_hndlr_t hmdb, imdb_hndlr_t hclass, void *ptr)
         d_release_block (imdb, &page_block->block);
     }
 
+    os_printf("--14 \n");
     if (slot_footer) {
         os_memset (slot_footer, 0, sizeof (imdb_slot_footer_t));
         slot_footer->flags = SLOT_FLAG_FREE;
@@ -2124,6 +2131,7 @@ imdb_clsobj_delete (imdb_hndlr_t hmdb, imdb_hndlr_t hclass, void *ptr)
     }
 
     d_release_class_block (imdb, class_block);
+    os_printf("--15 \n");
 
     return IMDB_ERR_SUCCESS;
 }
