@@ -656,10 +656,8 @@ espadmin_on_cfgupd (dtlv_ctx_t * conf)
         if (!wifi_softap_set_config (&config))
             d_log_eprintf (ESPADMIN_SERVICE_NAME, "wifi set softap config");
 
-/*
         if (softap_timeout)
             softap_timeout_set (softap_timeout);
-*/
     }
 #endif
 
