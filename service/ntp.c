@@ -416,12 +416,6 @@ ntp_peer_recv (uint8 peer_idx, ntp_peer_t * peer, ntp_packet_t * packet, ntp_tim
         d_log_wprintf (NTP_SERVICE_NAME, IPSTR " invalid ntp version: %u", IP2STR (&peer->ipaddr), packet->version);
         peer->state = NTP_PEER_STATE_ERROR;
     }
-    else if ((packet->root_delay.seconds == 0 && packet->root_delay.fraction ==0) || 
-             (packet->root_dispersion.seconds == 0 && packet->root_dispersion.fraction ==0) ||
-             (packet->reference_ts.seconds == 0)) {
-        d_log_wprintf (NTP_SERVICE_NAME, IPSTR " incorrect response", IP2STR (&peer->ipaddr));
-        peer->state = NTP_PEER_STATE_ERROR;
-    }
     else {
         // calculate RTT median and variance
         sint64_t        _x = ntp_time_diff_usec (recv_ts, &packet->origin_ts);
@@ -429,7 +423,13 @@ ntp_peer_recv (uint8 peer_idx, ntp_peer_t * peer, ntp_packet_t * packet, ntp_tim
         //os_printf("-- origin=%d, recv=%d:%d, trans=%d:%d, recv2=%d\n", packet->origin_ts.seconds, packet->receive_ts.seconds,  packet->receive_ts.fraction, 
         //    packet->transmit_ts.seconds, packet->transmit_ts.fraction, recv_ts->seconds);
 
-        if ((_x > 0) || (_y > 0) || (_x > _y)) {        // wrong times
+        if ((packet->root_delay.seconds == 0 && packet->root_delay.fraction ==0) || 
+             (packet->root_dispersion.seconds == 0 && packet->root_dispersion.fraction ==0) ||
+             (packet->reference_ts.seconds == 0)) 
+        {
+            // wrong response
+        }
+        else if ((_x > 0) || (_y > 0) || (_x > _y)) {        // wrong times
             os_memcpy (&peer->peer_ts, &packet->transmit_ts, sizeof (ntp_timestamp_t));
             os_memcpy (&peer->local_ts, recv_ts, sizeof (ntp_timestamp_t));
 
