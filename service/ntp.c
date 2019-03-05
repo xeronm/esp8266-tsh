@@ -413,13 +413,21 @@ ntp_peer_recv (uint8 peer_idx, ntp_peer_t * peer, ntp_packet_t * packet, ntp_tim
     tx_timer_reset ();
 
     if (packet->version != NTPv2) {
-        d_log_wprintf (NTP_SERVICE_NAME, IPSTR " got invalid ntp version: %u", IP2STR (&peer->ipaddr), packet->version);
+        d_log_wprintf (NTP_SERVICE_NAME, IPSTR " invalid ntp version: %u", IP2STR (&peer->ipaddr), packet->version);
+        peer->state = NTP_PEER_STATE_ERROR;
+    }
+    else if ((packet->root_delay.seconds == 0 && packet->root_delay.fraction ==0) || 
+             (packet->root_dispersion.seconds == 0 && packet->root_dispersion.fraction ==0) ||
+             (packet->reference_ts.seconds == 0)) {
+        d_log_wprintf (NTP_SERVICE_NAME, IPSTR " incorrect response", IP2STR (&peer->ipaddr));
         peer->state = NTP_PEER_STATE_ERROR;
     }
     else {
         // calculate RTT median and variance
         sint64_t        _x = ntp_time_diff_usec (recv_ts, &packet->origin_ts);
         sint64_t        _y = ntp_time_diff_usec (&packet->transmit_ts, &packet->receive_ts);
+        //os_printf("-- origin=%d, recv=%d:%d, trans=%d:%d, recv2=%d\n", packet->origin_ts.seconds, packet->receive_ts.seconds,  packet->receive_ts.fraction, 
+        //    packet->transmit_ts.seconds, packet->transmit_ts.fraction, recv_ts->seconds);
 
         if ((_x > 0) || (_y > 0) || (_x > _y)) {        // wrong times
             os_memcpy (&peer->peer_ts, &packet->transmit_ts, sizeof (ntp_timestamp_t));
@@ -462,11 +470,14 @@ ntp_recv_cb (void *arg, char *pusrdata, unsigned short length)
 #ifdef ARCH_XTENSA
     os_memcpy (remote_ipaddr.bytes, con_info->remote_ip, sizeof (ipv4_addr_t));
     d_log_dprintf (NTP_SERVICE_NAME, "recv len=%d from " IPSTR ":%d->%d", length, IP2STR (&remote_ipaddr),
-                   sdata->udp.remote_port, sdata->udp.local_port);
+                   con_info->remote_port, sdata->ntpudp.local_port);
 #endif
 
     if (!pusrdata)
         return;
+
+    //d_log_ebprintf (NTP_SERVICE_NAME, pusrdata, length, "-- recv from " IPSTR ":%d->%d", IP2STR (&remote_ipaddr),
+    //               con_info->remote_port, sdata->ntpudp.local_port);
 
     if (sdata->tx_state != NTP_TX_STATE_PENDING) {
         d_log_dprintf (NTP_SERVICE_NAME, "invalid state: %u", sdata->tx_state);
@@ -480,6 +491,7 @@ ntp_recv_cb (void *arg, char *pusrdata, unsigned short length)
 
     ntp_packet_t   *packet = d_pointer_as (ntp_packet_t, pusrdata);
 
+    betstoh (packet->reference_ts);
     // converting endianess
     betstoh (packet->transmit_ts);
     betstoh (packet->origin_ts);
