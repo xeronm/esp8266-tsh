@@ -24,9 +24,11 @@ typedef struct flash_ota_map_s {
 #define USER_DATA_BEGIN_OFFSET	0x1000
 #define USER2_DATA_END_OFFSET	0x6000
 
+#define d_flash_user1_partend_addr(map) 	((map)->user1 + (map)->bin_max)
 #define d_flash_user1_data_addr(map) 		((map)->user1 + (map)->bin_max + USER_DATA_BEGIN_OFFSET)
 #define d_flash_user1_data_addr_end(map) 	((map)->part1_end)
 
+#define d_flash_user2_partend_addr(map) 	((map)->user2 + (map)->bin_max)
 #define d_flash_user2_data_addr(map) 		((map)->user2 + (map)->bin_max + USER_DATA_BEGIN_OFFSET)
 #define d_flash_user2_data_addr_end(map) 	((map)->part2_end - USER2_DATA_END_OFFSET)
 

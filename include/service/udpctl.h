@@ -143,11 +143,16 @@ typedef enum udpctl_cmd_code_e {
     UCTL_CMD_CODE_AUTH = 1,
     UCTL_CMD_CODE_TERMINATE = 2,
     UCTL_CMD_CODE_SRVMSG = 3,
+    UCTL_CMD_CODE_NTFMSG = 4,
 } udpctl_cmd_code_t;
+
+typedef enum udpctl_msgtype_e {
+    UDPCTL_MSGTYPE_SURVEILLANCE = 10,
+} udpctl_msgtype_t;
 
 typedef enum udpctl_avp_code_e {
     UDPCTL_AVP_PROTOCOL = 100,
-    UDPCTL_AVP_MULTICAST_ADDR = 101,
+    UDPCTL_AVP_NOTIFICATION_ADDR = 101,
     UDPCTL_AVP_IDLE_TIMEOUT = 102,
     UDPCTL_AVP_AUTH_TIMEOUT = 103,
     UDPCTL_AVP_RECYCLE_TIMEOUT = 104,
@@ -157,7 +162,7 @@ typedef enum udpctl_avp_code_e {
     UDPCTL_AVP_CLIENT_STATE = 108,
     UDPCTL_AVP_CLIENT_FIRST_TIME = 109,
     UDPCTL_AVP_CLIENT_LAST_TIME = 110,
-    UDPCTL_AVP_SOFTAP_IDLE_TIMEOUT = 111,
+    UDPCTL_AVP_SURVEILLANCE_TIMEOUT = 111,
 } udpctl_avp_code_t;
 
 typedef enum udpctl_result_code_e {
@@ -178,7 +183,7 @@ typedef struct udpctl_client_s {
 } udpctl_client_t;
 
 // used by services
-svcs_errcode_t  udpctl_service_install ();
+svcs_errcode_t  udpctl_service_install (bool enabled);
 svcs_errcode_t  udpctl_service_uninstall ();
 svcs_errcode_t  udpctl_on_start (const svcs_resource_t * svcres, dtlv_ctx_t * conf);
 svcs_errcode_t  udpctl_on_stop ();

@@ -59,6 +59,7 @@ typedef enum imdb_errcode_e {
     IMDB_FILE_LOCK_ERROR = 15,
     IMDB_CACHE_CAPACITY = 16,
     IMDB_BLOCK_ACCESS = 17,
+    IMDB_CORRUPT = 18,
 } imdb_errcode_t;
 
 typedef enum imdb_access_path_s {

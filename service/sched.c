@@ -852,11 +852,12 @@ sched_on_cfgupd (dtlv_ctx_t * conf)
 
 
 svcs_errcode_t  ICACHE_FLASH_ATTR
-sched_service_install (void)
+sched_service_install (bool enabled)
 {
     svcs_service_def_t sdef;
     os_memset (&sdef, 0, sizeof (svcs_service_def_t));
-    sdef.enabled = true;
+    sdef.enabled = enabled;
+    sdef.multicast = true;
     sdef.on_cfgupd = sched_on_cfgupd;
     sdef.on_message = sched_on_message;
     sdef.on_start = sched_on_start;

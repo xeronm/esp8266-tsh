@@ -4,6 +4,7 @@ Light-weight Shell for ESP8266 with support of simple and configurable control l
 Developed and tested with my ESP-12E (4Mb) board.
 
 Main Goals:
+- OTA firmware update
 - light-weight udp control/management protocol with python client [esp8266-tshcli]
 - cron-like task scheduler
 - simple scripting language for making control logic with trace/debug feature
@@ -11,12 +12,13 @@ Main Goals:
 
 License: GPLv3
 
-*Some of internal solutions may looks weird, but all of it made just for fun and it works well.*
-
 *Feel free to use, improve, report bugs, criticize and etc.*
 
 Contributors
 - Denis Muratov <xeronm@gmail.com>
+
+
+[![Paypal Donations](https://www.paypalobjects.com/en_US/i/btn/btn_donate_SM.gif)](https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=xeronm%40gmail.com&currency_code=USD&source=url)
 
 ## 1. References
 
@@ -60,26 +62,36 @@ $ sudo docker run --name esp8266 -it --rm -v $PWD:/src/project dtec/esp8266:1.22
 
 ## 4. Usage
 
-### 4.1. Service catalog
+### 4.1. System Documentation
 
-| Id | Name      | Description                  |
-| ---| ----------| -----------------------------|
-|  0 | multicast | multicast messaging point    |
-|  1 | service   | service management           |
-|  2 | syslog    | system message logging       |
-|  3 | espadmin  | esp8266 system management    |
-|  4 | udpctl    | UDP system management        |
-|  5 | lwsh      | Light-weight shell           |
-|  6 | ntp       | Network Time Protocol client |
-|  7 | gpioctl   | GPIO control management      |
-|  8 | sched     | Cron-like scheduler          |
-| 21 | dev.dht   | DHT11/AM2302 sensor          |
+#### 4.1.1. Safe Mode
 
-### 4.2. Service documentation
+If exception occurs, on system initialization will checked `reason` and `exccause` and will turn system in Safe Mode to 60 seconds.
+Only few services need for logging and control operations starts immediately. All  other services starts after 60 seconds timeout. 
+Unconfirmed firmware updates will be rolled back to the previous version of firmware.
 
-#### 4.2.1. Service management (service)
 
-##### 4.2.1.1. Message types
+### 4.2. Service catalog
+
+| Id | Name      | Description                  | Safe Mode* |
+| ---| ----------| -----------------------------|-----------|
+|  0 | multicast | multicast messaging point    |           |
+|  1 | service   | service management           | Yes       |
+|  2 | syslog    | system message logging       | Yes       |
+|  3 | espadmin  | esp8266 system management    | Yes (no configuration) |
+|  4 | udpctl    | UDP system management        | Yes       |
+|  5 | lwsh      | Light-weight shell           |           |
+|  6 | ntp       | Network Time Protocol client |           |
+|  7 | gpioctl   | GPIO control management      |           |
+|  8 | sched     | Cron-like scheduler          |           |
+| 21 | dev.dht   | DHT11/AM2302 sensor          |           |
+
+
+### 4.3. Service documentation
+
+#### 4.3.1. Service management (service)
+
+##### 4.3.1.1. Message types
 
 |MsgType|Command|Multicast|Description|
 |-------|-------|---------|-----------|
@@ -99,9 +111,9 @@ $ sudo docker run --name esp8266 -it --rm -v $PWD:/src/project dtec/esp8266:1.22
 |40|MCAST_SIG4|Y| User signal |
 
 
-#### 4.2.2. System logging (syslog)
+#### 4.3.2. System logging (syslog)
 
-##### 4.2.2.2. Configuration parameters
+##### 4.3.2.2. Configuration parameters
 
 |Parameter|Level|Description|Default|
 |---------|-----|-----------|-------|
@@ -112,9 +124,9 @@ Example:
   { "syslog.Log-Severity": 4 }
 ```
 
-#### 4.2.3. esp8266 system management (espadmin)
+#### 4.3.3. esp8266 system management (espadmin)
 
-##### 4.2.3.1. Configuration parameters
+##### 4.3.3.1. Configuration parameters
 
 |Parameter|Level|Description|Default|
 |---------|-----|-----------|-------|
@@ -154,7 +166,7 @@ Example:
   }
 ```
 
-##### 4.2.3.2. Message types
+##### 4.3.3.2. Message types
 
 |MsgType|Command|Description|
 |-------|-------|-----------|
@@ -163,13 +175,14 @@ Example:
 |11|FDB_TRUNC|truncate Flash-DB|
 |12|FW_OTA_INIT| Initialize OTA firmware upgrade|
 |13|FW_OTA_UPLOAD| Upload firmware bin data |
-|14|FW_OTA_DONE| Commit firmware upgrade|
+|14|FW_OTA_DONE| Commit firmware upgrade, will reboot with new firmware|
 |15|FW_OTA_ABORT| Abort firmware upgrade|
-|16|FW_VERIFY| Verify firmware digest|
+|16|FW_OTA_VERIFY_DONE| Final commit firmware upgrade, if not successed by 60 sec after restart, will rollback to previous firmware |
+|17|FW_VERIFY| Verify firmware digest|
 
-#### 4.2.4. UDP system management (udpctl)
+#### 4.3.4. UDP system management (udpctl)
 
-##### 4.2.4.1. Configuration parameters
+##### 4.3.4.1. Configuration parameters
 
 |Parameter|Level|Description|Default|
 |---------|-----|-----------|-------|
@@ -186,13 +199,13 @@ Example:
   }
 ```
 
-##### 4.2.4.2. Message types
+##### 4.3.4.2. Message types
 
 |MsgType|Command|Description|
 |-------|-------|-----------|
 |1|INFO|Query information (state, peers, etc.) |
 
-##### 4.2.4.3. Protocol
+##### 4.3.4.3. Protocol
 
 ###### Message Flow
 0. Auth Request
@@ -249,7 +262,7 @@ Example:
     - E flag - error answer
 - **Command Code** - corresponds to service Message type
 - **Identifier** - message sequence identifier (starts from 0 for every new authenticated connection)
-- **Message Digest** - message digest for validate message originator
+- **Message Digest** - message digest for message originator and body validation
 - **Authenticator** - party authenticator issued by originator of auth request/answer message
 
 ###### Message Body
@@ -272,13 +285,13 @@ Message body is a sequence of AVP
 - **Data** - attribute value data (4-bytes aligned)
 
 
-#### 4.2.5. Light-weight shell (lwsh)
+#### 4.3.5. Light-weight shell (lwsh)
 
-##### 4.2.5.1. Configuration parameters
+##### 4.3.5.1. Configuration parameters
 
 This service hasn't any configurable parameters
 
-##### 4.2.5.2. Message types
+##### 4.3.5.2. Message types
 
 |MsgType|Command|Description|
 |-------|-------|-----------|
@@ -291,9 +304,9 @@ This service hasn't any configurable parameters
 |15|LOAD| Load existing script from source (Flash-DB)|
 |16|LIST| List all stored scripts from Flash-DB|
 
-#### 4.2.6. Network Time Protocol client (ntp)
+#### 4.3.6. Network Time Protocol client (ntp)
 
-##### 4.2.6.1. Configuration parameters
+##### 4.3.6.1. Configuration parameters
 
 |Parameter|Level|Description|Default|
 |---------|-----|-----------|-------|
@@ -314,33 +327,33 @@ Example:
   }
 ```
 
-##### 4.2.6.2. Message types
+##### 4.3.6.2. Message types
 
 |MsgType|Command|Description|
 |-------|-------|-----------|
 |1|INFO|Query information (state, peers, etc.) |
 |10|SETDATE| Query NTP peers and try to set local datetime|
 
-#### 4.2.7. GPIO control management (gpioctl)
+#### 4.3.7. GPIO control management (gpioctl)
 
-##### 4.2.7.1. Configuration parameters
+##### 4.3.7.1. Configuration parameters
 
 This service hasn't any configurable parameters
 
-##### 4.2.7.2. Message types
+##### 4.3.7.2. Message types
 
 |MsgType|Command|Description|
 |-------|-------|-----------|
 |1|INFO|Query GPIO perepherial information |
 |10|OUTPUT_SET| Set output parameters for GPIO PIN (value, delay, function)|
 
-#### 4.2.8. Cron-like scheduler (sched)
+#### 4.3.8. Cron-like scheduler (sched)
 
-##### 4.2.8.1. Configuration parameters
+##### 4.3.8.1. Configuration parameters
 
 This service hasn't any configurable parameters
 
-##### 4.2.8.2. Message types
+##### 4.3.8.2. Message types
 
 |MsgType|Command|Description|
 |-------|-------|-----------|
@@ -351,9 +364,9 @@ This service hasn't any configurable parameters
 |13|SOURCE| Get source of existing task from Flash-DB|
 |14|LIST| List all stored tasks from Flash-DB|
 
-#### 4.2.9. DHT11/AM2302 sensor (dev.dht)
+#### 4.3.9. DHT11/AM2302 sensor (dev.dht)
 
-##### 4.2.9.1. Configuration parameters
+##### 4.3.9.1. Configuration parameters
 
 |Parameter|Level|Description|Default|
 |---------|-----|-----------|-------|
@@ -371,7 +384,7 @@ This service hasn't any configurable parameters
 |dht.Temperature| 1 | Temperature Celseus (1/100)  | |
 |common.Milticast-Signal| 1 | Notification multicast signal_id (32-63)|
 
-##### 4.2.9.2. Message types
+##### 4.3.9.2. Message types
 
 |MsgType|Command|Description|
 |-------|-------|-----------|
@@ -533,7 +546,7 @@ Following terms were used:
   # temp = 0; # hmd = 0; # res := ! dht_get(1, hmd, temp); 
   ((last_ev != 2) && res && (hmd >= 3600) && (last_dt + 300 < sdt)) ?? { gpio_set(0, 0); last_ev := 2; last_dt := sdt; print(last_ev) }; 	// humidity high threshold
   ((last_ev = 2) && res && (hmd < 3600) && (last_dt + 300 < sdt)) ?? { gpio_set(0, 1); last_ev := 3; last_dt := sdt; print(last_ev) };	// humidity low threshold
-  ((last_ev = 1) && (last_dt + 720 < sdt) || (last_ev = 2) && (last_dt + 1800 < sdt)) ?? { gpio_set(0, 1); last_ev := 4; last_dt := sdt; print(last_ev) };	// power off timeout
+  ((last_ev = 1) && (last_dt + 720 < sdt) || (last_ev = 2) && res && (hmd < 4500) && (last_dt + 1800 < sdt)) ?? { gpio_set(0, 1); last_ev := 4; last_dt := sdt; print(last_ev) };	// power off timeout
 ```
 
 ###### 2. Add peristent named statement `fan_control` for common control logic
@@ -542,7 +555,7 @@ $ ./tcli.py -H 192.168.5.86 -s 5ccf7f85e196 lsh add -m '
 {
   "lsh.Statement-Name": "fan_control",
   "lsh.Persistent-Flag": 1,
-  "lsh.Statement-Text": "## last_dt; ## last_ev; # sdt := sysctime();\n(last_ev <= 0) ?? { gpio_set(0, 0); last_ev := 1; last_dt := sdt; print(last_ev) };\n\n# temp = 0; # hmd = 0; # res := !dht_get(1, hmd, temp);\n((last_ev != 2) && res && (hmd >= 3600) && (last_dt + 300 < sdt)) ?? { gpio_set(0, 0); last_ev := 2; last_dt := sdt; print(last_ev) };\n((last_ev = 2) && res && (hmd < 3600) && (last_dt + 300 < sdt)) ?? { gpio_set(0, 1); last_ev := 3; last_dt := sdt; print(last_ev) };\n((last_ev = 1) && (last_dt + 720 < sdt) || (last_ev = 2) && (last_dt + 1800 < sdt)) ?? { gpio_set(0, 1); last_ev := 4; last_dt := sdt; print(last_ev) };"
+  "lsh.Statement-Text": "## last_dt; ## last_ev; # sdt := sysctime();\n(last_ev <= 0) ?? { gpio_set(0, 0); last_ev := 1; last_dt := sdt; print(last_ev) };\n\n# temp = 0; # hmd = 0; # res := !dht_get(1, hmd, temp);\n((last_ev != 2) && res && (hmd >= 3600) && (last_dt + 300 < sdt)) ?? { gpio_set(0, 0); last_ev := 2; last_dt := sdt; print(last_ev) };\n((last_ev = 2) && res && (hmd < 3600) && (last_dt + 300 < sdt)) ?? { gpio_set(0, 1); last_ev := 3; last_dt := sdt; print(last_ev) };\n((last_ev = 1) && (last_dt + 720 < sdt) || (last_ev = 2) && res && (hmd < 4500) && (last_dt + 1800 < sdt)) ?? { gpio_set(0, 1); last_ev := 4; last_dt := sdt; print(last_ev) };"
 }'
 ```
 

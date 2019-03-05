@@ -81,7 +81,7 @@
 
 #ifdef IMDB_SMALL_RAM
 #define LSH_STMT_PARSE_BUFFER_SIZE		512
-#define LSH_STMT_BUFFER_SIZE			864
+#define LSH_STMT_BUFFER_SIZE			1400
 #define LSH_STMT_VARIDX_BUFFER_SIZE		512
 #else
 #define LSH_STMT_PARSE_BUFFER_SIZE		1024
@@ -2220,11 +2220,12 @@ lsh_on_message (service_ident_t orig_id,
 }
 
 svcs_errcode_t  ICACHE_FLASH_ATTR
-lsh_service_install (void)
+lsh_service_install (bool enabled)
 {
     svcs_service_def_t sdef;
     os_memset (&sdef, 0, sizeof (svcs_service_def_t));
-    sdef.enabled = true;
+    sdef.enabled = enabled;
+    sdef.multicast = false;
     sdef.on_start = lsh_on_start;
     sdef.on_message = lsh_on_message;
     sdef.on_stop = lsh_on_stop;

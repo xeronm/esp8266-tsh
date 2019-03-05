@@ -284,11 +284,12 @@ syslog_vbprintf (const log_severity_t severity, const char *svc, const char *buf
 
 
 svcs_errcode_t  ICACHE_FLASH_ATTR
-syslog_service_install (void)
+syslog_service_install (bool enabled)
 {
     svcs_service_def_t sdef;
     os_memset (&sdef, 0, sizeof (svcs_service_def_t));
-    sdef.enabled = true;
+    sdef.enabled = enabled;
+    sdef.multicast = false;
     sdef.on_start = syslog_on_start;
     sdef.on_stop = syslog_on_stop;
     sdef.on_message = syslog_on_message;

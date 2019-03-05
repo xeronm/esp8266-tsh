@@ -73,7 +73,7 @@ dht_result_t    dht_get (dht_t * value);        // exponential moving average
 dht_result_t    dht_get_hist (dht_hist_t * hist);
 
 // used by services
-svcs_errcode_t  dht_service_install ();
+svcs_errcode_t  dht_service_install (bool enabled);
 svcs_errcode_t  dht_service_uninstall ();
 svcs_errcode_t  dht_on_start (const svcs_resource_t * svcres, dtlv_ctx_t * conf);
 svcs_errcode_t  dht_on_stop ();

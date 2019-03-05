@@ -16,6 +16,7 @@
 #define	FWUPG_SUB_SERVICE_NAME	".fwupg"
 
 #define FWUPG_IDLE_TIMEOUT_SEC		60      // seconds
+#define FWUPG_VERIFY_TIMEOUT_SEC	60      // seconds
 #define FWUPG_REBOOT_TIMEOUT_SEC	1       // seconds
 
 #define FWUPG_BIN_CHECKSUM_SIZE		1       //
@@ -34,6 +35,7 @@ typedef enum __packed upgrade_err_e {
     UPGRADE_WRITE_ERROR = 8,
     UPGRADE_DIGEST_ERROR = 9,
     UPGRADE_OUT_OF_MEMORY = 10,
+    UPGRADE_NOT_VERIFIED = 11,
 } upgrade_err_t;
 
 typedef enum __packed upgrade_sate_e {
@@ -43,6 +45,7 @@ typedef enum __packed upgrade_sate_e {
     UPGRADE_UPLOADING = 3,
     UPGRADE_COMPLETE = 4,
     UPGRADE_ABORT = 5,
+    UPGRADE_VERIFYING = 6,
 } upgrade_sate_t;
 
 typedef struct firmware_info_s {
@@ -65,6 +68,14 @@ typedef struct firmware_info_s {
     firmware_digest_t digest;
 } firmware_info_t;
 
+typedef struct flash_upgrade_info_s {
+    uint16          crc16;
+    bool            safe_mode: 1;  // upgrade was doing in safemode
+    bool            verified: 1;   // upgrade was verified (1 minutes timeout after startup)
+    uint32          digest_pos;
+    uint32          usn;           // upgrade sequence number
+} flash_upgrade_info_t;
+
 #define FW_VERSTR		"%u.%u.%u%s(%u)"
 #define FW_VER2STR(fwi)		(fwi)->version.comp.major, (fwi)->version.comp.minor, (fwi)->version.comp.patch, (fwi)->ver_suffix, (fwi)->build
 
@@ -78,6 +89,10 @@ upgrade_err_t   fwupdate_init (firmware_info_t * fwinfo, firmware_digest_t * ini
 upgrade_err_t   fwupdate_upload (uint8 * data, size_t length);
 upgrade_err_t   fwupdate_done (void);
 upgrade_err_t   fwupdate_abort (void);
+
+upgrade_err_t   fwupdate_verify (void);
+upgrade_err_t   fwupdate_verify_done (void);
+upgrade_err_t   fwupdate_rollback (void);
 
 upgrade_err_t   fw_verify (firmware_info_t * fwinfo, firmware_digest_t * init_digest);
 

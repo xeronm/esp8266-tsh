@@ -49,7 +49,7 @@
 #define	IMDB_SERVICE_NAME		"imdb"
 
 #define d_obj2hndlr(obj)		(imdb_hndlr_t) (obj)
-#define d_hndlr2obj(type, hndlr)	(type *) (hndlr)        // TODO: сделать проверку на тип
+#define d_hndlr2obj(type, hndlr)	(type *) (hndlr)        // TODO: пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅ
 
 LOCAL const char *sz_imdb_error[] RODATA = {
     "",
@@ -70,6 +70,7 @@ LOCAL const char *sz_imdb_error[] RODATA = {
     "file lock error %d:%d",
     "cache capacity error, block %p",
     "block %p access error",
+    "data corruption ptr=%p, %s",
 };
 
 struct imdb_class_s;
@@ -145,6 +146,7 @@ typedef enum imdb_lock_s {
 #define	d_stat_slot_split(imdb)		{ (imdb)->stat.slot_split++; }
 #define	d_stat_block_read(imdb)		{ (imdb)->stat.block_read++; }
 #define	d_stat_block_write(imdb)	{ (imdb)->stat.block_write++; }
+#define	d_stat_slot_coalesce(imdb)	{ (imdb)->stat.slot_coalesce++; }
 
 typedef enum imdb_data_slot_type_s {
     DATA_SLOT_TYPE_1 = 0,
@@ -477,19 +479,6 @@ imdb_data4_slot_init (imdb_block_t * block, imdb_slot_free_t * slot_free, obj_si
     footer->length = slot_bsize;
 
     return d_pointer_add (void, data4, sizeof (imdb_slot_data4_t));
-}
-
-/*
-[inline] Shift FreeSlot offset to next DataSlot
-  - block:
-  - [in/out] slot_offset: shift from FreeSlot to next DataSlot
-*/
-INLINED void    ICACHE_FLASH_ATTR
-imdb_block_slot_free_next (imdb_block_t * block, block_size_t * slot_offset)
-{
-    imdb_slot_free_t *slot_free = d_pointer_add (imdb_slot_free_t, (block), d_bptr_size (*slot_offset));
-    d_assert (slot_free->flags == SLOT_FLAG_FREE, "slot=%p, flags=%u", slot_free, slot_free->flags);
-    (*slot_offset) += slot_free->length;
 }
 
 /*
@@ -1346,6 +1335,7 @@ imdb_page_block_alloc (imdb_t * imdb, imdb_block_class_t * class_block, imdb_blo
     block->block_index = bidx;
 
     imdb_block_slot_init (imdb, class_block->dbclass.ds_type, page_block, block);
+    d_setwrite_block (imdb, page_block);
     d_imdb_page_fl_insert_block (page_block, block);
 
 #ifdef IMDB_BLOCK_CRC
@@ -1937,7 +1927,7 @@ imdb_clsobj_insert (imdb_hndlr_t hmdb, imdb_hndlr_t hclass, void **ptr, size_t l
  * [public] write lock object block, need manual unlock.
  *   - hmdb: Handler to imdb instance
  *   - rowid: object row id
- *   - ptr: pointer to deleting object
+ *   - ptr: if not NULL returns pointer to updating object
  *   - result: imdb error code
  */
 imdb_errcode_t  ICACHE_FLASH_ATTR
@@ -1953,7 +1943,8 @@ imdb_clsobj_update_init (imdb_hndlr_t hmdb, imdb_rowid_t * rowid, void **ptr)
             return IMDB_BLOCK_ACCESS;
         }
 
-        *ptr = d_pointer_add (void, block, d_bptr_size (rowid->slot_offset) +
+        if (ptr)
+            *ptr = d_pointer_add (void, block, d_bptr_size (rowid->slot_offset) +
                               (rowid->ds_type == DATA_SLOT_TYPE_1) ? 0 : sizeof (imdb_slot_free_t));
     }
 
@@ -1964,13 +1955,12 @@ imdb_clsobj_update_init (imdb_hndlr_t hmdb, imdb_rowid_t * rowid, void **ptr)
  * [public] write lock and unlock object block.
  *   - hmdb: Handler to imdb instance
  *   - rowid: object row id
- *   - ptr: pointer to deleting object
+ *   - ptr: if not NULL returns pointer to updating object
  *   - result: imdb error code
  */
 imdb_errcode_t  ICACHE_FLASH_ATTR
 imdb_clsobj_update (imdb_hndlr_t hmdb, imdb_rowid_t * rowid, void **ptr)
 {
-    *ptr = NULL;
     d_imdb_check_hndlr (hmdb);
     imdb_t         *imdb = d_hndlr2obj (imdb_t, hmdb);
     if (imdb->db_def.opt_media) {
@@ -1981,7 +1971,8 @@ imdb_clsobj_update (imdb_hndlr_t hmdb, imdb_rowid_t * rowid, void **ptr)
         }
         block->lock_flag = DATA_LOCK_NONE;
 
-        *ptr = d_pointer_add (void, block, d_bptr_size (rowid->slot_offset) +
+        if (ptr)
+            *ptr = d_pointer_add (void, block, d_bptr_size (rowid->slot_offset) +
                               ((rowid->ds_type == DATA_SLOT_TYPE_1) ? 0 : sizeof (imdb_slot_free_t)));
     }
 
@@ -2019,6 +2010,7 @@ imdb_clsobj_delete (imdb_hndlr_t hmdb, imdb_hndlr_t hclass, void *ptr)
     imdb_block_t   *block = NULL;
 
     obj_size_t      slen = 0;
+    obj_size_t      block_offset = 0;
     switch (dbclass->ds_type) {
     case DATA_SLOT_TYPE_1:
     case DATA_SLOT_TYPE_3:
@@ -2027,22 +2019,36 @@ imdb_clsobj_delete (imdb_hndlr_t hmdb, imdb_hndlr_t hclass, void *ptr)
     case DATA_SLOT_TYPE_2:
         {
             imdb_slot_data2_t *slot_data2 = d_pointer_add (imdb_slot_data2_t, ptr, -sizeof (imdb_slot_data2_t));
-            d_assert (slot_data2->flags == SLOT_FLAG_DATA, "flags=%u", slot_data2->flags);
+            if (slot_data2->flags != SLOT_FLAG_DATA) {
+                d_log_eprintf (IMDB_SERVICE_NAME, sz_imdb_error[IMDB_CORRUPT], slot_data2, "flag != data");
+                return IMDB_CORRUPT;
+            }
+
             block = d_pointer_add (imdb_block_t, slot_data2, -d_bptr_size (slot_data2->block_offset));
             slen = dbclass->cdef.obj_size + sizeof (imdb_slot_data2_t);
             slot_free = (imdb_slot_free_t *) slot_data2;
+            slot_free->length = d_size_bptr (slen);
+            block_offset = slot_data2->block_offset;
         }
         break;
     case DATA_SLOT_TYPE_4:
         {
             imdb_slot_data4_t *slot_data4 = d_pointer_add (imdb_slot_data4_t, ptr, -sizeof (imdb_slot_data4_t));
-            d_assert (slot_data4->flags == SLOT_FLAG_DATA, "flags=%u", slot_data4->flags);
+            if (slot_data4->flags != SLOT_FLAG_DATA) {
+                d_log_eprintf (IMDB_SERVICE_NAME, sz_imdb_error[IMDB_CORRUPT], slot_data4, "flag != data");
+                return IMDB_CORRUPT;
+            }
             slen = d_bptr_size (slot_data4->length);
             slot_footer = d_pointer_add (imdb_slot_footer_t, slot_data4, slen - sizeof (imdb_slot_footer_t));
-            d_assert (slot_footer->flags == SLOT_FLAG_DATA, "flags=%u", slot_footer->flags);
+
+            if (slot_footer->flags != SLOT_FLAG_DATA) {
+                d_log_eprintf (IMDB_SERVICE_NAME, sz_imdb_error[IMDB_CORRUPT], slot_footer, "flag != data");
+                return IMDB_CORRUPT;
+            }
 
             block = d_pointer_add (imdb_block_t, slot_data4, -d_bptr_size (slot_data4->block_offset));
-            slot_free = (imdb_slot_free_t *) slot_data4;
+            slot_free = d_pointer_as (imdb_slot_free_t, slot_data4);
+            block_offset = slot_data4->block_offset;
         }
         break;
     default:
@@ -2051,14 +2057,64 @@ imdb_clsobj_delete (imdb_hndlr_t hmdb, imdb_hndlr_t hclass, void *ptr)
 
     d_stat_slot_free (imdb);
     slot_free->flags = SLOT_FLAG_FREE;
-    slot_free->length = d_size_bptr (slen);
 
     d_log_dprintf (IMDB_SERVICE_NAME, "delete: class=%p add free slot=%p, len=%u", class_block, slot_free,
                    slot_free->length);
 
     d_setwrite_block (imdb, block);
-    d_imdb_block_fl_insert_slot (block, slot_free);
-    if (!slot_free->next_offset) {      // block FL was empty        
+
+    imdb_slot_free_t *slot_free_n = NULL;
+    imdb_slot_free_t *slot_free_p = NULL;
+    // coalesce with next free slot
+    if (block_offset + slot_free->length < d_block_upper_data_blimit (imdb, block)) {
+        slot_free_n = d_pointer_add (imdb_slot_free_t, slot_free, slen);
+        if (slot_free_n->flags == SLOT_FLAG_FREE) {
+            slot_free->length += slot_free_n->length;
+            slot_footer = d_pointer_add (imdb_slot_footer_t, slot_free_n, d_bptr_size (slot_free_n->length) - sizeof (imdb_slot_footer_t));
+            d_stat_slot_coalesce (imdb);
+        }
+        else
+            slot_free_n = NULL;
+    }
+
+    // coalesce with prev free slot
+    if (block_offset > d_block_lower_data_blimit (block)) {
+        imdb_slot_footer_t *slot_footer_p = d_pointer_add (imdb_slot_footer_t, slot_free, -sizeof (imdb_slot_footer_t));
+        if (slot_footer_p->flags == SLOT_FLAG_FREE) {
+            slot_free_p = d_pointer_add (imdb_slot_free_t, slot_free, -d_bptr_size (slot_footer_p->length) );
+            slot_free_p->length += slot_free->length;
+            slot_free = slot_free_p;
+            d_stat_slot_coalesce (imdb);
+        }
+    }
+
+    imdb_slot_free_t *fslot = d_block_slot_free (block);
+    if (fslot) { // block FL was not empty
+        if (slot_free_p || slot_free_n) {
+            // prev/next free slot may not in free list        
+            imdb_slot_free_t *fslot_prev = NULL;
+            while (fslot) {
+                if (fslot_prev == fslot) {
+                    d_log_eprintf (IMDB_SERVICE_NAME, sz_imdb_error[IMDB_CORRUPT], fslot_prev, "free list loop");
+                    return IMDB_CORRUPT;
+                }
+                if ((fslot == slot_free_p) || (fslot == slot_free_n)) {
+                    if (fslot_prev)
+                        fslot_prev->next_offset = fslot->next_offset;
+                    else
+                        block->free_offset = fslot->next_offset;
+                }
+                else 
+                    fslot_prev = fslot;
+                fslot = d_block_next_slot_free (block, fslot);
+            }
+        }
+
+        d_imdb_block_fl_insert_slot (block, slot_free);
+    }
+    else {      // block FL was empty
+        d_imdb_block_fl_insert_slot (block, slot_free);
+
         page_ptr_t      page_ptr;
         page_ptr.raw = d_block_get_page_blockid (block, imdb->db_def.block_size);
 
@@ -2081,8 +2137,6 @@ imdb_clsobj_delete (imdb_hndlr_t hmdb, imdb_hndlr_t hclass, void *ptr)
         slot_footer->flags = SLOT_FLAG_FREE;
         slot_footer->length = slot_free->length;
     }
-
-    // !!! TODO: Coalesce adjoin Slots !!!
 
     d_release_class_block (imdb, class_block);
 
@@ -2191,7 +2245,6 @@ imdb_class_info (imdb_hndlr_t hmdb, imdb_hndlr_t hclass, imdb_class_info_t * cla
                 }
 
                 slot_free = d_block_slot_free (block_targ);
-
                 // iterate slot
                 while (slot_free) {
                     class_info->slots_free++;

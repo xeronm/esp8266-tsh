@@ -34,6 +34,7 @@
 
 #ifdef ARCH_XTENSA
 #include "uart.h"
+#include "fwupgrade.h"
 #include "service/espadmin.h"
 #include "service/gpioctl.h"
 #include "service/device/dhtxx.h"
@@ -43,8 +44,12 @@ typedef struct system_data_s {
     imdb_hndlr_t    hmdb;
     imdb_hndlr_t    hfdb;
     char            sysdescr[SYSTEM_DESCRIPTION_LENGTH + 1];
+    uint16          softap_timeout;
+    bool            safe_mode;
 #ifdef ARCH_XTENSA
     os_timer_t      timer_overflow;
+    os_timer_t      timer_softap;
+    os_timer_t      timer_safemode;
     os_event_t      task_queue[TASK_QUEUE_LENGTH];
 #endif
 } system_data_t;
@@ -54,34 +59,40 @@ LOCAL system_data_t *sdata = NULL;
 #define STARTUP_SERVICE_NAME	"startup"
 #define SHUTDOWN_SERVICE_NAME	"shutdown"
 
-typedef         svcs_errcode_t (*service_install) (void);
+typedef         svcs_errcode_t (*service_install) (bool enabled);
 
 typedef struct reg_service_s {
     service_install fn_install;
+    service_ident_t service_id;
     service_name_t  name;
     bool            safe_mode;
 } reg_service_t;
 
 #ifdef ARCH_XTENSA
-#define REG_SERVICE_MAX	8
-#else
-#define REG_SERVICE_MAX	5
-#endif
-LOCAL reg_service_t const reg_services[REG_SERVICE_MAX] RODATA = {
-    {syslog_service_install, SYSLOG_SERVICE_NAME, true},
-    {lsh_service_install, LSH_SERVICE_NAME, false},
-    {sched_service_install, SCHED_SERVICE_NAME, false},
-#ifdef ARCH_XTENSA
-    {espadmin_service_install, ESPADMIN_SERVICE_NAME, false},
-    {gpio_service_install, GPIO_SERVICE_NAME, false},
-#endif
-    {udpctl_service_install, UDPCTL_SERVICE_NAME, true},
-    {ntp_service_install, NTP_SERVICE_NAME, false},
-#ifdef ARCH_XTENSA
-    {dht_service_install, DHT_SERVICE_NAME, false},
-#endif
+LOCAL reg_service_t const reg_services[] RODATA = {
+    {syslog_service_install, SYSLOG_SERVICE_ID, SYSLOG_SERVICE_NAME, true},
+    {lsh_service_install, LSH_SERVICE_ID, LSH_SERVICE_NAME, false},
+    {sched_service_install, SCHED_SERVICE_ID, SCHED_SERVICE_NAME, false},
+    {espadmin_service_install, ESPADMIN_SERVICE_ID, ESPADMIN_SERVICE_NAME, true},
+    {gpio_service_install, GPIO_SERVICE_ID, GPIO_SERVICE_NAME, false},
+    {udpctl_service_install, UDPCTL_SERVICE_ID, UDPCTL_SERVICE_NAME, true},
+    {ntp_service_install, NTP_SERVICE_ID, NTP_SERVICE_NAME, false},
+    {dht_service_install, DHT_SERVICE_ID, DHT_SERVICE_NAME, false},
 };
 
+#define REG_SERVICE_MAX	8
+#else
+
+LOCAL reg_service_t const reg_services[] RODATA = {
+    {syslog_service_install, SYSLOG_SERVICE_ID, SYSLOG_SERVICE_NAME, true},
+    {lsh_service_install, LSH_SERVICE_ID, LSH_SERVICE_NAME, false},
+    {sched_service_install, SCHED_SERVICE_ID, SCHED_SERVICE_NAME, false},
+    {udpctl_service_install, UDPCTL_SERVICE_ID, UDPCTL_SERVICE_NAME, true},
+    {ntp_service_install, NTP_SERVICE_ID, NTP_SERVICE_NAME, false},
+};
+
+#define REG_SERVICE_MAX	5
+#endif
 
 LOCAL imdb_def_t db_def RODATA = {
     SYSTEM_IMDB_BLOCK_SIZE,
@@ -106,12 +117,48 @@ time_overflow_timeout (void *args)
     lt_get_ctime (&ts);
 }
 
+LOCAL void      ICACHE_FLASH_ATTR
+softap_timeout (void *args)
+{
+    d_log_wprintf (MAIN_SERVICE_NAME, "softap timeout");
+#ifdef ARCH_XTENSA
+    uint8 opmode = wifi_get_opmode ();
+    wifi_set_opmode_current (opmode & ~(uint8)SOFTAP_MODE );
+#endif
+}
+
+
+LOCAL void      ICACHE_FLASH_ATTR
+start_all_services (void)
+{
+    svcctl_start (sdata->hmdb, sdata->hfdb);
+    // installing services
+    int             i;
+    for (i = 0; i < REG_SERVICE_MAX; i++) {
+        reg_services[i].fn_install (!sdata->safe_mode || reg_services[i].safe_mode);
+    }
+}
+
+LOCAL void      ICACHE_FLASH_ATTR
+safemode_timeout (void *args)
+{
+    d_log_wprintf (MAIN_SERVICE_NAME, "safemode timeout");
+
+#ifdef ARCH_XTENSA
+    svcctl_stop ();
+#endif
+
+    sdata->safe_mode = false;
+
+#ifdef ARCH_XTENSA
+    start_all_services ();
+#endif
+}
+
 #ifdef ARCH_XTENSA
 LOCAL void      ICACHE_FLASH_ATTR
 time_overflow_setup (void)
 {
-    // setup time overflow timer
-    os_memset (&sdata->timer_overflow, 0, sizeof (os_timer_t));
     os_timer_disarm (&sdata->timer_overflow);
     os_timer_setfn (&sdata->timer_overflow, time_overflow_timeout, NULL);
 
@@ -119,7 +166,34 @@ time_overflow_setup (void)
     d_log_iprintf (MAIN_SERVICE_NAME, "overflow timer:%u min", timeout_min);
     os_timer_arm (&sdata->timer_overflow, timeout_min * MSEC_PER_MIN, true);
 }
+
+void            ICACHE_FLASH_ATTR
+softap_timeout_set (uint16 timeout_sec)
+{
+    if (!sdata)
+        return;
+    sdata->softap_timeout = timeout_sec;
+    os_timer_disarm (&sdata->timer_softap);
+    os_timer_setfn (&sdata->timer_softap, softap_timeout, NULL);
+
+    d_log_iprintf (MAIN_SERVICE_NAME, "softap timer:%u sec", timeout_sec);
+    os_timer_arm (&sdata->timer_softap, timeout_sec * MSEC_PER_SEC, false);
+}
 #endif
+
+uint16          ICACHE_FLASH_ATTR
+softap_timeout_get_last (void) { 
+    if (!sdata)
+        return 0;
+    return sdata->softap_timeout; 
+}
+
+bool            ICACHE_FLASH_ATTR 
+system_get_safe_mode (void) { 
+    if (!sdata)
+        return false;
+    return sdata->safe_mode; 
+}
 
 #ifdef ARCH_XTENSA
 LOCAL void      ICACHE_FLASH_ATTR
@@ -169,6 +243,23 @@ system_init (void)
                    APP_VERSION, system_get_sdk_version ());
     d_log_wprintf (STARTUP_SERVICE_NAME, "***  userbin:0x%06x, fmem:%d  ***", system_get_userbin_addr (),
                    system_get_free_heap_size ());
+
+    struct rst_info *rsti = system_get_rst_info ();
+    if ((rsti->reason == REASON_EXCEPTION_RST) || (rsti->exccause)) {
+        d_log_eprintf (STARTUP_SERVICE_NAME, "restart reason:%u,cause:%u, entering safe mode, timeout:%u", rsti->reason,
+                   rsti->exccause, SYSTEM_SAFEMODE_TIMEOUT_SEC);
+        sdata->safe_mode = true;
+    
+        os_timer_disarm (&sdata->timer_safemode);
+        os_timer_setfn (&sdata->timer_safemode, safemode_timeout, NULL);
+        os_timer_arm (&sdata->timer_safemode, SYSTEM_SAFEMODE_TIMEOUT_SEC * MSEC_PER_SEC, false);
+    }
+
+    if ((fwupdate_verify () == UPGRADE_NOT_VERIFIED) && (sdata->safe_mode)) {
+        d_log_eprintf (STARTUP_SERVICE_NAME, "firmware upgrade not verified, rollback");
+        fwupdate_rollback ();
+        return;
+    }
 #endif
 
 #ifndef DISABLE_SYSTEM
@@ -177,12 +268,7 @@ system_init (void)
     imdb_init (&db_def, &sdata->hmdb);
     imdb_init (&fdb_def, &sdata->hfdb);
 
-    svcctl_start (sdata->hmdb, sdata->hfdb);
-    // installing services
-    int             i;
-    for (i = 0; i < REG_SERVICE_MAX; i++) {
-        reg_services[i].fn_install ();
-    }
+    start_all_services ();
 #endif
 
 #ifdef ARCH_XTENSA
@@ -217,6 +303,8 @@ system_shutdown (void)
 #ifdef ARCH_XTENSA
     //wifi_station_disconnect ();
     os_timer_disarm (&sdata->timer_overflow);
+    os_timer_disarm (&sdata->timer_softap);
+    os_timer_disarm (&sdata->timer_safemode);
 #endif
     st_free (sdata);
 
@@ -253,21 +341,22 @@ system_get_default_ssid (unsigned char *buf, uint8 len)
 {
 #ifdef ARCH_XTENSA
     char           *hostname = wifi_station_get_hostname ();
-    size_t          plen = os_strlen (hostname);
+    size_t          plen = (hostname) ? os_strnlen (hostname, len) : 0;
     if (plen) {
         os_strncpy ((char*) buf, hostname, len);
+        return MIN (plen, len);
     }
-    else
-        /*
-         * uint8           macaddr[6];
-         * if (wifi_get_macaddr (STATION_IF, macaddr)) {
-         * size_t plen = os_strlen(AP_SSID_PREFIX);
-         * os_memcpy (buf, AP_SSID_PREFIX, plen);
-         * return plen + buf2hex ( d_pointer_add(char, buf, plen), d_pointer_add(char, &macaddr, 3), MIN (3, (len - plen)/ 2));
-         * }        
-         * else */
+    else {
+        uint8           macaddr[6];
+        if (wifi_get_macaddr (STATION_IF, macaddr)) {
+            size_t plen = os_strlen(AP_SSID_PREFIX);
+            os_memcpy (buf, AP_SSID_PREFIX, plen);
+            return plen + buf2hex ( d_pointer_add(char, buf, plen), d_pointer_add(char, &macaddr, 3), MIN (3, (len - plen)/ 2));
+        }        
+    }
 #endif
-        return 0;
+
+    return 0;
 }
 
 const char     *ICACHE_FLASH_ATTR

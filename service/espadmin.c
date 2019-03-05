@@ -73,11 +73,14 @@ espadmin_on_msg_product (dtlv_ctx_t * msg_out)
 #ifdef ARCH_XTENSA
     char            version[VERSION_BUFFER_SIZE];
     os_snprintf (version, VERSION_BUFFER_SIZE, FW_VERSTR, FW_VER2STR (&fw_info));
+    char           *hostname = wifi_station_get_hostname ();
+
     d_svcs_check_dtlv_error (dtlv_avp_encode_nchar
                              (msg_out, COMMON_AVP_APP_PRODUCT, sizeof (fw_info.product), fw_info.product)
                              || dtlv_avp_encode_nchar (msg_out, COMMON_AVP_APP_VERSION, VERSION_BUFFER_SIZE, version)
-                             || dtlv_avp_encode_char (msg_out, COMMON_AVP_HOST_NAME, wifi_station_get_hostname ())
+                             || ((hostname) ? dtlv_avp_encode_char (msg_out, COMMON_AVP_HOST_NAME, hostname) : false)
                              || dtlv_avp_encode_char (msg_out, COMMON_AVP_SYSTEM_DESCRIPTION, system_get_description ())
+                             || dtlv_avp_encode_uint32 (msg_out, COMMON_AVP_SYS_UPTIME, lt_ctime ())
         );
 #endif
     return SVCS_ERR_SUCCESS;
@@ -121,7 +124,6 @@ espadmin_on_msg_system (dtlv_ctx_t * msg_out)
                              dtlv_avp_encode_char (msg_out, ESPADMIN_AVP_SYS_SDKVERSION, system_get_sdk_version ()) ||
                              dtlv_avp_encode_uint32 (msg_out, ESPADMIN_AVP_SYS_CHIP_ID, system_get_chip_id ()) ||
                              dtlv_avp_encode_uint32 (msg_out, ESPADMIN_AVP_SYS_FLASH_ID, spi_flash_get_id ()) ||
-                             dtlv_avp_encode_uint32 (msg_out, ESPADMIN_AVP_SYS_UPTIME, lt_ctime ()) ||
                              dtlv_avp_encode_uint32 (msg_out, ESPADMIN_AVP_SYS_HEAP_FREE, system_get_free_heap_size ())
                              || dtlv_avp_encode_uint8 (msg_out, ESPADMIN_AVP_SYS_RST_REASON, rsti->reason));
     if ((rsti->reason == REASON_EXCEPTION_RST) || (rsti->exccause)) {
@@ -198,11 +200,13 @@ espadmin_on_msg_wireless (dtlv_ctx_t * msg_out)
         struct softap_config config;
         os_memset (&config, 0, sizeof (struct softap_config));
         if (wifi_softap_get_config (&config)) {
+            uint16 timeout = softap_timeout_get_last();
             d_svcs_check_dtlv_error (dtlv_avp_encode_nchar
                                      (msg_out, ESPADMIN_AVP_WIFI_SSID, config.ssid_len, (char *) config.ssid)
                                      || dtlv_avp_encode_char (msg_out, ESPADMIN_AVP_WIFI_PASSWORD,
                                                               (char *) config.password)
-                                     || dtlv_avp_encode_uint8 (msg_out, ESPADMIN_AVP_WIFI_AUTH_MODE, config.authmode));
+                                     || dtlv_avp_encode_uint8 (msg_out, ESPADMIN_AVP_WIFI_AUTH_MODE, config.authmode)
+                                     || (timeout ? dtlv_avp_encode_uint16 (msg_out, ESPADMIN_AVP_WIFI_SOFTAP_TIMEOUT, timeout) : 0) );
         }
 
         uint8           macaddr[6];
@@ -380,8 +384,8 @@ espadmin_on_msg_fwupdate_info (dtlv_ctx_t * msg_out, upgrade_err_t ures)
 
     d_svcs_check_dtlv_error (dtlv_avp_encode_uint8 (msg_out, COMMON_AVP_RESULT_EXT_CODE, ures) ||
                              dtlv_avp_encode_uint8 (msg_out, ESPADMIN_AVP_OTA_STATE, info.state) ||
-                             dtlv_avp_encode_uint32 (msg_out, ESPADMIN_AVP_FW_ADDR, info.fwbin_start_addr) ||
-                             dtlv_avp_encode_uint32 (msg_out, ESPADMIN_AVP_OTA_CURRENT_ADDR, info.fwbin_curr_addr));
+                             ((info.state) ? (dtlv_avp_encode_uint32 (msg_out, ESPADMIN_AVP_FW_ADDR, info.fwbin_start_addr) ||
+                                             dtlv_avp_encode_uint32 (msg_out, ESPADMIN_AVP_OTA_CURRENT_ADDR, info.fwbin_curr_addr)) : false) );
     return SVCS_ERR_SUCCESS;
 }
 #endif
@@ -494,6 +498,9 @@ espadmin_on_message (service_ident_t orig_id, service_msgtype_t msgtype, void *c
     case ESPADMIN_MSGTYPE_FW_OTA_DONE:
         d_svcs_check_svcs_error (espadmin_on_msg_fwupdate_info (msg_out, fwupdate_done ()));
         break;
+    case ESPADMIN_MSGTYPE_FW_OTA_VERIFY_DONE:
+        d_svcs_check_svcs_error (espadmin_on_msg_fwupdate_info (msg_out, fwupdate_verify_done ()));
+        break;
     case ESPADMIN_MSGTYPE_FW_VERIFY:
         {
             espadmin_on_msg_product (msg_out);
@@ -522,6 +529,7 @@ espadmin_on_cfgupd (dtlv_ctx_t * conf)
     uint8           wifi_st_password[64] = ESPADMIN_DEFAULT_WIFI_ST_PASSWORD;
     uint8           wifi_autoconnect = ESPADMIN_DEFAULT_WIFI_AUTO_CONNECT;
     uint8           wifi_sleep_type = ESPADMIN_DEFAULT_WIFI_SLEEP_TYPE;
+    uint16          softap_timeout = ESPADMIN_DEFAULT_WIFI_SOFTAP_TIMEOUT;
 
 #ifdef ESPADMIN_DEFAULT_WIFI_AP_PASSWORD
     uint8           wifi_ap_password[64] = ESPADMIN_DEFAULT_WIFI_AP_PASSWORD;
@@ -541,7 +549,7 @@ espadmin_on_cfgupd (dtlv_ctx_t * conf)
 
     if (conf) {
         const char     *sysdescr = NULL;
-        const char     *hostname = NULL;
+        char     *hostname = NULL;
 
         dtlv_ctx_t      wifi_conf;
         os_memset (&wifi_conf, 0, sizeof (dtlv_ctx_t));
@@ -578,8 +586,10 @@ espadmin_on_cfgupd (dtlv_ctx_t * conf)
             if (softap_conf.buf) {
                 char           *password = NULL;
                 char           *ssid = NULL;
+
                 dtlv_ctx_reset_decode (&softap_conf);
                 dtlv_seq_decode_begin (&softap_conf, ESPADMIN_SERVICE_ID);
+                dtlv_seq_decode_uint16 (ESPADMIN_AVP_WIFI_SOFTAP_TIMEOUT, & softap_timeout);
                 dtlv_seq_decode_uint8 (ESPADMIN_AVP_WIFI_AUTH_MODE, (uint8 *) & wifi_ap_auth_mode);
                 dtlv_seq_decode_ptr (ESPADMIN_AVP_WIFI_PASSWORD, password, char);
                 dtlv_seq_decode_ptr (ESPADMIN_AVP_WIFI_SSID, ssid, char);
@@ -626,7 +636,7 @@ espadmin_on_cfgupd (dtlv_ctx_t * conf)
         os_strncpy ((char *) config.ssid, (char *) wifi_st_ssid, sizeof (wifi_st_ssid));
         os_strncpy ((char *) config.password, (char *) wifi_st_password, sizeof (wifi_st_password));
 
-        d_log_iprintf (ESPADMIN_SERVICE_NAME, "\tstation ssid:%s, auto:%u", config.ssid, wifi_autoconnect);
+        d_log_iprintf (ESPADMIN_SERVICE_NAME, "\tstation ssid:%s, password:%s, auto:%u", config.ssid, wifi_st_password, wifi_autoconnect);
         if (!wifi_station_set_config (&config))
             d_log_eprintf (ESPADMIN_SERVICE_NAME, "wifi set station config");
         wifi_station_set_auto_connect (wifi_autoconnect);
@@ -642,9 +652,12 @@ espadmin_on_cfgupd (dtlv_ctx_t * conf)
         config.ssid_hidden = wifi_ap_ssid_hidden;
         config.authmode = wifi_ap_auth_mode;
 
-        d_log_iprintf (ESPADMIN_SERVICE_NAME, "\tsoftap ssid:%s, password:%s", config.ssid, config.password);
+        d_log_iprintf (ESPADMIN_SERVICE_NAME, "\tsoftap ssid:%s, password:%s, auth:%u", config.ssid, config.password, config.authmode);
         if (!wifi_softap_set_config (&config))
             d_log_eprintf (ESPADMIN_SERVICE_NAME, "wifi set softap config");
+
+        if (softap_timeout)
+            softap_timeout_set (softap_timeout);
     }
 #endif
 
@@ -653,11 +666,12 @@ espadmin_on_cfgupd (dtlv_ctx_t * conf)
 
 
 svcs_errcode_t  ICACHE_FLASH_ATTR
-espadmin_service_install (void)
+espadmin_service_install (bool enabled)
 {
     svcs_service_def_t sdef;
     os_memset (&sdef, 0, sizeof (sdef));
-    sdef.enabled = true;
+    sdef.enabled = enabled;
+    sdef.multicast = false;
     sdef.on_start = espadmin_on_start;
     sdef.on_stop = espadmin_on_stop;
     sdef.on_message = espadmin_on_message;

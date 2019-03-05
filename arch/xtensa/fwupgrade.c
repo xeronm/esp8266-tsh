@@ -30,13 +30,17 @@
 
 #include "upgrade.h"
 
-typedef struct upgrade_data_s {
+typedef struct upgrade_data_base_s {
     upgrade_sate_t  state;
+    os_timer_t      tx_timer;
+} upgrade_data_base_t;
+
+typedef struct upgrade_data_s {
+    upgrade_data_base_t base;
     uint16          curr_erased_sec;
     uint32          fwbin_start_addr;   // upload start address
     uint32          fwbin_curr_addr;    // last written address
     uint16          buffer_pos; // buffer position
-    os_timer_t      tx_timer;
     SHA256Context   sha256;
     firmware_info_t fwinfo;
     firmware_digest_t init_digest;
@@ -44,7 +48,6 @@ typedef struct upgrade_data_s {
 } upgrade_data_t;
 
 LOCAL upgrade_data_t *sdata = NULL;
-
 
 LOCAL const char *sz_upgrade_error[] ICACHE_RODATA_ATTR = {
     "",
@@ -60,30 +63,78 @@ LOCAL const char *sz_upgrade_error[] ICACHE_RODATA_ATTR = {
     "out of memory",
 };
 
+LOCAL bool      ICACHE_FLASH_ATTR
+firmware_write_fui (flash_upgrade_info_t * fui, uint32 fui_addr)
+{
+    fui->crc16 = ~(uint16)0;
+    fui->crc16 = crc16 (d_pointer_as (unsigned char, fui), sizeof (flash_upgrade_info_t));
+    return  !(spi_flash_erase_sector (fui_addr/SPI_FLASH_SEC_SIZE) ||
+              spi_flash_write (fui_addr, (uint32 *) fui, sizeof (flash_upgrade_info_t)));
+}
+
+LOCAL bool      ICACHE_FLASH_ATTR
+firmware_read_fui (flash_upgrade_info_t * fui, uint32 fui_addr)
+{
+    if (spi_flash_read (fui_addr, (uint32 *) fui, sizeof (flash_upgrade_info_t)))
+        return false;
+
+    uint16 _crc16 = fui->crc16;
+    fui->crc16 = ~(uint16)0;
+    if (_crc16 != crc16 (d_pointer_as (unsigned char, fui), sizeof (flash_upgrade_info_t))) {
+        return false;
+    }
+
+    return true;
+}
 
 LOCAL void      ICACHE_FLASH_ATTR
 firmware_flash_done (bool fabort)
 {
     d_assert (sdata, "sdata is null");
 
-    os_timer_disarm (&sdata->tx_timer);
+    os_timer_disarm (&sdata->base.tx_timer);
 
     if (fabort) {
         system_upgrade_flag_set (UPGRADE_FLAG_IDLE);
-        sdata->state = UPGRADE_ABORT;
+        sdata->base.state = UPGRADE_ABORT;
 
         d_log_wprintf (MAIN_SERVICE_NAME FWUPG_SUB_SERVICE_NAME, "aborted, addr:0x%06x, wrlen:%u",
                        sdata->fwbin_start_addr, sdata->fwbin_curr_addr - sdata->fwbin_start_addr);
     }
     else {
-        system_upgrade_flag_set (UPGRADE_FLAG_FINISH);
-        sdata->state = UPGRADE_COMPLETE;
+        flash_upgrade_info_t fui;
+        flash_ota_map_t *fwmap = get_flash_ota_map ();
+        uint8           fwbin = system_upgrade_userbin_check ();
+        uint32          fuiaddr_new;
+        uint32          fuiaddr_cur;
+        uint32          usn = 1;
 
-        d_log_wprintf (MAIN_SERVICE_NAME FWUPG_SUB_SERVICE_NAME, "comited, addr:0x%06x, wrlen:%u",
-                       sdata->fwbin_start_addr, sdata->fwbin_curr_addr - sdata->fwbin_start_addr);
+        if (fwbin == UPGRADE_FW_BIN1) {
+            fuiaddr_new = d_flash_user2_partend_addr (fwmap);
+            fuiaddr_cur = d_flash_user1_partend_addr (fwmap);
+        }
+        else {
+            fuiaddr_new = d_flash_user1_partend_addr (fwmap);
+            fuiaddr_cur = d_flash_user2_partend_addr (fwmap);
+        }
+
+        if (firmware_read_fui (&fui, fuiaddr_cur))
+            usn = fui.usn + 1;
+
+        os_memset (&fui, 0, sizeof (flash_upgrade_info_t));
+        fui.safe_mode = system_get_safe_mode ();
+        fui.usn = usn;
+        fui.digest_pos = sdata->fwinfo.digest_pos;
+        firmware_write_fui (&fui, fuiaddr_new);
+
+        system_upgrade_flag_set (UPGRADE_FLAG_FINISH);
+        sdata->base.state = UPGRADE_COMPLETE;
+
+        d_log_wprintf (MAIN_SERVICE_NAME FWUPG_SUB_SERVICE_NAME, "comited, addr:0x%06x, wrlen:%u, usn:%u",
+                       sdata->fwbin_start_addr, sdata->fwbin_curr_addr - sdata->fwbin_start_addr, usn);
     }
 
-    os_timer_arm (&sdata->tx_timer, FWUPG_REBOOT_TIMEOUT_SEC * MSEC_PER_SEC, false);
+    os_timer_arm (&sdata->base.tx_timer, FWUPG_REBOOT_TIMEOUT_SEC * MSEC_PER_SEC, false);
 }
 
 LOCAL bool      ICACHE_FLASH_ATTR
@@ -132,7 +183,7 @@ upgrade_flush_buffer (void)
     if (fres || spi_flash_write (sdata->fwbin_curr_addr, (uint32 *) sdata->buffer, sdata->buffer_pos)) {
         d_log_eprintf (MAIN_SERVICE_NAME FWUPG_SUB_SERVICE_NAME, sz_upgrade_error[UPGRADE_WRITE_ERROR],
                        sdata->fwbin_curr_addr);
-        sdata->state = UPGRADE_ERROR;
+        sdata->base.state = UPGRADE_ERROR;
         return UPGRADE_WRITE_ERROR;
     }
 
@@ -142,7 +193,7 @@ upgrade_flush_buffer (void)
     if (SHA256Input
         (&sdata->sha256, sdata->buffer,
          MIN (sdata->buffer_pos, sdata->fwinfo.binsize - FWUPG_BIN_CHECKSUM_SIZE - last_pos))) {
-        sdata->state = UPGRADE_ERROR;
+        sdata->base.state = UPGRADE_ERROR;
         return UPGRADE_DIGEST_ERROR;
     }
 
@@ -152,13 +203,22 @@ upgrade_flush_buffer (void)
     return UPGRADE_ERR_SUCCESS;
 }
 
-
 LOCAL void      ICACHE_FLASH_ATTR
 fwupdate_timeout (void *args)
 {
     d_assert (sdata, "sdata is null");
 
-    switch (sdata->state) {
+    switch (sdata->base.state) {
+    case UPGRADE_VERIFYING:
+        if (check_system_upgrade_flag (UPGRADE_FLAG_FINISH)) {
+            system_shutdown ();
+            system_upgrade_reboot ();
+        }
+        else {
+            d_log_wprintf (MAIN_SERVICE_NAME FWUPG_SUB_SERVICE_NAME, "upgrade verify timeout, rollback...");
+            fwupdate_rollback ();
+        }
+        break;
     case UPGRADE_COMPLETE:
         if (check_system_upgrade_flag (UPGRADE_FLAG_FINISH)) {
             d_log_iprintf (MAIN_SERVICE_NAME FWUPG_SUB_SERVICE_NAME, "complete, reboot...");
@@ -179,7 +239,7 @@ fwupdate_timeout (void *args)
         break;
     default:
         d_log_wprintf (MAIN_SERVICE_NAME FWUPG_SUB_SERVICE_NAME, sz_upgrade_error[UPGRADE_INVALID_STATE], "timeout",
-                       sdata->state);
+                       sdata->base.state);
         firmware_flash_done (true);
     }
 }
@@ -202,11 +262,11 @@ firmware_flash_init (uint32 start_addr, firmware_info_t * fwinfo, firmware_diges
 
     SHA256Reset (&sdata->sha256);
 
-    os_timer_disarm (&sdata->tx_timer);
-    os_timer_setfn (&sdata->tx_timer, fwupdate_timeout, NULL);
-    os_timer_arm (&sdata->tx_timer, FWUPG_IDLE_TIMEOUT_SEC * MSEC_PER_SEC, false);
+    os_timer_disarm (&sdata->base.tx_timer);
+    os_timer_setfn (&sdata->base.tx_timer, fwupdate_timeout, NULL);
+    os_timer_arm (&sdata->base.tx_timer, FWUPG_IDLE_TIMEOUT_SEC * MSEC_PER_SEC, false);
 
-    sdata->state = UPGRADE_READY;
+    sdata->base.state = UPGRADE_READY;
     system_upgrade_flag_set (UPGRADE_FLAG_START);
 
     d_log_wprintf (MAIN_SERVICE_NAME FWUPG_SUB_SERVICE_NAME, "start addr:0x%06x, sec_size:%u", start_addr,
@@ -243,7 +303,7 @@ fwupdate_init (firmware_info_t * fwinfo, firmware_digest_t * init_digest)
 
     if (sdata) {
         d_log_eprintf (MAIN_SERVICE_NAME FWUPG_SUB_SERVICE_NAME, sz_upgrade_error[UPGRADE_INVALID_STATE], "init",
-                       sdata->state);
+                       sdata->base.state);
         return UPGRADE_INVALID_STATE;
     }
     if (!check_system_upgrade_flag (UPGRADE_FLAG_IDLE))
@@ -251,6 +311,7 @@ fwupdate_init (firmware_info_t * fwinfo, firmware_digest_t * init_digest)
 
     uint8           fwbin = system_upgrade_userbin_check ();
     uint32          fwaddr;
+
     if (fwbin == UPGRADE_FW_BIN1) {
         fwbin = UPGRADE_FW_BIN2;
         fwaddr = fwmap->user2;
@@ -270,16 +331,16 @@ fwupdate_upload (uint8 * data, size_t length)
         d_log_eprintf (MAIN_SERVICE_NAME FWUPG_SUB_SERVICE_NAME, sz_upgrade_error[UPGRADE_NOT_INIT]);
         return UPGRADE_NOT_INIT;
     }
-    if ((sdata->state != UPGRADE_READY) && (sdata->state != UPGRADE_UPLOADING)) {
+    if ((sdata->base.state != UPGRADE_READY) && (sdata->base.state != UPGRADE_UPLOADING)) {
         d_log_wprintf (MAIN_SERVICE_NAME FWUPG_SUB_SERVICE_NAME, sz_upgrade_error[UPGRADE_INVALID_STATE], "upload",
-                       sdata->state);
+                       sdata->base.state);
         return UPGRADE_INVALID_STATE;
     }
     if (!check_system_upgrade_flag (UPGRADE_FLAG_START))
         return UPGRADE_INVALID_STATE;
 
-    os_timer_disarm (&sdata->tx_timer);
-    os_timer_arm (&sdata->tx_timer, FWUPG_IDLE_TIMEOUT_SEC * MSEC_PER_SEC, false);
+    os_timer_disarm (&sdata->base.tx_timer);
+    os_timer_arm (&sdata->base.tx_timer, FWUPG_IDLE_TIMEOUT_SEC * MSEC_PER_SEC, false);
 
     size_t          csize = sdata->fwbin_curr_addr - sdata->fwbin_start_addr + sdata->buffer_pos;
     if (csize + length > sdata->fwinfo.binsize) {
@@ -289,8 +350,8 @@ fwupdate_upload (uint8 * data, size_t length)
         return UPGRADE_SIZE_OVERFLOW;
     }
 
-    if (sdata->state == UPGRADE_READY)
-        sdata->state = UPGRADE_UPLOADING;
+    if (sdata->base.state == UPGRADE_READY)
+        sdata->base.state = UPGRADE_UPLOADING;
 
     uint8          *data_ptr = data;
     size_t          data_left = length;
@@ -322,15 +383,15 @@ fwupdate_done (void)
         d_log_eprintf (MAIN_SERVICE_NAME FWUPG_SUB_SERVICE_NAME, sz_upgrade_error[UPGRADE_NOT_INIT]);
         return UPGRADE_NOT_INIT;
     }
-    if (sdata->state != UPGRADE_UPLOADING) {
+    if (sdata->base.state != UPGRADE_UPLOADING) {
         d_log_wprintf (MAIN_SERVICE_NAME FWUPG_SUB_SERVICE_NAME, sz_upgrade_error[UPGRADE_INVALID_STATE], "done",
-                       sdata->state);
+                       sdata->base.state);
         return UPGRADE_INVALID_STATE;
     }
     if (!check_system_upgrade_flag (UPGRADE_FLAG_START))
         return UPGRADE_INVALID_STATE;
 
-    os_timer_disarm (&sdata->tx_timer);
+    os_timer_disarm (&sdata->base.tx_timer);
 
     firmware_digest_t digest;
     if (SHA256Result (&sdata->sha256, digest)) {
@@ -361,9 +422,95 @@ fwupdate_abort (void)
         return UPGRADE_NOT_INIT;
     }
 
+    if (sdata->base.state == UPGRADE_VERIFYING) {
+        d_log_wprintf (MAIN_SERVICE_NAME FWUPG_SUB_SERVICE_NAME, sz_upgrade_error[UPGRADE_INVALID_STATE], "abort",
+                       sdata->base.state);
+        return UPGRADE_INVALID_STATE;
+    }
+
     firmware_flash_done (true);
     return UPGRADE_ERR_SUCCESS;
 }
+
+upgrade_err_t   ICACHE_FLASH_ATTR
+fwupdate_verify (void) {
+    if (sdata) {
+        d_log_eprintf (MAIN_SERVICE_NAME FWUPG_SUB_SERVICE_NAME, sz_upgrade_error[UPGRADE_INVALID_STATE], "init",
+                       sdata->base.state);
+        return UPGRADE_INVALID_STATE;
+    }
+
+    flash_upgrade_info_t fui;
+    flash_ota_map_t *fwmap = get_flash_ota_map ();
+    uint8           fwbin = system_upgrade_userbin_check ();
+    uint32          fuiaddr_cur = (fwbin == UPGRADE_FW_BIN1) ? d_flash_user1_partend_addr (fwmap) : d_flash_user2_partend_addr (fwmap);
+
+    if (!firmware_read_fui (&fui, fuiaddr_cur))
+        return UPGRADE_READ_ERROR;
+
+    if (!fui.verified) {
+        sdata = (upgrade_data_t *)os_malloc (sizeof (upgrade_data_base_t));
+        if (!sdata)
+            return UPGRADE_OUT_OF_MEMORY;
+
+        os_memset (sdata, 0, sizeof (upgrade_data_base_t));
+        sdata->base.state = UPGRADE_VERIFYING;
+    
+        //os_memcpy (&sdata->fwinfo, fui.digest_pos, sizeof (firmware_info_t));    
+
+        d_log_wprintf (MAIN_SERVICE_NAME FWUPG_SUB_SERVICE_NAME, "verify usn:%u timeout:%u", fui.usn, FWUPG_VERIFY_TIMEOUT_SEC);
+
+        os_timer_disarm (&sdata->base.tx_timer);
+        os_timer_setfn (&sdata->base.tx_timer, fwupdate_timeout, NULL);
+        os_timer_arm (&sdata->base.tx_timer, FWUPG_VERIFY_TIMEOUT_SEC * MSEC_PER_SEC, false);
+
+        return UPGRADE_NOT_VERIFIED;
+    }
+
+    return UPGRADE_ERR_SUCCESS;
+}
+
+upgrade_err_t   ICACHE_FLASH_ATTR
+fwupdate_rollback (void) {
+    if (!sdata) {
+        d_log_eprintf (MAIN_SERVICE_NAME FWUPG_SUB_SERVICE_NAME, sz_upgrade_error[UPGRADE_NOT_INIT]);
+        return UPGRADE_NOT_INIT;
+    }
+
+    if (sdata->base.state != UPGRADE_VERIFYING) {
+        d_log_wprintf (MAIN_SERVICE_NAME FWUPG_SUB_SERVICE_NAME, sz_upgrade_error[UPGRADE_INVALID_STATE], "rollback",
+                       sdata->base.state);
+        return UPGRADE_INVALID_STATE;
+    }
+
+    os_timer_disarm (&sdata->base.tx_timer);
+    system_upgrade_flag_set (UPGRADE_FLAG_FINISH);
+    os_timer_arm (&sdata->base.tx_timer, FWUPG_REBOOT_TIMEOUT_SEC * MSEC_PER_SEC, false);
+}
+
+upgrade_err_t   ICACHE_FLASH_ATTR 
+fwupdate_verify_done (void) {
+    flash_upgrade_info_t fui;
+    flash_ota_map_t *fwmap = get_flash_ota_map ();
+    uint8           fwbin = system_upgrade_userbin_check ();
+    uint32          fuiaddr_cur = (fwbin == UPGRADE_FW_BIN1) ? d_flash_user1_partend_addr (fwmap) : d_flash_user2_partend_addr (fwmap);
+
+    if (firmware_read_fui (&fui, fuiaddr_cur)) {
+        fui.verified = true;
+        if (!firmware_write_fui (&fui, fuiaddr_cur))
+            return UPGRADE_WRITE_ERROR;
+
+        d_log_wprintf (MAIN_SERVICE_NAME FWUPG_SUB_SERVICE_NAME, "verify_done usn:%u", fui.usn);
+    }
+    else
+        return UPGRADE_READ_ERROR;
+
+    os_timer_disarm (&sdata->base.tx_timer);
+    st_free (sdata);
+
+    return UPGRADE_ERR_SUCCESS;
+}
+
 
 upgrade_err_t   ICACHE_FLASH_ATTR
 fwupdate_info (upgrade_info_t * info)
@@ -374,7 +521,7 @@ fwupdate_info (upgrade_info_t * info)
         return UPGRADE_NOT_INIT;
     }
 
-    info->state = sdata->state;
+    info->state = sdata->base.state;
     info->fwbin_start_addr = sdata->fwbin_start_addr;
     info->fwbin_curr_addr = sdata->fwbin_curr_addr;
 
