@@ -182,10 +182,18 @@ softap_timeout_set (uint16 timeout_sec)
 #endif
 
 uint16          ICACHE_FLASH_ATTR
-softap_timeout_get_last (void) { return sdata->softap_timeout; }
+softap_timeout_get_last (void) { 
+    if (!sdata)
+        return 0;
+    return sdata->softap_timeout; 
+}
 
 bool            ICACHE_FLASH_ATTR 
-system_get_safe_mode (void) { return sdata->safe_mode; }
+system_get_safe_mode (void) { 
+    if (!sdata)
+        return false;
+    return sdata->safe_mode; 
+}
 
 #ifdef ARCH_XTENSA
 LOCAL void      ICACHE_FLASH_ATTR

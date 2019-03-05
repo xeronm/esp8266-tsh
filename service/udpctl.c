@@ -272,8 +272,10 @@ LOCAL svcs_errcode_t  ICACHE_FLASH_ATTR
 udpctl_notify_message (service_ident_t orig_id,
                    service_msgtype_t msgtype, void *ctxdata, dtlv_ctx_t * msg_in)
 {
+#ifdef ARCH_XTENSA
     os_memcpy (sdata->srvudp.remote_ip, sdata->conf.ntfaddr.bytes, sizeof (ipv4_addr_t));
     sdata->srvudp.remote_port = sdata->conf.ntfaddr_port;
+#endif
     char            data_out[UDPCTL_MESSAGE_SIZE];
 
     udpctl_packet_t *packet_out = d_pointer_as (udpctl_packet_t, data_out);
@@ -296,7 +298,11 @@ udpctl_notify_message (service_ident_t orig_id,
     dtlv_ctx_init_encode (&ntfmsg, d_pointer_add (char, packet_out, hdrlen), UDPCTL_MESSAGE_SIZE - hdrlen);
 
     dtlv_avp_t     *gavp;
+#ifdef ARCH_XTENSA    
     char           *hostname = wifi_station_get_hostname ();
+#else
+    char           *hostname = "hostname";
+#endif
 
     d_udpctl_check_dtlv_error (dtlv_avp_encode_uint32 (&ntfmsg, COMMON_AVP_EVENT_TIMESTAMP, lt_time (NULL))
                               || dtlv_avp_encode_grouping (&ntfmsg, orig_id, COMMON_AVP_SVC_MESSAGE, &gavp)
@@ -323,7 +329,11 @@ udpctl_notify_message (service_ident_t orig_id,
         os_memcpy (packetsec_out->base_sec.digest, digest_out, sizeof (udpctl_digest_t));
     }
 
+#ifdef ARCH_XTENSA
     sint16          cres = espconn_sendto (&sdata->srvconn, (uint8 *) data_out, length_out);
+#else
+    sint16          cres = 0;
+#endif
     if (cres)
         d_log_wprintf (UDPCTL_SERVICE_NAME, "notify " IPSTR ":%u sent %u:%u failed:%u", IP2STR (&sdata->conf.ntfaddr), sdata->conf.ntfaddr_port, msgtype, length_out, cres);
     else

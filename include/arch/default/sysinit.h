@@ -58,7 +58,9 @@ typedef struct ip_addr ip_addr_t;
 typedef uint16  ip_port_t;
 typedef void   *ip_conn_t;
 
-#define IPADDR_NONE 	0xFFFFFFFF
+#define IPADDR_NONE         ((uint32)0xffffffffUL)
+#define IPADDR_ANY          ((uint32)0x00000000UL)
+
 
 #define LINE_END		"\n"
 #define LINE_END_STRLEN	1

@@ -48,6 +48,7 @@ typedef enum svcs_errcode_e {
     SVCS_MSGTYPE_INVALID = 7,
     SVCS_INVALID_MESSAGE = 8,
     SVCS_DISABLED = 9,
+    SVCS_NOT_AVAILABLE = 10,
 } svcs_errcode_t;
 
 typedef enum svcs_state_e {

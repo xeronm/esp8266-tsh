@@ -49,6 +49,9 @@
 	if (!sdata) \
 		return SVCS_NOT_RUN;
 
+#define d_check_has_hfdb(void) \
+    if (!sdata->svcres.hfdb) \
+		return SVCS_NOT_AVAILABLE;
 
 typedef struct svcs_service_conf_v0_s {
     service_ident_t service_id;
@@ -106,8 +109,6 @@ LOCAL imdb_errcode_t ICACHE_FLASH_ATTR
 svcctl_forall_conf_find (imdb_fetch_obj_t * fobj, void *data)
 {
     svcs_service_conf_t *conf = d_pointer_as (svcs_service_conf_t, fobj->dataptr);
-    os_printf("-- 22!! %d %d %d\n", conf->service_id, conf->disabled, conf->cfgtype);
-
     svcs_find_conf_ctx_t *find_conf_ctx = d_pointer_as (svcs_find_conf_ctx_t, data);
     if ((find_conf_ctx->service_id == conf->service_id) && (find_conf_ctx->cfgtype == conf->cfgtype)) {
         os_memcpy (&find_conf_ctx->rowid, &fobj->rowid, sizeof (imdb_rowid_t));
@@ -125,10 +126,10 @@ LOCAL imdb_errcode_t ICACHE_FLASH_ATTR
 svcctl_forall_conf_validate (imdb_fetch_obj_t * fobj, void *data)
 {
     svcs_service_conf_t *conf = d_pointer_as (svcs_service_conf_t, fobj->dataptr);
-    os_printf("-- 11!! %d %d %d\n", conf->service_id, conf->disabled, conf->cfgtype);
 
     svcs_service_conf_t * new_conf = NULL;
     bool fobsolete = false;
+    bool *changed = d_pointer_as(bool, data);
 
     if (conf->struct_size != sizeof(svcs_service_conf_t)) {
         svcs_service_conf_v0_t *old_conf = d_pointer_as(svcs_service_conf_v0_t, fobj->dataptr);
@@ -155,12 +156,14 @@ svcctl_forall_conf_validate (imdb_fetch_obj_t * fobj, void *data)
     }
 
     if (new_conf) {
-        d_log_wprintf (SERVICES_SERVICE_NAME, "id:%d type:%d config upgraded", new_conf->cfgtype, conf->service_id);
-        return imdb_clsobj_delete (sdata->svcres.hfdb, sdata->hconf, data);
+        d_log_wprintf (SERVICES_SERVICE_NAME, "id:%d type:%d config upgraded", conf->service_id, new_conf->cfgtype);
+        *changed = true;
+        return imdb_clsobj_delete (sdata->svcres.hfdb, sdata->hconf, fobj->dataptr);
     }
     if (fobsolete) {
         d_log_wprintf (SERVICES_SERVICE_NAME, "id:%d new config obsolete", conf->service_id);
-        return imdb_clsobj_delete (sdata->svcres.hfdb, sdata->hconf, data);
+        *changed = true;
+        return imdb_clsobj_delete (sdata->svcres.hfdb, sdata->hconf, fobj->dataptr);
     }
 
     return IMDB_ERR_SUCCESS;
@@ -169,6 +172,8 @@ svcctl_forall_conf_validate (imdb_fetch_obj_t * fobj, void *data)
 LOCAL svcs_errcode_t ICACHE_FLASH_ATTR
 svcctl_find_conf (service_ident_t service_id, svcs_service_conf_t ** conf, svcs_cfgtype_t cfgtype, bool update)
 {
+    d_check_has_hfdb ();
+    
     svcs_find_conf_ctx_t find_conf_ctx;
     find_conf_ctx.service_id = service_id;
     find_conf_ctx.cfgtype = cfgtype;
@@ -233,7 +238,7 @@ svcctl_svc_start (svcs_service_t * svc, bool ignore_disabled)
     svcs_service_conf_t *conf_data;
     dtlv_ctx_t      conf;
     dtlv_ctx_t     *conf_ptr = NULL;
-    os_printf("-- !! %d\n", svc->info.service_id);
+
     if (!system_get_safe_mode ()) {
         svcs_errcode_t  res = svcctl_find_conf (svc->info.service_id, &conf_data, SVCS_CFGTYPE_CURRENT, false);
         if (res == SVCS_ERR_SUCCESS) {
@@ -651,7 +656,10 @@ svcctl_start (imdb_hndlr_t hmdb, imdb_hndlr_t hfdb)
         }
 
         if (!system_get_safe_mode ()) {
-            imdb_class_forall (sdata->svcres.hfdb, sdata->hconf, NULL, svcctl_forall_conf_validate);
+            bool changed;
+            imdb_class_forall (sdata->svcres.hfdb, sdata->hconf, (void*) &changed, svcctl_forall_conf_validate);
+            if (changed)
+                imdb_flush (sdata->svcres.hfdb);
         }
     }
 
@@ -864,6 +872,7 @@ svcs_errcode_t  ICACHE_FLASH_ATTR
 svcctl_service_conf_set (service_ident_t service_id, dtlv_ctx_t * conf)
 {
     d_check_is_run ();
+    d_check_has_hfdb ();
 
     svcs_service_t *svc = NULL;
     svcs_errcode_t  ret = svcctl_find (service_id, NULL, &svc);
@@ -904,6 +913,7 @@ svcs_errcode_t  ICACHE_FLASH_ATTR
 svcctl_service_conf_save (service_ident_t service_id)
 {
     d_check_is_run ();
+    d_check_has_hfdb ();
 
     svcs_service_t *svc = NULL;
     d_svcs_check_svcs_error (svcctl_find (service_id, NULL, &svc));
@@ -929,6 +939,9 @@ svcctl_service_conf_save (service_ident_t service_id)
 
 svcs_errcode_t  svcctl_service_set_enabled (service_ident_t service_id, bool enabled)
 {
+    d_check_is_run ();
+    d_check_has_hfdb ();
+
     svcs_service_conf_t *conf_data;
     svcctl_find_conf (service_id, &conf_data, SVCS_CFGTYPE_NEW, true);
     if (!conf_data)
